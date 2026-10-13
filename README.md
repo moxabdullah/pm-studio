@@ -47,7 +47,7 @@ docs/phase-1-backend.md the plan for the PocketBase backend
 scripts/                get-pocketbase.sh / .ps1 (pinned PocketBase download) and the helpers behind npm run server and seed:dev
 server/                 the PocketBase side
   pb_migrations/        JS migrations: every collection and API rule, applied when the server starts
-  pb_hooks/             server hooks (rejects record requests that are not signed in)
+  pb_hooks/             server hooks (401 for requests that are not signed in, new-account defaults, no stale app page)
   pb_public/            the built app (git-ignored; npm run build:server writes it)
   pb_data/              database and uploaded files (git-ignored; this is what gets backed up)
 src/
@@ -57,7 +57,7 @@ src/
     tokens.css          colours, spacing, type, radius, the shared --gutter
     base.css  components.css  shell.css  panels.css  overlays.css  states.css  motion.css  responsive.css
     views/              list, board, table, calendar, timeline, projects & files
-    pages/              settings, auth & onboarding
+    pages/              settings & sign-in
   core/                 utilities, constants, icons, store (state + lookups), theme
     pb.js               PocketBase client (server URL, sign-in state)
     sync.js             sync engine: loads data, saves changes, applies live updates
