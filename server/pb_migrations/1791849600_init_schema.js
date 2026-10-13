@@ -13,7 +13,7 @@
 
    Rule syntax notes (verified on PocketBase 0.40.5):
    - `members.id ?= @request.auth.id` matches a multi-relation. `members ?= @request.auth.id` looks equivalent but does not match.
-   - Create rules see the new record's own fields (`private`, `project.members.id`, `author`, ...).
+   - Create rules see the new record's own fields (`private`, `project.members.id`, `uploaded_by`, ...).
    - A rule can follow a relation in the request body (`@request.body.project.private`). The update rules use that so a record
      can't be moved into a private project its editor can't see.
    - `@request.body.role` is the value PocketBase would store, so the role rule also catches arrays, `role+` and multipart forms.
@@ -101,6 +101,8 @@ migrate(
     users.deleteRule = ADMIN_ONLY;
     users.manageRule = ADMIN_ONLY;
     users.authToken.duration = 30 * 24 * 60 * 60; // the login page promises "Remember me for 30 days"
+    // No SMTP in Phase 1, so every new-device login would log "Failed to send login alert". Switch it on together with SMTP.
+    users.authAlert.enabled = false;
     app.save(users);
     // accounts that predate the role column count as members
     app.db().newQuery("UPDATE users SET role = 'member' WHERE role = '' OR role IS NULL").execute();
@@ -130,19 +132,16 @@ migrate(
       [relation('project', 'projects', { required: true, cascade: true }), text('status'), relation('assignee', 'users'), bool('archived')],
       [['project'], ['assignee']],
     );
+    // Comments and activity: no author check on create (undo re-creates colleagues' entries). Author ownership arrives with Phase 2 permissions.
     create(
       'comments',
-      Object.assign(all(inProject('task.project.')), {
-        create: inProject('task.project.') + ' && author = @request.auth.id',
-        update: inProject('task.project.') + ' && ' + movableTo('task', 'task.project.'),
-      }),
+      Object.assign(all(inProject('task.project.')), { update: inProject('task.project.') + ' && ' + movableTo('task', 'task.project.') }),
       [relation('task', 'tasks', { required: true, cascade: true }), relation('author', 'users')],
       [['task']],
     );
     create(
       'activity',
       Object.assign(all(ACTIVITY_VISIBLE), {
-        create: ACTIVITY_VISIBLE + ' && by = @request.auth.id',
         update: ACTIVITY_VISIBLE + ' && ' + movableTo('project', 'project.', true) + ' && ' + movableTo('task', 'task.project.', true),
       }),
       [relation('project', 'projects', { cascade: true }), relation('task', 'tasks', { cascade: true }), relation('by', 'users')],
@@ -206,6 +205,7 @@ migrate(
     users.deleteRule = 'id = @request.auth.id';
     users.manageRule = null;
     users.authToken.duration = 432000;
+    users.authAlert.enabled = true;
     ['doc', 'role', 'status', 'color', 'title'].forEach(name => users.fields.removeByName(name));
     app.save(users);
 
