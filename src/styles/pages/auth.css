@@ -1,5 +1,5 @@
 /* ============================================================
-   AUTH / ONBOARDING
+   AUTH
    ============================================================ */
 .auth {
   min-height: 100%;
@@ -49,39 +49,6 @@
   color: var(--text-2);
   margin: -8px 0 4px;
 }
-.or {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text-3);
-  font-size: var(--fs-xs);
-}
-.or::before,
-.or::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-.social {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.social .btn {
-  justify-content: center;
-  gap: 10px;
-}
-.glyph-g,
-.glyph-m,
-.glyph-a {
-  width: 16px;
-  height: 16px;
-  display: inline-grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 13px;
-}
 .link {
   color: var(--accent);
   font-weight: 500;
@@ -107,30 +74,6 @@
 }
 .strength i.on {
   background: var(--c);
-}
-.onb {
-  max-width: 560px;
-}
-.steps {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-.steps i {
-  width: 28px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--border-strong);
-  transition: background 0.2s;
-}
-.steps i.on {
-  background: var(--accent);
-}
-.opts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
 }
 .opt {
   border: 1px solid var(--border);

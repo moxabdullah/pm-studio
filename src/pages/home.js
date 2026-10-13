@@ -1,7 +1,7 @@
 /* ---------- HOME ---------- */
 import { DAY, MONL, TODAY, WDL, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, allTasks, canSee, isOver, pColor, progressOf, proj, visibleProjects } from '../core/store.js';
+import { D, S, allTasks, canSee, isOver, me, pColor, progressOf, proj, visibleProjects, wsActivity } from '../core/store.js';
 import { av, avStack, empty, pIcon, pStatus, prIcon, progBar } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
@@ -37,8 +37,8 @@ export function pageHome() {
   };
   const dls = [dl('Today', 0, 0), dl('Tomorrow', 1, 1), dl('This week', 2, 7)];
   return `<div class="page">
-    <div class="ph"><div><h1>${greet}, ${esc(S.prefs.name.split(' ')[0])}</h1><p><span class="num">${WDL[TODAY.getDay()]}, ${MONL[TODAY.getMonth()]} ${TODAY.getDate()}</span> · Here's what's happening across your workspace.</p></div>
-      <div class="acts"><button class="btn btn-secondary hide-m" data-a="invite">${ic('user-plus', 14)}Invite member</button><button class="btn btn-secondary hide-m" data-a="newProject">${ic('folder-plus', 14)}New project</button><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}New task</button></div></div>
+    <div class="ph"><div><h1>${greet}, ${esc(me().name.split(' ')[0])}</h1><p><span class="num">${WDL[TODAY.getDay()]}, ${MONL[TODAY.getMonth()]} ${TODAY.getDate()}</span> · Here's what's happening across your workspace.</p></div>
+      <div class="acts"><button class="btn btn-secondary hide-m" data-a="newProject">${ic('folder-plus', 14)}New project</button><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}New task</button></div></div>
     <div class="stats" style="margin-bottom:16px">
       <button class="stat" data-a="go" data-r="projects"><span class="k">${ic('folder-kanban', 14)}Active projects</span><span class="v">${activeP.length}</span><span class="d">${activeP.filter(p => p.status === 'risk').length} at risk</span></button>
       <button class="stat" data-a="goTasks" data-f="open"><span class="k">${ic('circle-dashed', 14)}Open tasks</span><span class="v">${open.length}</span><span class="d">${open.filter(t => t.assignee === D().me).length} assigned to you</span></button>
@@ -100,8 +100,8 @@ export function pageHome() {
         </section>
         <section class="panel">
           <div class="panel-h"><h2>Recent activity</h2><div class="acts"><button class="btn btn-sm btn-ghost" data-a="go" data-r="activity">View all</button></div></div>
-          <div class="panel-b feed lined">${D()
-            .activity.slice(0, 7)
+          <div class="panel-b feed lined">${wsActivity()
+            .slice(0, 7)
             .map(a => actHtml(a, { proj: true }))
             .join('')}</div>
         </section>

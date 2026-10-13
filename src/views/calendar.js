@@ -1,7 +1,7 @@
 /* ---------- CALENDAR ---------- */
 import { MONL, TODAY, WD, addD, diffD, esc, fmtDate, iso, parse, sod } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, allTasks, pColor, proj } from '../core/store.js';
+import { D, S, allTasks, pColor, proj, wsEvents } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { applyView, viewOf, viewToolbar } from '../shell/view-engine.js';
@@ -15,7 +15,7 @@ export function startOfWeek(d) {
 export function calendarHtml(ts, opt = {}) {
   const cur = parse(S.ui.calDate);
   const mode = S.ui.calMode;
-  const evs = opt.events ? D().events.filter(e => !opt.project || e.project === opt.project) : [];
+  const evs = opt.events ? (opt.project ? D().events.filter(e => e.project === opt.project) : wsEvents()) : [];
   const itemsOn = ds => [...evs.filter(e => e.date === ds).map(e => ({ ev: e })), ...ts.filter(t => t.due === ds).map(t => ({ t }))];
   const wdn = Array.from({ length: 7 }, (_, i) => WD[(i + S.prefs.weekStart) % 7]);
   const chip = it => {

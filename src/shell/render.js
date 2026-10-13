@@ -137,8 +137,8 @@ export function render() {
   render._popSig = popSig;
   if (S.ui.sel.size && !render._selN) fx.bulk = true;
   render._selN = S.ui.sel.size;
-  const authSig = S.ui.auth ? S.ui.auth + (S.ui.auth === 'onboarding' ? S.ui.onb : '') : '';
-  if (authSig && authSig !== render._authSig) fx[S.ui.auth === 'onboarding' ? 'step' : 'auth'] = true;
+  const authSig = S.ui.auth || '';
+  if (authSig && authSig !== render._authSig) fx.auth = true;
   render._authSig = authSig;
   const a = document.activeElement;
   const fid = a && a.id;

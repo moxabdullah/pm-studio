@@ -26,7 +26,7 @@ export function pageOverview() {
       <div class="stat"><span class="k">Projects</span><span class="v">${ps.length}</span><span class="d">${ps.filter(p => p.status === 'complete').length} completed</span></div>
       <div class="stat"><span class="k">Tasks</span><span class="v">${all.length}</span><span class="d">${all.length - done} open</span></div>
       <div class="stat"><span class="k">Completion rate</span><span class="v">${Math.round((done / Math.max(all.length, 1)) * 100)}%</span><span class="d">across all projects</span></div>
-      <div class="stat"><span class="k">Members</span><span class="v">${D().members.length}</span><span class="d">${D().members.filter(m => m.status === 'invited').length} pending invite</span></div>
+      <div class="stat"><span class="k">Members</span><span class="v">${D().members.length}</span><span class="d">${D().members.filter(m => m.status === 'active').length} active</span></div>
     </div>
     <div class="grid2">
       <section class="panel"><div class="panel-h"><h2>Portfolio</h2></div>

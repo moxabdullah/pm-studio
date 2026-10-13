@@ -2,7 +2,7 @@
 import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ST } from '../core/constants.js';
-import { D, mem, proj, task, visibleProjects } from '../core/store.js';
+import { D, isAdmin, mem, proj, task, visibleProjects } from '../core/store.js';
 
 export function ctxMenu(p) {
   const I = (act, icon, label, extra = '', r = '') =>
@@ -59,17 +59,11 @@ export function ctxMenu(p) {
   if (p.ctx === 'member') {
     const m = mem(p.id);
     if (!m) return '';
-    const canRm = m.role !== 'Owner' && m.id !== D().me;
     return (
       I('viewProfile', 'user', 'View profile') +
       I('assignToMember', 'plus', 'Assign a task') +
       I('copyEmail', 'mail', 'Copy email') +
-      (canRm
-        ? I('ctxRole', 'shield', 'Change role…') +
-          (m.status === 'invited' ? I('resendInvite', 'send', 'Resend invite') : '') +
-          sep +
-          I('removeMember', 'user-minus', 'Remove from workspace', 'danger')
-        : '')
+      (isAdmin() && m.id !== D().me ? I('ctxRole', 'shield', 'Change role…') : '')
     );
   }
   if (p.ctx === 'file') {
@@ -77,7 +71,6 @@ export function ctxMenu(p) {
       I('previewFile', 'eye', 'Preview') +
       I('renameFile', 'pencil', 'Rename') +
       I('copyLink', 'link', 'Copy link') +
-      I('dupFile', 'copy', 'Duplicate') +
       sep +
       I('delFile', 'trash-2', 'Delete', 'danger')
     );
