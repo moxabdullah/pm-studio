@@ -6,9 +6,13 @@ const pocketbaseVm = {
   migrate: 'readonly',
   routerUse: 'readonly',
   onRecordCreate: 'readonly',
+  onRecordUpdateRequest: 'readonly',
   Collection: 'readonly',
   Field: 'readonly',
+  BadRequestError: 'readonly',
+  NotFoundError: 'readonly',
   UnauthorizedError: 'readonly',
+  ValidationError: 'readonly',
   $app: 'readonly',
 };
 
