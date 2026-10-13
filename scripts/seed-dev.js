@@ -76,7 +76,8 @@ async function requireServer(origin) {
 }
 
 /* A throwaway superuser looks at the database before the dev superuser (with a known password) is allowed into it. */
-const newProbe = () => ({ email: `seed-probe-${randomBytes(4).toString('hex')}@gr8rstudio.local`, password: randomBytes(18).toString('base64url') });
+// The password starts with a letter: base64url can start with "-", which the PocketBase CLI would read as a flag.
+const newProbe = () => ({ email: `seed-probe-${randomBytes(4).toString('hex')}@gr8rstudio.local`, password: 'p' + randomBytes(18).toString('base64url') });
 
 function dropProbe(probe) {
   try {
