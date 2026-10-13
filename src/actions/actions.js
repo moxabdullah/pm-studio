@@ -3,7 +3,26 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
-import { D, S, allTasks, canSee, commentsOf, isAdmin, logAct, me, mem, proj, save, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
+import {
+  D,
+  S,
+  allTasks,
+  canSee,
+  commentsOf,
+  isAdmin,
+  logAct,
+  me,
+  mem,
+  proj,
+  resetStore,
+  save,
+  task,
+  tasksOf,
+  teamsList,
+  visibleProjects,
+} from '../core/store.js';
+import { pb, setRemember } from '../core/pb.js';
+import { restoreState, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -126,11 +145,16 @@ export function confirmDlg(o) {
   S.ui.confirmText = '';
   openModal({ type: 'confirm', ...o });
 }
+/* Undo. A snapshot is an opaque token: restoring puts the data back as it was and keeps whatever other people changed since, so Undo
+   never reverts their work (see snapshotState/restoreState in core/sync.js). */
 export function snapshot() {
-  return JSON.stringify(S.data);
+  return snapshotState();
 }
 export function restore(snap) {
-  S.data = JSON.parse(snap);
+  if (!restoreState(snap)) {
+    toast("Couldn't undo: the data was refreshed since.", { kind: 'err' });
+    return;
+  }
   save();
   render();
 }
@@ -1663,27 +1687,29 @@ A.newWorkspace = () => {
     },
   });
 };
-A.signOut = () => {
-  S.ui.pop = null;
-  S.ui.palette = null;
-  S.ui.drawer = null;
-  S.ui.modals = [];
+/* The sign-in page with nothing of the last session left in memory: data, settings, views, route, history and open panels are reset.
+   `message` shows above the form (why the session ended). */
+export function showLogin(message = '') {
+  resetStore();
   S.ui.auth = 'login';
-  S.ui.errors = {};
+  if (message) S.ui.errors.login = message;
   render();
+}
+A.signOut = async () => {
+  S.ui.pop = null;
+  await stopSync({ flush: true }); // sends anything unsaved first, when online
+  pb.authStore.clear();
+  showLogin();
 };
 A.shortcuts = () => {
   S.ui.pop = null;
   S.ui.palette = null;
   openModal({ type: 'shortcuts' });
 };
-A.retryOnline = el => {
+A.retryOnline = async el => {
   el.classList.add('is-loading');
-  setTimeout(() => {
-    S.ui.offline = false;
-    render();
-    toast('Reconnected. All changes are synced.');
-  }, 700);
+  await retryNow(); // on success the offline bar goes away with the next render
+  el.classList.remove('is-loading');
 };
 A.demoToast = el => {
   const v = el.dataset.v;
@@ -1858,17 +1884,33 @@ A.toggleShowPw = () => {
   }
 };
 export const EMAIL_RE = /^\S+@\S+\.\S+$/;
+IN.loginField = el => {
+  S.ui.af = S.ui.af || {};
+  S.ui.af[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+};
 export function enterApp(msg) {
   S.ui.auth = null;
   S.ui.errors = {};
+  S.ui.af = null;
+  S.ui.showPw = false;
   go(S.prefs.home || 'home');
   toast(msg);
 }
-A.doLogin = () => {
+/* Why a sign-in failed, in words for the person at the keyboard. */
+function signInError(err, stage) {
+  const s = err?.status;
+  if (s === 0 || s === 502 || s === 503 || s === 504) return "Can't reach the server. Check your connection and try again.";
+  if (stage === 'password' && (s === 400 || s === 401 || s === 403 || s === 404)) return "That email and password don't match.";
+  const why = err?.response?.message || err?.message || 'unknown error';
+  return stage === 'password' ? `Couldn't sign in: ${why}` : `You're signed in, but your data couldn't be loaded: ${why}`;
+}
+A.doLogin = async () => {
+  if (S.ui.signingIn) return;
   const e = (S.ui.errors = {});
   const em = $('#l-email').value.trim(),
-    pw = $('#l-pw').value;
-  S.ui.af.email = em;
+    pw = $('#l-pw').value,
+    remember = $('#l-rem').checked;
+  S.ui.af = { ...S.ui.af, email: em, remember };
   if (!em) e.email = 'Enter your email address';
   else if (!EMAIL_RE.test(em)) e.email = 'Enter a valid email, like name@company.com';
   if (!pw) e.pw = 'Enter your password';
@@ -1878,5 +1920,28 @@ A.doLogin = () => {
     if (!e.email) $('#l-pw').value = pw;
     return;
   }
-  loadingBtn('login-btn', 750, () => enterApp(`Signed in as ${em}`));
+  S.ui.signingIn = true;
+  const btn = document.getElementById('login-btn');
+  btn?.classList.add('is-loading');
+  btn?.setAttribute('aria-busy', 'true');
+  let stage = 'password';
+  try {
+    setRemember(remember);
+    await pb.collection('users').authWithPassword(em, pw);
+    stage = 'data';
+    await startSync();
+  } catch (err) {
+    pb.authStore.clear();
+    S.ui.signingIn = false;
+    S.ui.errors = { login: signInError(err, stage) };
+    render(); // rebuilds the form: put the password back so a typo is easy to fix
+    const field = $('#l-pw');
+    if (field) {
+      field.value = pw;
+      field.focus();
+    }
+    return;
+  }
+  S.ui.signingIn = false;
+  enterApp(`Signed in as ${em}`);
 };

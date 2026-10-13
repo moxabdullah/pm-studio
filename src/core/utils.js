@@ -8,7 +8,19 @@ document.querySelectorAll('link[data-font]').forEach(l => {
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-export const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 8);
+/* Record ids are what PocketBase accepts as a primary key: exactly 15 characters of [a-z0-9]. The app creates objects
+   synchronously and sends this id on create. Call sites still pass an old-style prefix (uid('t')); it is ignored. Bytes of 252 and
+   above are skipped so every character is equally likely (252 is a multiple of 36). */
+const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+export function uid() {
+  let id = '';
+  while (id.length < 15) {
+    for (const b of crypto.getRandomValues(new Uint8Array(32))) {
+      if (b < 252 && id.length < 15) id += ID_CHARS[b % 36];
+    }
+  }
+  return id;
+}
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const MOD = isMac ? '⌘' : 'Ctrl';
