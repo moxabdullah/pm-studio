@@ -12,16 +12,16 @@ import { autosize, focusKey, render } from './render.js';
 
 const COALESCE_MS = 100;
 const RECHECK_MS = 150;
-const STALE_MS = 15000; // a drag or press whose end was never reported (released outside the window) stops counting after this
+const STALE_MS = 15000; // a drag, press or composition whose end was never reported (released outside the window, say) stops counting after this
 
 let timer = 0;
 let dragSince = 0;
 let pressSince = 0;
-let composing = false;
+let composeSince = 0;
 let rendering = false;
 
 const on = since => since > 0 && Date.now() - since < STALE_MS;
-const busy = () => on(dragSince) || on(pressSince) || composing || !!document.querySelector('.select-menu');
+const busy = () => on(dragSince) || on(pressSince) || on(composeSince) || !!document.querySelector('.select-menu');
 /* Something the user was doing has ended: render soon, after the app's own handlers for that event have run. */
 function ended() {
   if (timer) {
@@ -70,14 +70,14 @@ addEventListener('blur', () => {
 document.addEventListener(
   'compositionstart',
   () => {
-    composing = true;
+    composeSince = Date.now();
   },
   true,
 );
 document.addEventListener(
   'compositionend',
   () => {
-    composing = false;
+    composeSince = 0;
     ended();
   },
   true,

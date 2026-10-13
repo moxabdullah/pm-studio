@@ -38,17 +38,19 @@
                record's `updated` time. It only ever advances to a state the server confirmed (a load, a live update, or the answer
                to our own request), never to what we merely sent. So while a write is in flight it still shows what the server had,
                and the user's edit is still recognisably "mine" if someone else's change to the same record arrives meanwhile.
-     flush     Diffs S.data against base. Creates go parent-first, then updates (only the top-level fields that changed; `doc` as a
-               whole), then deletes child-first. A 404 on delete counts as done. The server's answer to each create and update is
-               applied like a live update. Network failure -> offline. 401 -> sign-in page. Any other 4xx -> one toast, and the
-               server's version of the record replaces the local one (so a rejected change is never sent again).
+     flush     Diffs S.data against base and sends creates and updates (only the top-level fields that changed; `doc` as a whole)
+               together, a create that needs a parent created in the same flush after it, then deletes. A 404 on delete counts as
+               done. The server's answer to each create and update is applied like a live update. Network failure -> offline.
+               401 -> sign-in page. Any other 4xx -> one toast, and the server's version of the record replaces the local one (so
+               a rejected change is never sent again).
      live      One subscription per collection. An event is dropped when it is older than base (by `updated`: a late echo of an
                earlier write) or equal to it (our own echo). Otherwise it is merged per top-level field and per top-level `doc` key
                (3-way against base): fields with an unsent local edit keep the local value, the rest take the remote one. The
                object is patched in place.
      offline   Entered when a request cannot reach the server (or a proxy answers 502-504), or the live stream stays down and the
-               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery: send what is unsent,
-               then reload by merging (not replacing) so nothing typed meanwhile is lost, then resubscribe.
+               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery: reload by merging (not
+               replacing, so nothing typed meanwhile is lost), then send what is unsent (built on the fresh copy, so it does not
+               overwrite other people's changes to the same record), then start a new stream.
      journal   The last minute of remote changes that were applied to S.data, for restoreState(). */
 import { authStore, pb } from './pb.js';
 import {
@@ -78,6 +80,7 @@ const st = {
   active: false, // between startSync and stopSync
   ready: false, // the first load has been installed
   stopping: false,
+  broken: false, // the last flush failed on a bug (not a server answer) and the user has been told
   gen: 0, // bumps on every start and stop: work begun under an older value gives up quietly
   me: '', // the signed-in user's id
   offline: false,
@@ -98,9 +101,20 @@ export const stats = { flushes: 0, lastDiffMs: 0, lastFlushMs: 0, lastOps: 0, re
 const DEV = !!import.meta.env?.DEV;
 
 const same = (a, b) => stableStringify(a) === stableStringify(b);
-const entryOf = (p, u = '') => ({ p, s: stableStringify(p), u });
+/* A baseline entry: the payload p, its key-sorted string s, a plain string j of how the app builds it (see differs()), and u. */
+const entryOf = (p, u = '') => ({ p, s: stableStringify(p), j: JSON.stringify(p), u });
+/* Does the app's payload `p` differ from baseline entry `b`? The plain JSON string says "no" cheaply (the same payload built the same
+   way gives the same string, and this is the usual answer for almost every record on every flush). Only when it differs is the
+   key-sorted comparison made, which is authoritative (PocketBase returns keys sorted, the app does not), and its "same" is remembered. */
+function differs(p, b) {
+  const j = JSON.stringify(p);
+  if (j === b.j) return false;
+  if (stableStringify(p) !== b.s) return true;
+  b.j = j;
+  return false;
+}
 const FRONT = new Set(['activity', 'notifs', 'files']); // lists the app keeps newest first
-const CAPPED = new Set(['activity', 'notifs']); // only the newest are loaded, so absence from a load means nothing
+const CAPS = { activity: 1000, notifs: 500 }; // collections of which only the newest are loaded
 const find = (key, id) => D()[key].find(x => x.id === id);
 
 /* What a failed request means: 'network' (the server cannot be reached; a proxy answering 502-504 counts), 'auth' (the session is
@@ -377,7 +391,7 @@ async function loadAll() {
       .collection(coll)
       .getList(1, n, { sort: '-created,id', skipTotal: true })
       .then(r => r.items);
-  const jobs = COLLECTIONS.map(({ key, coll }) => [key, key === 'activity' ? newest(coll, 1000) : key === 'notifs' ? newest(coll, 500) : full(coll)]);
+  const jobs = COLLECTIONS.map(({ key, coll }) => [key, CAPS[key] ? newest(coll, CAPS[key]) : full(coll)]);
   jobs.push([USER_PREFS, full(USER_PREFS)]);
   const done = await Promise.all(jobs.map(j => j[1]));
   return Object.fromEntries(jobs.map((j, i) => [j[0], done[i]]));
@@ -420,8 +434,8 @@ async function resync() {
         seen.add(rec.id);
         changed = applyRecord(key, rec) || changed;
       }
-      if (CAPPED.has(key)) continue;
-      // Missing from the load: gone, unless paging skipped it while records were being deleted. Ask before removing.
+      if (all[key].length >= (CAPS[key] || Infinity)) continue; // a capped list that filled up: what is missing may just be older
+      // Missing from a complete load: gone, unless paging skipped it while records were being deleted. Ask before removing.
       const missing = [...base.get(key).keys()].filter(id => !seen.has(id));
       const gone = await Promise.all(missing.map(id => confirmGone(key, coll, id)));
       for (const [i, id] of missing.entries()) {
@@ -528,7 +542,7 @@ function computeDiff() {
       const b = known.get(p.id);
       if (!b) {
         if (!updateOnly) creates.push({ type: 'create', key, coll, id: p.id, payload: p });
-      } else if (stableStringify(p) !== b.s) updates.push({ type: 'update', key, coll, id: p.id, fields: changedFields(b.p, p) });
+      } else if (differs(p, b)) updates.push({ type: 'update', key, coll, id: p.id, fields: changedFields(b.p, p) });
     }
     if (!updateOnly) for (const id of known.keys()) if (!seen.has(id)) deletes.push({ type: 'delete', key, coll, id });
   }
@@ -537,7 +551,7 @@ function computeDiff() {
   const p = prefsPayload(id);
   let prefs = null;
   if (!cur) prefs = { type: 'create', key: USER_PREFS, coll: USER_PREFS, id, payload: p };
-  else if (stableStringify(p) !== cur.s) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p) };
+  else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p) };
   return { creates, updates, deletes: deletes.reverse(), prefs };
 }
 export function pendingChanges() {
@@ -554,15 +568,33 @@ export function pendingDetails() {
   );
 }
 
-/* Ops grouped by collection, in the order the collections first appear. */
-const byColl = ops => {
-  const groups = new Map();
-  for (const op of ops) {
-    if (!groups.has(op.coll)) groups.set(op.coll, []);
-    groups.get(op.coll).push(op);
+/* The ops in the rounds they go out in. Creates, updates and the user's settings go together, except that one that points at a
+   record created in this same flush (a task in a new project, a comment on a new task) waits for it. Deletes go last: an update
+   may move a child out of the record being deleted. Everything within a round is sent at once, so an ordinary save is one round
+   trip, which also matters when the page is about to close (a round that has not started by then is never sent). Deletes need no
+   order among themselves: deleting a parent removes its children on the server, and a child already gone counts as deleted. */
+function rounds(diff) {
+  const creating = new Set(diff.creates.map(op => op.id));
+  const waitsFor = op => {
+    const ids = [];
+    for (const [field, value] of Object.entries(op.payload || op.fields)) if (field !== 'id' && field !== 'doc') ids.push(...[].concat(value));
+    return ids.filter(id => creating.has(id) && id !== op.id);
+  };
+  const out = [];
+  const done = new Set();
+  let left = [...diff.creates, ...diff.updates, ...(diff.prefs ? [diff.prefs] : [])];
+  while (left.length) {
+    const ready = new Set(left.filter(op => waitsFor(op).every(id => done.has(id))));
+    if (!ready.size) {
+      out.push(left); // cannot happen (relations never loop), but never stall on it
+      break;
+    }
+    out.push([...ready]);
+    for (const op of ready) if (op.type === 'create') done.add(op.id);
+    left = left.filter(op => !ready.has(op));
   }
-  return [...groups.values()];
-};
+  return [...out, diff.deletes];
+}
 /* The server accepted an op: its answer is the new baseline. An answer that carries more than what was sent (someone else's change
    to the same record got in first) is merged like a live update. Returns true when S.data changed. */
 function settle(op, rec) {
@@ -603,7 +635,7 @@ async function flushOnce(options, gen) {
   const t0 = performance.now();
   const diff = computeDiff();
   stats.lastDiffMs = performance.now() - t0;
-  const phases = [...byColl(diff.creates), [...diff.updates, ...(diff.prefs ? [diff.prefs] : [])], ...byColl(diff.deletes)].filter(p => p.length);
+  const phases = rounds(diff).filter(p => p.length);
   stats.lastOps = phases.reduce((n, p) => n + p.length, 0);
   if (!phases.length) return true;
   const rejected = [];
@@ -644,6 +676,13 @@ export function flush(options = {}) {
         st.again = false;
         ok = await flushOnce(request, gen);
       } while (st.again && ok && gen === st.gen);
+      st.broken = false;
+    } catch (err) {
+      // A bug, not a server answer. Nothing was sent for this round, so say so (once) rather than lose changes in silence.
+      console.error('sync: could not save', err);
+      if (!st.broken) hooks.toast("Couldn't save your changes. Reload the page and try again.", { kind: 'err' });
+      st.broken = true;
+      ok = false;
     } finally {
       if (st.flushing === run) st.flushing = null;
     }
@@ -671,9 +710,9 @@ async function adoptServerTruth({ key, coll, id }) {
     } else applyRecord(key, await pb.collection(coll).getOne(id), true);
   } catch (err) {
     const kind = classify(err);
-    if (err?.status === 404 && key !== USER_PREFS)
+    if (err?.status === 404 && key !== USER_PREFS) {
       removeRecord(key, id, true); // gone, or not ours to see
-    else if (kind === 'network') goOffline();
+    } else if (kind === 'network') goOffline();
     else if (kind === 'rejected') {
       // Cannot even read it back. Stop trying to send it rather than send it forever.
       const known = base.get(key);
@@ -720,8 +759,10 @@ function recover() {
     const gen = st.gen;
     try {
       await ping();
-      if (!(await flush({ recovering: true }))) return false;
+      // Merge first, then send. The reload keeps unsent edits (it merges, it does not replace), and `doc` is written whole: sent
+      // first, an edit built on a stale copy would overwrite what other people changed in the same record meanwhile.
       await resync();
+      if (!(await flush({ recovering: true }))) return false;
       await resubscribe(); // after an outage the old stream may be dead without the browser knowing
     } catch (err) {
       if (reloadFailure(err) !== 'other') return false;
