@@ -56,7 +56,7 @@ export const sel = (k, opts, v) =>
   `<select class="select" style="width:auto;min-width:180px" data-in="prefSel" data-k="${k}" aria-label="${k}">${opts
     .map(o => {
       const [val, n] = Array.isArray(o) ? o : [o, o];
-      return `<option value="${val}" ${String(v) === String(val) ? 'selected' : ''}>${n}</option>`;
+      return `<option value="${esc(val)}" ${String(v) === String(val) ? 'selected' : ''}>${n}</option>`;
     })
     .join('')}</select>`;
 export function pageSettings() {
@@ -64,7 +64,7 @@ export function pageSettings() {
   const title = SET_NAV.flatMap(g => g[1]).find(x => x[0] === sec) || ['appearance', 'Appearance'];
   return `<div class="set">
     <nav class="set-nav" aria-label="Settings">${SET_NAV.map(([g, items]) => `<div class="gh">${g}</div>${items.map(([k, n, i]) => `<button class="sitem ${sec === k ? 'on' : ''}" data-a="go" data-r="settings" data-sec="${k}">${ic(i, 15)}<span>${n}</span></button>`).join('')}`).join('')}</nav>
-    <div class="set-body" data-keep="set:${sec}"><div class="set-in">${settingsBody(sec, title[1])}</div></div>
+    <div class="set-body" data-keep="set:${esc(sec)}"><div class="set-in">${settingsBody(sec, title[1])}</div></div>
   </div>`;
 }
 export function settingsBody(sec, title) {
@@ -114,7 +114,7 @@ export function settingsBody(sec, title) {
         ]
           .map(
             ([k, c]) =>
-              `<button class="sw ${P.accent === k ? 'on' : ''}" style="--c:${c}" role="radio" aria-checked="${P.accent === k}" data-a="setPref" data-k="accent" data-v="${k}" aria-label="${k}" data-tip="${k[0].toUpperCase() + k.slice(1)}">${P.accent === k ? ic('check', 13) : ''}</button>`,
+              `<button class="sw ${P.accent === k ? 'on' : ''}" style="--c:${c}" role="radio" aria-checked="${P.accent === k}" data-a="setPref" data-k="accent" data-v="${k}" aria-label="${k}" data-tip="${esc(k[0].toUpperCase() + k.slice(1))}">${P.accent === k ? ic('check', 13) : ''}</button>`,
           )
           .join('')}</div>`,
       )}</div>
@@ -197,7 +197,7 @@ export function settingsBody(sec, title) {
       return (
         H(`${d.members.length} people have access to ${esc(d.ws.name)}.`) +
         `<div class="row" style="margin-bottom:12px"><button class="btn btn-secondary" data-a="go" data-r="members">Open member directory</button></div>
-      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${m.id}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${admin && m.id !== d.me ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role}</span>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
+      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${esc(m.id)}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${admin && m.id !== d.me ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${esc(m.id)}">${esc(m.role)}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${esc(m.role)}</span>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${esc(m.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
       );
     case 'teams':
       return H('Teams group people and projects.') + teamsGrid();
@@ -221,7 +221,7 @@ export function settingsBody(sec, title) {
           ),
         ) +
         srow('Show completed tasks on boards', '', tog('showDoneBoard', P.showDoneBoard !== false)) +
-        `<div class="sblock"><h2>Archived projects</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">Restore</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">Delete</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">No archived projects. Archived projects are hidden from the sidebar but keep all their tasks.</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}Open archive</button></div></div>`
+        `<div class="sblock"><h2>Archived projects</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${esc(p.id)}">Restore</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${esc(p.id)}">Delete</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">No archived projects. Archived projects are hidden from the sidebar but keep all their tasks.</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}Open archive</button></div></div>`
       );
     }
     case 'permissions':
@@ -267,7 +267,7 @@ export function settingsBody(sec, title) {
         H('How you appear to others in the workspace.') +
         `<form data-submit="saveProfile" class="col" style="gap:16px;max-width:440px">
       <div class="row" style="gap:14px">${av(d.me, 'xl', false)}<div><div class="label" style="margin-bottom:6px">Avatar color</div><div class="swatches">${['#5A67D8', '#C54B78', '#3B82C4', '#23918A', '#C48A1E', '#8662C9'].map(c => `<button type="button" class="sw ${me().c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="avColor" data-v="${c}" aria-label="Color"></button>`).join('')}</div></div></div>
-      <div class="field"><label class="label" for="pf-name">Full name</label><input class="input ${err ? 'is-error' : ''}" id="pf-name" value="${esc(me().name)}">${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
+      <div class="field"><label class="label" for="pf-name">Full name</label><input class="input ${err ? 'is-error' : ''}" id="pf-name" value="${esc(me().name)}">${err ? `<span class="err">${ic('circle-alert', 12)}${esc(err)}</span>` : ''}</div>
       <div class="field"><label class="label" for="pf-title">Title</label><input class="input" id="pf-title" value="${esc(me().title)}"></div>
       <div class="field"><label class="label" for="pf-email">Email</label><input class="input" id="pf-email" value="${esc(me().email)}" disabled><span class="hint">Ask an admin to change your sign-in email.</span></div>
       <div><button class="btn btn-primary" data-a="saveProfile" id="pf-save">Save profile</button></div></form>`
@@ -317,9 +317,9 @@ export function settingsBody(sec, title) {
       return (
         H("Use a long password you don't use anywhere else.") +
         `${S.ui.pwDone ? `<div class="alert ok" style="margin-bottom:14px">${ic('circle-check', 15)}<span>Password updated. Other sessions stay signed in.</span></div>` : ''}<form data-submit="savePassword" class="col" style="gap:14px;max-width:400px">
-      <div class="field"><label class="label" for="pw-cur">Current password</label><input type="password" class="input ${e.pwCur ? 'is-error' : ''}" id="pw-cur" autocomplete="current-password">${e.pwCur ? `<span class="err">${ic('circle-alert', 12)}${e.pwCur}</span>` : ''}</div>
-      <div class="field"><label class="label" for="pw-new">New password</label><input type="password" class="input ${e.pwNew ? 'is-error' : ''}" id="pw-new" data-in="pwStrength" value="${esc(pw)}" autocomplete="new-password">${strengthMeter(pw)}${e.pwNew ? `<span class="err">${ic('circle-alert', 12)}${e.pwNew}</span>` : '<span class="hint">At least 10 characters with a number or symbol.</span>'}</div>
-      <div class="field"><label class="label" for="pw-conf">Confirm new password</label><input type="password" class="input ${e.pwConf ? 'is-error' : ''}" id="pw-conf" autocomplete="new-password">${e.pwConf ? `<span class="err">${ic('circle-alert', 12)}${e.pwConf}</span>` : ''}</div>
+      <div class="field"><label class="label" for="pw-cur">Current password</label><input type="password" class="input ${e.pwCur ? 'is-error' : ''}" id="pw-cur" autocomplete="current-password">${e.pwCur ? `<span class="err">${ic('circle-alert', 12)}${esc(e.pwCur)}</span>` : ''}</div>
+      <div class="field"><label class="label" for="pw-new">New password</label><input type="password" class="input ${e.pwNew ? 'is-error' : ''}" id="pw-new" data-in="pwStrength" value="${esc(pw)}" autocomplete="new-password">${strengthMeter(pw)}${e.pwNew ? `<span class="err">${ic('circle-alert', 12)}${esc(e.pwNew)}</span>` : '<span class="hint">At least 10 characters with a number or symbol.</span>'}</div>
+      <div class="field"><label class="label" for="pw-conf">Confirm new password</label><input type="password" class="input ${e.pwConf ? 'is-error' : ''}" id="pw-conf" autocomplete="new-password">${e.pwConf ? `<span class="err">${ic('circle-alert', 12)}${esc(e.pwConf)}</span>` : ''}</div>
       <div><button class="btn btn-primary" data-a="savePassword" id="pw-save">Update password</button></div></form>`
       );
     }

@@ -7,10 +7,11 @@ import { FT, av, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
 export function searchAll(q) {
   q = (q || '').trim().toLowerCase();
   if (!q) return { tasks: [], projects: [], people: [], files: [], comments: [] };
-  const has = s => (s || '').toLowerCase().includes(q);
+  const str = s => String(s ?? '').toLowerCase();
+  const has = s => str(s).includes(q);
   return {
     tasks: allTasks()
-      .filter(t => has(t.title) || has(t.key) || has(t.desc.replace(/<[^>]+>/g, '')))
+      .filter(t => has(t.title) || has(t.key) || has(str(t.desc).replace(/<[^>]+>/g, '')))
       .slice(0, 30),
     projects: visibleProjects().filter(p => has(p.name) || has(p.desc)),
     people: D().members.filter(m => has(m.name) || has(m.email) || has(m.title)),
@@ -50,7 +51,7 @@ export function pageSearch() {
               r.tasks
                 .map(
                   t =>
-                    `<div class="mini" data-a="openTask" data-id="${t.id}">${stIcon(t.status)}<span class="mono faint" style="font-size:11px">${t.key}</span><span class="tt">${hl(t.title, q)}</span><span class="pj"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span>${esc(proj(t.project).name)}</span>${av(t.assignee, 'sm')}</div>`,
+                    `<div class="mini" data-a="openTask" data-id="${esc(t.id)}">${stIcon(t.status)}<span class="mono faint" style="font-size:11px">${esc(t.key)}</span><span class="tt">${hl(t.title, q)}</span><span class="pj"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span>${esc(proj(t.project).name)}</span>${av(t.assignee, 'sm')}</div>`,
                 )
                 .join(''),
             ) +
@@ -60,7 +61,7 @@ export function pageSearch() {
               r.projects
                 .map(
                   p =>
-                    `<div class="mini" data-a="go" data-r="project" data-id="${p.id}">${pIcon(p, '', 13)}<span class="tt">${hl(p.name, q)} <span class="faint" style="font-size:12px">— ${esc(p.desc.slice(0, 70))}…</span></span>${pStatus(p.status)}</div>`,
+                    `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 13)}<span class="tt">${hl(p.name, q)} <span class="faint" style="font-size:12px">— ${esc(p.desc.slice(0, 70))}…</span></span>${pStatus(p.status)}</div>`,
                 )
                 .join(''),
             ) +
@@ -70,7 +71,7 @@ export function pageSearch() {
               r.people
                 .map(
                   m =>
-                    `<div class="mini" data-a="go" data-r="member" data-id="${m.id}">${av(m.id, 'md', false)}<span class="tt">${hl(m.name, q)} <span class="faint" style="font-size:12px">${esc(m.title)}</span></span><span class="faint" style="font-size:12px">${esc(m.email)}</span></div>`,
+                    `<div class="mini" data-a="go" data-r="member" data-id="${esc(m.id)}">${av(m.id, 'md', false)}<span class="tt">${hl(m.name, q)} <span class="faint" style="font-size:12px">${esc(m.title)}</span></span><span class="faint" style="font-size:12px">${esc(m.email)}</span></div>`,
                 )
                 .join(''),
             ) +
@@ -80,7 +81,7 @@ export function pageSearch() {
               r.files
                 .map(
                   f =>
-                    `<div class="mini" data-a="go" data-r="project" data-id="${f.project}" data-tab="files"><span class="ftype" style="--c:${FT[f.type].c}">${ic(FT[f.type].i, 14)}</span><span class="tt">${hl(f.name, q)}</span><span class="faint" style="font-size:12px">${f.size} · ${esc(proj(f.project).name)}</span></div>`,
+                    `<div class="mini" data-a="go" data-r="project" data-id="${esc(f.project)}" data-tab="files"><span class="ftype" style="--c:${FT[f.type].c}">${ic(FT[f.type].i, 14)}</span><span class="tt">${hl(f.name, q)}</span><span class="faint" style="font-size:12px">${esc(f.size)} · ${esc(proj(f.project).name)}</span></div>`,
                 )
                 .join(''),
             ) +
@@ -90,7 +91,7 @@ export function pageSearch() {
               r.comments
                 .map(
                   c =>
-                    `<div class="mini" style="align-items:flex-start;padding-top:10px;padding-bottom:10px" data-a="openTask" data-id="${c.task}">${av(c.by, 'sm')}<div class="grow" style="min-width:0"><div style="font-size:12px" class="muted"><b style="color:var(--text);font-weight:500">${esc(mem(c.by).name)}</b> on ${esc(task(c.task).title)} · ${ago(c.at)}</div><div style="font-size:13px">${hl(c.text, q)}</div></div></div>`,
+                    `<div class="mini" style="align-items:flex-start;padding-top:10px;padding-bottom:10px" data-a="openTask" data-id="${esc(c.task)}">${av(c.by, 'sm')}<div class="grow" style="min-width:0"><div style="font-size:12px" class="muted"><b style="color:var(--text);font-weight:500">${esc(mem(c.by)?.name)}</b> on ${esc(task(c.task).title)} · ${ago(c.at)}</div><div style="font-size:13px">${hl(c.text, q)}</div></div></div>`,
                 )
                 .join(''),
             )

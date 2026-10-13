@@ -1,14 +1,20 @@
 /* ---------- icons: inlined Lucide subset (src/00-icons.js), rendered to inline svg ---------- */
 import { ICONS } from 'virtual:icons';
 import { esc } from './utils.js';
+import { safeColor } from './safe.js';
 
 export const _icCache = {};
+const DEFAULT_ICON = '<rect x="5" y="5" width="14" height="14" rx="3"/>';
+/* Icon names can come from stored data (project and team icons). Only the bundled icons resolve; anything else,
+   including "constructor" or markup, gets the default glyph. */
 export function ic(name, size = 16, cls = '') {
-  const k = name + '|' + size + '|' + cls;
+  const known = typeof name === 'string' && Object.prototype.hasOwnProperty.call(ICONS, name);
+  const px = Number(size) || 16;
+  const k = (known ? name : '') + '|' + px + '|' + cls;
   if (_icCache[k]) return _icCache[k];
-  const inner = ICONS[name] || '<rect x="5" y="5" width="14" height="14" rx="3"/>';
+  const inner = known ? ICONS[name] : DEFAULT_ICON;
   return (_icCache[k] =
-    `<svg class="i ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`);
+    `<svg class="i ${esc(cls)}" width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`);
 }
 /* Gr8r brand (src/assets/logo.svg): the wordmark follows the theme's text colour; the app icon is the white wordmark on a black tile. */
 export const LOGO_D =
@@ -20,5 +26,5 @@ export const MARK = (px = 22) =>
 export function wsLogo(w, px = 22) {
   return w && w.brand
     ? `<span class="ws-logo brand" style="width:${px}px;height:${px}px">${MARK(px)}</span>`
-    : `<span class="ws-logo" style="--c:${w.c};width:${px}px;height:${px}px;font-size:${Math.max(9, Math.round(px * 0.46))}px">${esc(w.name[0])}</span>`;
+    : `<span class="ws-logo" style="--c:${safeColor(w?.c)};width:${px}px;height:${px}px;font-size:${Math.max(9, Math.round(px * 0.46))}px">${esc(String(w?.name ?? '')[0])}</span>`;
 }

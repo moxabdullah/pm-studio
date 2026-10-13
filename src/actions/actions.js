@@ -3,6 +3,7 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
+import { lookup, sanitizeHtml } from '../core/safe.js';
 import { D, S, allTasks, canSee, commentsOf, isAdmin, logAct, me, mem, proj, save, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
@@ -58,7 +59,7 @@ export function createTask(f) {
   logAct('created', t);
   return t;
 }
-export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
+export const RECUR_DAYS = lookup({ Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 }); // t.recur is stored text
 export function applyPatch(t, patch) {
   const msgs = [];
   for (const k of Object.keys(patch)) {
@@ -522,7 +523,7 @@ A.editTask = el => {
   if (!t) return;
   S.ui.form = {
     title: t.title,
-    desc: (t.desc || '')
+    desc: String(t.desc ?? '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim(),
@@ -635,7 +636,7 @@ A.submitTask = () => {
         applyPatch(t, base);
         if (
           f.desc !==
-          (t.desc || '')
+          String(t.desc ?? '')
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
@@ -935,7 +936,7 @@ document.addEventListener('mousedown', e => {
   const ed = $('#d-desc');
   if (ed) {
     const t = task(ed.dataset.rte);
-    t.desc = ed.innerHTML;
+    t.desc = sanitizeHtml(ed.innerHTML);
     save();
   }
 });
@@ -944,10 +945,18 @@ document.addEventListener('input', e => {
   if (!ed) return;
   const t = task(ed.dataset.rte);
   if (t) {
-    t.desc = ed.innerHTML;
+    t.desc = sanitizeHtml(ed.innerHTML);
     t.updated = Date.now();
     save();
   }
+});
+/* Pasted HTML is cleaned before it enters the editor, so markup from another page (handlers, scripts, styles) never lands in a description. */
+document.addEventListener('paste', e => {
+  const ed = e.target.closest?.('[data-rte]');
+  const html = e.clipboardData?.getData('text/html');
+  if (!ed || !html) return;
+  e.preventDefault();
+  document.execCommand('insertHTML', false, sanitizeHtml(html));
 });
 
 /* selection & bulk */

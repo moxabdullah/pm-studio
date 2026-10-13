@@ -21,11 +21,11 @@ export function calendarHtml(ts, opt = {}) {
   const chip = it => {
     if (it.ev) {
       const p = proj(it.ev.project);
-      return `<button class="cev event" style="--c:${pColor(p)}" data-a="pop" data-pop="event" data-id="${it.ev.id}" title="${esc(it.ev.title)} · ${it.ev.time}"><span class="num faint" style="font-size:11px">${it.ev.time}</span><span class="trunc">${esc(it.ev.title)}</span></button>`;
+      return `<button class="cev event" style="--c:${pColor(p)}" data-a="pop" data-pop="event" data-id="${esc(it.ev.id)}" title="${esc(it.ev.title)} · ${esc(it.ev.time)}"><span class="num faint" style="font-size:11px">${esc(it.ev.time)}</span><span class="trunc">${esc(it.ev.title)}</span></button>`;
     }
     const t = it.t;
     const p = proj(t.project);
-    return `<button class="cev ${t.status === 'done' ? 'done' : ''}${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task" title="${esc(t.title)}">${t.status === 'done' ? stIcon('done', 11) : prIcon(t.priority, 11)}<span class="trunc">${esc(t.title)}</span>${av(t.assignee, '', false)}</button>`;
+    return `<button class="cev ${t.status === 'done' ? 'done' : ''}${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${esc(t.id)}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task" title="${esc(t.title)}">${t.status === 'done' ? stIcon('done', 11) : prIcon(t.priority, 11)}<span class="trunc">${esc(t.title)}</span>${av(t.assignee, '', false)}</button>`;
   };
   let label, body;
   if (mode === 'month') {
@@ -42,9 +42,9 @@ export function calendarHtml(ts, opt = {}) {
           const today = diffD(d, TODAY) === 0;
           return `<div class="cday ${d.getMonth() !== cur.getMonth() ? 'out' : ''} ${today ? 'today' : ''}" data-drop-day="${ds}">
           <span class="dn" ${today ? 'aria-current="date"' : ''}>${d.getDate()}</span>
-          <button class="ibtn ibtn-xs add" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="Add task on ${fmtDate(ds)}">${ic('plus', 13)}</button>
+          <button class="ibtn ibtn-xs add" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${esc(opt.project)}"` : ''} aria-label="Add task on ${fmtDate(ds)}">${ic('plus', 13)}</button>
           ${items.slice(0, 3).map(chip).join('')}
-          ${items.length > 3 ? `<button class="cmore" data-a="pop" data-pop="daylist" data-date="${ds}" data-key="${opt.key || ''}">+${items.length - 3} more</button>` : ''}
+          ${items.length > 3 ? `<button class="cmore" data-a="pop" data-pop="daylist" data-date="${ds}" data-key="${esc(opt.key || '')}">+${items.length - 3} more</button>` : ''}
         </div>`;
         })
         .join('')}</div>`;
@@ -57,17 +57,17 @@ export function calendarHtml(ts, opt = {}) {
         const ds = iso(d);
         const items = itemsOn(ds).sort((a, b) => (a.ev ? 0 : 1) - (b.ev ? 0 : 1));
         const today = diffD(d, TODAY) === 0;
-        return `<div class="wcol"><div class="wcol-h ${today ? 'today' : ''}"><span class="n">${d.getDate()}</span><span class="muted" style="font-size:12px">${WD[d.getDay()]}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="Add task">${ic('plus', 13)}</button></div>
+        return `<div class="wcol"><div class="wcol-h ${today ? 'today' : ''}"><span class="n">${d.getDate()}</span><span class="muted" style="font-size:12px">${WD[d.getDay()]}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${esc(opt.project)}"` : ''} aria-label="Add task">${ic('plus', 13)}</button></div>
         <div class="wcol-b" data-drop-day="${ds}">${
           items
             .map(it => {
               if (it.ev) {
                 const p = proj(it.ev.project);
-                return `<button class="wcard event" style="--c:${pColor(p)}" data-a="pop" data-pop="event" data-id="${it.ev.id}"><span class="t"><span class="pdot" style="--c:${pColor(p)};border-radius:50%"></span>${esc(it.ev.title)}</span><span class="m">${ic('clock', 11)}${it.ev.time} · ${esc(p.name)}</span></button>`;
+                return `<button class="wcard event" style="--c:${pColor(p)}" data-a="pop" data-pop="event" data-id="${esc(it.ev.id)}"><span class="t"><span class="pdot" style="--c:${pColor(p)};border-radius:50%"></span>${esc(it.ev.title)}</span><span class="m">${ic('clock', 11)}${esc(it.ev.time)} · ${esc(p?.name)}</span></button>`;
               }
               const t = it.t;
               const p = proj(t.project);
-              return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p.name)}</span>${av(t.assignee, 'sm', false)}</span></button>`;
+              return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${esc(t.id)}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p?.name)}</span>${av(t.assignee, 'sm', false)}</span></button>`;
             })
             .join('') || '<span class="faint" style="font-size:12px;padding:4px">No tasks</span>'
         }</div></div>`;

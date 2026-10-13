@@ -9,7 +9,7 @@ export function authShell(inner) {
     <div class="auth-c">${inner}</div>
     <div class="auth-foot" style="padding:18px;font-size:12px" ><span class="faint">© 2026 Gr8r Studio · Terms · Privacy</span></div></div>`;
 }
-export const ferr = k => (S.ui.errors[k] ? `<span class="err" id="${k}-err">${ic('circle-alert', 12)}${S.ui.errors[k]}</span>` : '');
+export const ferr = k => (S.ui.errors[k] ? `<span class="err" id="${k}-err">${ic('circle-alert', 12)}${esc(S.ui.errors[k])}</span>` : '');
 export const icls = k => (S.ui.errors[k] ? 'is-error' : '');
 /* Sign-in is the only screen: there is no public sign-up, and admins reset passwords. S.ui.errors.login shows above the fields. */
 export function renderAuth() {

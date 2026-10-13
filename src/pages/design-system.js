@@ -1,5 +1,5 @@
 /* ---------------- DESIGN SYSTEM ---------------- */
-import { dOff } from '../core/utils.js';
+import { dOff, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { LABELS, PCOLORS, PRIOS, STATUSES } from '../core/constants.js';
 import { S, allTasks, task } from '../core/store.js';
@@ -137,7 +137,7 @@ export function pageSystem() {
         .join('')}</div></div></div></div>
     <div class="ds-sec"><h2>Feedback</h2>
       <div class="col" style="gap:8px;margin-bottom:12px"><div class="alert info">${ic('info', 15)}<span><b>Heads up.</b> Timeline dependencies are shown as dashed when out of order.</span></div><div class="alert ok">${ic('circle-check', 15)}<span>Project archived. <button class="link">Undo</button></span></div><div class="alert warn">${ic('triangle-alert', 15)}<span>3 tasks due this week are not started.</span></div><div class="alert danger">${ic('circle-alert', 15)}<span>Your changes couldn't be saved. <button class="link">Try again</button></span></div></div>
-      <div class="ds-row"><span class="lab">Triggers</span><button class="btn btn-secondary" data-a="demoToast" data-v="ok">Toast</button><button class="btn btn-secondary" data-a="demoToast" data-v="err">Error toast</button><button class="btn btn-secondary" data-tip="Tooltips pair with icon buttons">Tooltip</button><button class="btn btn-secondary" data-a="newTask">Modal</button><button class="btn btn-secondary" data-a="openTask" data-id="${demo?.id || ''}" ${demo ? '' : 'disabled'}>Drawer</button><button class="btn btn-secondary" data-a="demoConfirm">Confirmation</button><button class="btn btn-secondary" data-a="openPalette">Command menu</button></div></div>
+      <div class="ds-row"><span class="lab">Triggers</span><button class="btn btn-secondary" data-a="demoToast" data-v="ok">Toast</button><button class="btn btn-secondary" data-a="demoToast" data-v="err">Error toast</button><button class="btn btn-secondary" data-tip="Tooltips pair with icon buttons">Tooltip</button><button class="btn btn-secondary" data-a="newTask">Modal</button><button class="btn btn-secondary" data-a="openTask" data-id="${esc(demo?.id || '')}" ${demo ? '' : 'disabled'}>Drawer</button><button class="btn btn-secondary" data-a="demoConfirm">Confirmation</button><button class="btn btn-secondary" data-a="openPalette">Command menu</button></div></div>
     <div class="ds-sec"><h2>Iconography <span>Lucide · 1.8px stroke · 12–18px</span></h2><div class="panel" style="padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px;color:var(--text-2)">${['house', 'inbox', 'circle-check', 'star', 'search', 'bell', 'folder-kanban', 'list-checks', 'calendar', 'chart-gantt', 'users', 'activity', 'settings', 'plus', 'list-filter', 'arrow-up-down', 'rows-3', 'share-2', 'ellipsis', 'paperclip', 'message-square', 'tag', 'link', 'copy', 'pencil', 'trash-2', 'archive', 'upload', 'repeat', 'timer', 'git-branch', 'lock', 'eye', 'at-sign', 'sun', 'moon'].map(i => `<span style="height:36px;display:grid;place-items:center" title="${i}">${ic(i, 17)}</span>`).join('')}</div></div>
   </div>`;
 }

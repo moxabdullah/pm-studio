@@ -1,5 +1,5 @@
 /* ---------- MY TASKS ---------- */
-import { TODAY, dOff, diffD, parse } from '../core/utils.js';
+import { TODAY, dOff, diffD, esc, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, isOver } from '../core/store.js';
 import { applyView, viewOf, viewToolbar } from '../shell/view-engine.js';
@@ -47,7 +47,7 @@ export function pageMyTasks() {
       ]
         .map(([k, n, i]) => `<button class="${mode === k ? 'on' : ''}" data-a="set" data-k="myView" data-v="${k}">${ic(i, 13)}${n}</button>`)
         .join('')}</div>
-      <button class="btn btn-primary" data-a="newTask" data-assignee="${D().me}">${ic('plus', 14)}New task</button></div></div>
+      <button class="btn btn-primary" data-a="newTask" data-assignee="${esc(D().me)}">${ic('plus', 14)}New task</button></div></div>
     ${viewToolbar(key, { group: false })}
     ${mode === 'calendar' ? calendarHtml(mine, { key: 'my' }) : `<div class="list-wrap">${listHtml(groups, key, { cols: ['project', 'status', 'priority', 'due'], complete: true, drag: false, keepEmpty: true })}</div>`}
   </div>`;

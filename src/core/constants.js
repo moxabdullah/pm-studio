@@ -1,4 +1,8 @@
+import { lookup } from './safe.js';
+
 /* ---------- vocab ---------- */
+/* Lookups keyed by stored values (status, priority, project status, colour name, label id) go through lookup():
+   an unknown or hostile key gets a neutral entry (or undefined where there is no fallback) instead of crashing. */
 export const STATUSES = [
   { id: 'backlog', name: 'Backlog' },
   { id: 'todo', name: 'To Do' },
@@ -6,7 +10,7 @@ export const STATUSES = [
   { id: 'review', name: 'Review' },
   { id: 'done', name: 'Done' },
 ];
-export const ST = Object.fromEntries(STATUSES.map(s => [s.id, s]));
+export const ST = lookup(Object.fromEntries(STATUSES.map(s => [s.id, s])), { id: 'unknown', name: 'Unknown' });
 export const PRIOS = [
   { id: 'urgent', name: 'Urgent', w: 4 },
   { id: 'high', name: 'High', w: 3 },
@@ -14,7 +18,7 @@ export const PRIOS = [
   { id: 'low', name: 'Low', w: 1 },
   { id: 'none', name: 'No priority', w: 0 },
 ];
-export const PR = Object.fromEntries(PRIOS.map(p => [p.id, p]));
+export const PR = lookup(Object.fromEntries(PRIOS.map(p => [p.id, p])), PRIOS[4]);
 export const LABELS = [
   { id: 'design', name: 'Design', c: 'var(--violet)' },
   { id: 'frontend', name: 'Frontend', c: 'var(--blue)' },
@@ -25,15 +29,18 @@ export const LABELS = [
   { id: 'qa', name: 'QA', c: 'var(--green)' },
   { id: 'growth', name: 'Growth', c: 'var(--orange)' },
 ];
-export const LB = Object.fromEntries(LABELS.map(l => [l.id, l]));
-export const PSTAT = {
-  planning: { name: 'Planning', c: 'var(--gray)' },
-  active: { name: 'In Progress', c: 'var(--blue)' },
-  risk: { name: 'At Risk', c: 'var(--red)' },
-  hold: { name: 'On Hold', c: 'var(--amber)' },
-  complete: { name: 'Completed', c: 'var(--green)' },
-};
-export const PCOLORS = {
+export const LB = lookup(Object.fromEntries(LABELS.map(l => [l.id, l])));
+export const PSTAT = lookup(
+  {
+    planning: { name: 'Planning', c: 'var(--gray)' },
+    active: { name: 'In Progress', c: 'var(--blue)' },
+    risk: { name: 'At Risk', c: 'var(--red)' },
+    hold: { name: 'On Hold', c: 'var(--amber)' },
+    complete: { name: 'Completed', c: 'var(--green)' },
+  },
+  { name: 'Unknown', c: 'var(--gray)' },
+);
+export const PCOLORS = lookup({
   indigo: '#5A67D8',
   blue: '#3B82C4',
   violet: '#8662C9',
@@ -42,7 +49,7 @@ export const PCOLORS = {
   amber: '#C48A1E',
   green: '#3D8E5F',
   slate: '#6B7280',
-};
+});
 export const PICONS = [
   'globe',
   'smartphone',

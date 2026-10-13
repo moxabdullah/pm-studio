@@ -1,4 +1,5 @@
 /* ---------- WORKSPACE TASKS ---------- */
+import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { allTasks, canSee, visibleProjects } from '../core/store.js';
 import { applyView, groupTasks, viewOf, viewToolbar } from '../shell/view-engine.js';
@@ -18,7 +19,7 @@ export function pageTasks() {
   ]
     .map(
       ([k, n, i]) =>
-        `<button class="${v.mode === k ? 'on' : ''}" data-a="setViewMode" data-key="${key}" data-v="${k}">${ic(i, 13)}<span class="hide-m">${n}</span></button>`,
+        `<button class="${v.mode === k ? 'on' : ''}" data-a="setViewMode" data-key="${esc(key)}" data-v="${k}">${ic(i, 13)}<span class="hide-m">${n}</span></button>`,
     )
     .join('')}</div>`;
   let body;

@@ -4,6 +4,7 @@
 import { $, $$ } from '../core/utils.js';
 import { D, S, mem, proj, team } from '../core/store.js';
 import { applyPrefs } from '../core/theme.js';
+import { lookup } from '../core/safe.js';
 import { enhanceSelects, selectMenu } from '../ui/select.js';
 import { renderShell } from './layout.js';
 import { PTABS } from '../pages/project.js';
@@ -12,7 +13,8 @@ import { renderLayer } from '../overlays/drawer.js';
 import { placePop } from '../overlays/popovers.js';
 import { renderAuth } from '../pages/auth.js';
 
-export const ROUTE_NAMES = {
+/* The URL hash picks a route, so "#constructor" must not count as one: only the table's own keys resolve. */
+export const ROUTE_NAMES = lookup({
   home: 'Home',
   inbox: 'Inbox',
   mytasks: 'My Tasks',
@@ -33,7 +35,7 @@ export const ROUTE_NAMES = {
   system: 'Design system',
   states: 'System states',
   archive: 'Archive',
-};
+});
 export const ROUTE_ICONS = {
   home: 'house',
   inbox: 'inbox',
