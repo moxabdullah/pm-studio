@@ -69,6 +69,7 @@ export function ctxMenu(p) {
   if (p.ctx === 'file') {
     return (
       I('previewFile', 'eye', 'Preview') +
+      I('downloadFile', 'download', 'Download') +
       I('renameFile', 'pencil', 'Rename') +
       I('copyLink', 'link', 'Copy link') +
       sep +

@@ -7,6 +7,7 @@ const pocketbaseVm = {
   routerUse: 'readonly',
   onRecordCreate: 'readonly',
   onRecordUpdateRequest: 'readonly',
+  onFileDownloadRequest: 'readonly',
   Collection: 'readonly',
   Field: 'readonly',
   BadRequestError: 'readonly',

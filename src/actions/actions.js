@@ -22,12 +22,14 @@ import {
   teamsList,
   visibleProjects,
 } from '../core/store.js';
-import { pb, setRemember } from '../core/pb.js';
-import { restoreState, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
+import { fileUrl, pb, setRemember } from '../core/pb.js';
+import { flush, quietResync, restoreState, resubscribe, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
+import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
+import { remoteRender } from '../shell/remote-render.js';
 import { viewOf } from '../shell/view-engine.js';
 import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
@@ -608,10 +610,15 @@ IN.form = el => {
 IN.formMore = el => {
   S.ui.form.more = el.checked;
 };
-IN.formFiles = el => {
-  [...el.files].forEach(f => S.ui.form.files.push({ name: f.name, size: fsize(f.size), type: fileType(f.name) }));
+/* Files picked in the task form wait here, as real File objects, until the task is saved; submitTask then uploads them. */
+function addFormFiles(picked) {
+  if (!S.ui.modals.some(m => m.type === 'task')) return;
+  const big = picked.filter(f => f.size > MAX_FILE_BYTES);
+  if (big.length) toast(tooBig(big), { kind: 'err', ms: 6000 });
+  picked.filter(f => f.size <= MAX_FILE_BYTES).forEach(f => S.ui.form.files.push({ name: f.name, size: fsize(f.size), type: fileType(f.name), blob: f }));
   render();
-};
+}
+A.pickFormFiles = () => pick(addFormFiles);
 KEY.formAddSub = el => {
   const v = el.value.trim();
   if (!v) return;
@@ -640,7 +647,7 @@ A.submitTask = () => {
     return;
   }
   S.ui.errors = {};
-  const files = f.files.map(x => ({ id: uid('a'), name: x.name, type: x.type, size: x.size, by: D().me, at: Date.now() }));
+  const picked = f.files.map(x => x.blob).filter(Boolean);
   const base = {
     title,
     project: f.project,
@@ -666,20 +673,19 @@ A.submitTask = () => {
             .trim()
         )
           t.desc = f.desc ? `<p>${esc(f.desc)}</p>` : '';
-        t.attachments.push(...files);
       })
     )
       return;
     S.ui.modals.pop();
     render();
     toast('Changes saved');
+    handleFiles(picked, { project: t.project, task: t.id });
     return;
   }
   let t;
   if (
     !mutate(() => {
-      t = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '', attachments: files });
-      files.forEach(x => D().files.unshift({ ...x, project: t.project, task: t.id }));
+      t = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '' });
     })
   )
     return;
@@ -688,12 +694,14 @@ A.submitTask = () => {
     render();
     setTimeout(() => $('#f-title')?.focus(), 0);
     toast(`Created ${t.key}`, { ms: 2000 });
+    handleFiles(picked, { project: t.project, task: t.id });
     return;
   }
   S.ui.modals.pop();
   fxSet({ added: t.id });
   render();
   toast(`Created ${t.key} in ${proj(t.project).name}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
+  handleFiles(picked, { project: t.project, task: t.id });
 };
 
 /* inline composer */
@@ -812,63 +820,211 @@ A.expandRow = el => {
   render();
 };
 
-/* attachments */
+/* ---------- files and attachments ----------
+   A files record is the file itself (src/core/files.js uploads and downloads it); a task's `attachments` entry is a pointer to one
+   ({ id, name, type, size, by, at }, the id being the record's). Both sync like any other change to S.data. */
 A.rmAttach = el => {
   const t = task(el.dataset.id);
-  const f = t.attachments.find(a => a.id === el.dataset.aid);
-  mutate(() => {
-    t.attachments = t.attachments.filter(a => a.id !== el.dataset.aid);
-    logAct('removed a file from', t);
-  });
-  toast(`Removed ${f.name}`);
+  const f = t?.attachments.find(a => a.id === el.dataset.aid);
+  if (!f) return;
+  // only the pointer goes: the file stays in the project's Files
+  if (
+    mutate(() => {
+      t.attachments = t.attachments.filter(a => a.id !== el.dataset.aid);
+      logAct('removed a file from', t);
+    })
+  )
+    toast(`Removed ${f.name}`);
 };
 A.filePreview = el => {
   const t = task(el.dataset.tid);
-  const f = t.attachments.find(a => a.id === el.dataset.aid);
-  openModal({ type: 'filePreview', file: f, tid: t.id });
+  const att = t?.attachments.find(a => a.id === el.dataset.aid);
+  if (att) openFilePreview(fileOf(t, att) || att, t.id);
 };
 A.previewFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
   S.ui.pop = null;
-  if (f) openModal({ type: 'filePreview', file: f, tid: f.task });
+  if (f) openFilePreview(f, f.task);
+  else render();
 };
-export function handleFiles(files, ctx) {
-  if (!files || !files.length) return;
+/* The preview modal. An image gets a real <img> with a file URL (its token lasts a few minutes; the error handler below renews a stale
+   one), anything else keeps the icon preview and offers a download. Nothing a person uploaded is ever put in an iframe, object or embed,
+   and the window never navigates to one: only raster images are drawn, and everything else is downloaded. */
+let opening = '';
+export async function openFilePreview(f, tid) {
+  if (opening === f.id) return;
+  opening = f.id;
+  try {
+    let src = '';
+    if (isRaster(f)) {
+      try {
+        src = await fileUrl(f);
+      } catch {
+        /* offline, say: the icon preview shows */
+      }
+    }
+    openModal({ type: 'filePreview', file: f, tid, src });
+  } finally {
+    opening = '';
+  }
+}
+/* An image that fails to load (a token that ran out while the modal stayed open) gets one new URL. If that fails too, the icon preview
+   that sits underneath it shows instead. `error` does not bubble, hence the capture. */
+document.addEventListener(
+  'error',
+  async e => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.dataset.fid) return;
+    const f = D().files.find(x => x.id === img.dataset.fid);
+    if (!f || img.dataset.retried) {
+      img.hidden = true;
+      return;
+    }
+    img.dataset.retried = '1';
+    try {
+      const src = await fileUrl(f);
+      const m = S.ui.modals.find(x => x.type === 'filePreview' && x.file.id === f.id);
+      if (m) m.src = src; // later renders start from the fresh URL
+      img.src = src;
+    } catch {
+      img.hidden = true;
+    }
+  },
+  true,
+);
+A.downloadFile = async el => {
+  const f = D().files.find(x => x.id === el.dataset.id);
+  if (S.ui.pop) {
+    S.ui.pop = null;
+    render();
+  }
+  if (!f) return;
+  try {
+    await downloadFile(f);
+  } catch (err) {
+    toast(`Couldn't download ${f.name}: ${err.status === 0 ? "can't reach the server" : err.response?.message || err.message}`, { kind: 'err' });
+  }
+};
+
+const MB_LIMIT = MAX_FILE_BYTES / 1048576;
+function tooBig(files) {
+  const names = files
+    .slice(0, 2)
+    .map(f => f.name)
+    .join(', ');
+  return files.length === 1
+    ? `${files[0].name} is ${fsize(files[0].size)}. Files can be up to ${MB_LIMIT} MB.`
+    : `${files.length} files are over the ${MB_LIMIT} MB limit and were skipped: ${names}${files.length > 2 ? ', …' : ''}`;
+}
+/* Uploads the files, one after the other, each as a files record with its bytes. `ctx` is { project, task? }: with a task, the file is
+   also attached to it. Progress is the real number of bytes sent. A failure says why and drops that file's row; the others carry on.
+   (The caller may empty the file input right after this returns: the list is copied first.) */
+export function handleFiles(files, ctx = {}) {
+  const list = [...(files || [])];
+  if (!list.length) return;
   if (S.ui.offline) {
-    toast("Upload failed — you're offline.", { kind: 'err', action: 'Try again', onAction: () => {} });
+    toast("Upload failed — you're offline.", {
+      kind: 'err',
+      action: 'Try again',
+      onAction: async () => {
+        if (await retryNow()) handleFiles(list, ctx);
+      },
+    });
     return;
   }
+  if (!proj(ctx.project)) {
+    toast("Couldn't upload: that project isn't available.", { kind: 'err' });
+    return;
+  }
+  const big = list.filter(f => f.size > MAX_FILE_BYTES);
+  if (big.length) toast(tooBig(big), { kind: 'err', ms: 6000 });
+  const jobs = list
+    .filter(f => f.size <= MAX_FILE_BYTES)
+    .map(file => ({ file, up: { id: uid(), name: file.name, size: fsize(file.size), project: ctx.project, task: ctx.task || null, pct: 0 } }));
+  if (!jobs.length) return;
   S.ui.uploads = S.ui.uploads || [];
-  [...files].forEach(file => {
-    const up = { id: uid('u'), name: file.name, size: fsize(file.size), project: ctx.project, task: ctx.task, pct: 0 };
-    S.ui.uploads.push(up);
-    const iv = setInterval(() => {
-      up.pct = Math.min(100, up.pct + 9 + Math.round(Math.random() * 22));
-      const bar = document.getElementById('upbar-' + up.id),
-        pc = document.getElementById('upct-' + up.id);
-      if (bar) bar.style.setProperty('--p', up.pct / 100);
-      if (pc) pc.textContent = up.pct + '%';
-      if (up.pct >= 100) {
-        clearInterval(iv);
-        S.ui.uploads = S.ui.uploads.filter(x => x !== up);
-        const rec = { id: uid('f'), name: up.name, type: fileType(up.name), size: up.size, by: D().me, at: Date.now() };
-        D().files.unshift({ ...rec, project: up.project, task: up.task || null });
-        if (up.task) {
-          const t = task(up.task);
-          t.attachments.push(rec);
-          logAct('added a file to', t, up.name);
-        }
-        save();
-        render();
-        toast(`Uploaded ${up.name}`);
-      }
-    }, 220);
-  });
+  S.ui.uploads.push(...jobs.map(j => j.up));
   render();
+  (async () => {
+    const who = D().me;
+    for (const job of jobs) {
+      if (D().me !== who || !pb.authStore.isValid) break; // the session ended: the rest never starts
+      await uploadOne(job, ctx);
+    }
+  })();
 }
-IN.uploadFiles = el => {
-  handleFiles(el.files, { project: el.dataset.project, task: el.dataset.task });
-  el.value = '';
+async function uploadOne({ file, up }, ctx) {
+  const gone = () => {
+    if (S.ui.uploads) S.ui.uploads = S.ui.uploads.filter(x => x !== up);
+  };
+  try {
+    // A folder dropped into the page arrives as a "file" that cannot be read. Find out before the request, not from its error.
+    await file.slice(0, 1).arrayBuffer();
+  } catch {
+    gone();
+    toast(`Couldn't read ${file.name}. Folders can't be uploaded.`, { kind: 'err' });
+    remoteRender();
+    return;
+  }
+  const app = { id: uid(), project: up.project, task: up.task, name: file.name, type: fileType(file.name), size: fsize(file.size), by: D().me, at: Date.now() };
+  try {
+    const rec = await uploadFile(app, file, {
+      onProgress: frac => {
+        up.pct = Math.max(up.pct, Math.min(100, Math.round(frac * 100)));
+        document.getElementById('upbar-' + up.id)?.style.setProperty('--p', up.pct / 100);
+        const label = document.getElementById('upct-' + up.id);
+        if (label) label.textContent = up.pct + '%';
+      },
+    });
+    gone();
+    if (!rec) return; // the session ended while this was uploading
+    const t = up.task && task(up.task);
+    if (t) {
+      // Not through mutate(): the file is on the server already, so the pointer to it must be recorded even if the connection just dropped.
+      t.attachments.push({ id: rec.id, name: rec.name, type: rec.type, size: rec.size, by: rec.by, at: rec.at });
+      logAct('added a file to', t, rec.name);
+      save();
+    }
+    remoteRender();
+    toast(`Uploaded ${rec.name}`);
+  } catch (err) {
+    gone();
+    remoteRender();
+    if (err.isAbort) return; // signed out meanwhile
+    if (err.status === 401) return sessionEnded();
+    const why = err.status === 0 ? "can't reach the server" : uploadMessage(err);
+    toast(`Couldn't upload ${file.name}: ${why}`, {
+      kind: 'err',
+      ms: 7000,
+      ...(err.status === 0 && { action: 'Try again', onAction: () => handleFiles([file], ctx) }),
+    });
+  }
+}
+/* One hidden file input serves every Upload button, attach icon and dropzone, and the task form. It is created once and is never part
+   of a render. A native file dialog belongs to its input element: if the page were rebuilt while the dialog is open (a colleague's
+   change arriving, an upload finishing), an input inside it would be thrown away and the file the person then picks would go nowhere,
+   without a word. The controls are plain buttons that open this one. `pickFor` says what to do with the chosen files. */
+let picker = null;
+let pickFor = null;
+function pick(onFiles) {
+  if (!picker) {
+    picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
+    picker.setAttribute('aria-hidden', 'true');
+    picker.tabIndex = -1;
+    picker.addEventListener('click', e => e.stopPropagation()); // the app's own click handling has nothing to do with this one
+    picker.addEventListener('change', () => {
+      const chosen = [...picker.files]; // a copy: the input is emptied right away, so the next pick fires `change` even for the same file
+      picker.value = '';
+      if (chosen.length) pickFor?.(chosen);
+    });
+    document.body.append(picker);
+  }
+  pickFor = onFiles;
+  picker.click();
+}
+A.pickFiles = el => {
+  const ctx = { project: el.dataset.project, task: el.dataset.task }; // read now: el is gone by the time a file is chosen, if the page was rebuilt
+  pick(chosen => handleFiles(chosen, ctx));
 };
 
 /* comments */
@@ -1553,16 +1709,19 @@ IN.fileSort = el => {
   S.ui.fileSort = el.value;
   render();
 };
+/* Renaming changes the display name only. The stored file stays as it is; downloads are named after the display name
+   (server/pb_hooks/file_names.pb.js), and task attachments show the name of the file they point to. */
 A.renameFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
   S.ui.pop = null;
+  if (!f) return render();
   openModal({
     type: 'prompt',
     title: 'Rename file',
     label: 'File name',
     value: f.name,
     run: v => {
-      if (v)
+      if (v && v !== f.name)
         mutate(() => {
           f.name = v;
           f.type = fileType(v);
@@ -1573,6 +1732,7 @@ A.renameFile = el => {
 A.delFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
   S.ui.pop = null;
+  if (!f) return render();
   confirmDlg({
     title: 'Delete file?',
     body: `<b>${esc(f.name)}</b> will be removed from the project${f.task ? ' and its task' : ''}.`,
@@ -1582,7 +1742,12 @@ A.delFile = el => {
       if (
         mutate(() => {
           D().files = D().files.filter(x => x !== f);
-          if (f.task && task(f.task)) task(f.task).attachments = task(f.task).attachments.filter(a => a.name !== f.name);
+          // The sync deletes the record and its stored file. Every attachment that points to it goes too, found by the record's id; an
+          // attachment from before they carried it (its id matches no file) is found by name on the file's own task.
+          const known = new Set(D().files.map(x => x.id));
+          const points = (t, a) => a.id === f.id || (t.id === f.task && !known.has(a.id) && a.name === f.name);
+          for (const t of D().tasks)
+            if (Array.isArray(t.attachments) && t.attachments.some(a => points(t, a))) t.attachments = t.attachments.filter(a => !points(t, a));
         })
       )
         toast(`Deleted ${f.name}`);
@@ -1703,6 +1868,13 @@ export function showLogin(message = '') {
   S.ui.auth = 'login';
   if (message) S.ui.errors.login = message;
   render();
+}
+/* The server answered 401 to something the sync engine did not send (an upload, the password change): the session is over. End it the way
+   the engine does. stopSync() comes first so that the engine does not also report it, with its own words, when the store is cleared. */
+async function sessionEnded() {
+  await stopSync();
+  pb.authStore.clear();
+  showLogin('Your session expired. Sign in again.');
 }
 A.signOut = async () => {
   S.ui.pop = null;
@@ -1860,7 +2032,27 @@ IN.pwStrength = el => {
   if (m) m.replaceWith(tmp.firstElementChild || document.createTextNode(''));
   else if (tmp.firstElementChild) el.after(tmp.firstElementChild);
 };
-A.savePassword = () => {
+/* Changing the password on the server ends every session of the account, this one included (PocketBase renews the account's token
+   key), and it signs the live-update stream out too: the stream stays open but receives nothing. So, in this order:
+     1. send what is unsaved, while the old token still works (a request with it after step 2 would get a 401, which ends the session),
+     2. change the password (the server checks the old one),
+     3. sign in again with the new password right away. The store keeps the "remember me" choice of the session it replaces,
+     4. open a new live-update stream with the new token, and catch up on what was missed meanwhile.
+   Another tab of the same browser shares the stored session. It learns of the new token from there and needs step 4 as well, which the
+   listener below does; here `renewing` keeps it from doing the same a second time. (A device with its own session is simply signed
+   out: its token is dead, and the next request it makes shows the sign-in page.) */
+let renewing = false;
+let tokenSeen = pb.authStore.token;
+pb.authStore.onChange(token => {
+  const was = tokenSeen;
+  tokenSeen = token;
+  // Only a different token for the same person, while the app is signed in. At boot and at sign-in D().me is still empty.
+  if (renewing || !token || !was || token === was || !D().me || pb.authStore.record?.id !== D().me) return;
+  resubscribe();
+  quietResync();
+});
+A.savePassword = async () => {
+  if (S.ui.pwBusy) return;
   const e = (S.ui.errors = {});
   const cur = $('#pw-cur').value,
     nw = $('#pw-new').value,
@@ -1869,16 +2061,78 @@ A.savePassword = () => {
   if (!cur) e.pwCur = 'Enter your current password';
   if (nw.length < 10 || !/[0-9\W]/.test(nw)) e.pwNew = 'Use at least 10 characters, including a number or symbol';
   if (nw !== cf) e.pwConf = "Passwords don't match";
-  if (Object.keys(e).length) {
+  /* render() builds the form again; the fields the page doesn't carry in S.ui get their text back (the current password only
+     if it wasn't the thing the server refused: a wrong one is better retyped from empty). */
+  const redraw = (focusId, keepCurrent = true) => {
     render();
+    for (const [id, v] of [
+      ['pw-cur', keepCurrent ? cur : ''],
+      ['pw-conf', cf],
+    ]) {
+      const i = $('#' + id);
+      if (i) i.value = v;
+    }
+    $('#' + focusId)?.focus();
+  };
+  S.ui.pwNew = nw;
+  if (Object.keys(e).length) return redraw(e.pwCur ? 'pw-cur' : e.pwNew ? 'pw-new' : 'pw-conf');
+  if (S.ui.offline) {
+    toast("Your password couldn't be changed. You're offline.", { kind: 'err', action: 'Try again', onAction: () => retryNow() });
     return;
   }
-  loadingBtn('pw-save', 800, () => {
+  const busy = on => {
+    S.ui.pwBusy = on;
+    const b = document.getElementById('pw-save');
+    b?.classList.toggle('is-loading', on);
+    b?.setAttribute('aria-busy', String(on));
+  };
+  const signedIn = pb.authStore.record;
+  if (!signedIn) return;
+  busy(true);
+  renewing = true;
+  try {
+    try {
+      if (!(await flush())) throw Object.assign(new Error('unsaved changes'), { status: 0 });
+      await pb.collection('users').update(signedIn.id, { oldPassword: cur, password: nw, passwordConfirm: cf });
+    } catch (err) {
+      const fields = err.response?.data || {};
+      if (fields.oldPassword) e.pwCur = 'Current password is incorrect';
+      if (fields.password) e.pwNew = fields.password.message || 'That password was refused';
+      if (fields.passwordConfirm) e.pwConf = "Passwords don't match";
+      if (err.status === 401) await sessionEnded();
+      else if (Object.keys(e).length) redraw(e.pwCur ? 'pw-cur' : e.pwNew ? 'pw-new' : 'pw-conf', !e.pwCur);
+      else toast(`Couldn't change the password: ${err.status === 0 ? "can't reach the server" : err.response?.message || err.message}`, { kind: 'err' });
+      return;
+    }
+    // The password is changed. From here the old token is dead; get a new one before anything else asks the server for something.
+    let failure = null;
+    for (let tries = 0; tries < 3; tries++) {
+      try {
+        await pb.collection('users').authWithPassword(signedIn.email, nw);
+        failure = null;
+        break;
+      } catch (err) {
+        failure = err;
+        if (err.status && err.status < 500) break; // the server answered and said no: trying again won't help
+        await new Promise(r => setTimeout(r, 700));
+      }
+    }
+    if (failure) {
+      await stopSync();
+      pb.authStore.clear();
+      showLogin('Your password was changed, but signing you back in failed. Sign in with the new password.');
+      return;
+    }
+    await resubscribe();
+    quietResync();
     S.ui.pwDone = true;
     S.ui.pwNew = '';
     render();
     toast('Password updated');
-  });
+  } finally {
+    renewing = false;
+    busy(false);
+  }
 };
 
 /* auth */

@@ -47,7 +47,7 @@ docs/phase-1-backend.md the plan for the PocketBase backend
 scripts/                get-pocketbase.sh / .ps1 (pinned PocketBase download) and the helpers behind npm run server and seed:dev
 server/                 the PocketBase side
   pb_migrations/        JS migrations: every collection and API rule, applied when the server starts
-  pb_hooks/             server hooks (401 when not signed in, new-account defaults, no stale app page, field-by-field saves)
+  pb_hooks/             server hooks (401 when not signed in, new-account defaults, no stale app page, field-by-field saves, download names)
   pb_public/            the built app (git-ignored; npm run build:server writes it)
   pb_data/              database and uploaded files (git-ignored; this is what gets backed up)
 src/
@@ -88,6 +88,10 @@ Dependencies point downward:
   (`S`). `render()` rebuilds the shell and keeps focus and scroll positions.
 - **Interactions:** elements declare `data-a="actionName"`. `actions/events.js` delegates the
   click to `A.actionName`. Inputs use `data-in`, blur handlers use `data-blur`.
+- **File inputs:** never put an `<input type="file">` in a template. A render while the system
+  file dialog is open (a colleague's change arriving) would throw the input away together with the
+  person's choice. Use a control with `data-a="pickFiles"` (`data-project`, optional `data-task`):
+  it opens the one hidden input that `actions/actions.js` keeps outside the rendered page.
 - **Layout:** every page edge uses `var(--gutter)`, so the breadcrumb, page header, toolbar,
   list, table and board start on the same line.
 - **Dropdowns:** write a normal `<select class="select">`. `ui/select.js` renders it as the
@@ -97,7 +101,10 @@ Dependencies point downward:
 - **Stored data is untrusted:** every signed-in user can write records that everyone else
   renders. Put text and attribute values through `esc()`, colours through `safeColor()`, task
   descriptions through `sanitizeHtml()`, and read status, priority and similar keys from the
-  tables in `core/constants.js`, which fall back instead of throwing (`core/safe.js`).
+  tables in `core/constants.js`, which fall back instead of throwing (`core/safe.js`). Uploaded
+  files are the same: only png, jpg, gif and webp are ever drawn, and only through `<img>`
+  (`isRaster()` in `core/files.js`). Everything else is downloaded (`download: true`), never put in
+  an iframe or object, and never opened in the app's own window.
 
 ## Continuous integration
 

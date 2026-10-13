@@ -4,6 +4,7 @@
 import { MOD, TODAY, ago, diffD, esc, fmtDate, parse, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
+import { fileOf } from '../core/files.js';
 import { FT, av, filePrev, fileType, fmtComment, lbl, progBar, safely, sanitizeHtml } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { cellAssignee, cellDue, cellPrio, cellProject, cellStatus } from '../components/task-list.js';
@@ -101,9 +102,9 @@ export function drawerHtml(t) {
         <div class="subt" style="color:var(--text-3)">${ic('plus', 15)}<input class="inline-in" id="d-sub" data-key-enter="addSub" data-id="${esc(t.id)}" placeholder="Add subtask" aria-label="Add subtask" style="font-size:13.5px"></div>
       </div>
 
-      <div class="dsec"><div class="dsec-h"><h3>Attachments</h3><span class="cnt">${t.attachments.length}</span><div class="acts"><label class="btn btn-sm btn-ghost" style="cursor:pointer">${ic('upload', 13)}Upload<input type="file" multiple hidden data-in="uploadFiles" data-task="${esc(t.id)}" data-project="${esc(t.project)}"></label></div></div>
-        ${ups.map(x => `<div class="upl" style="margin-bottom:6px"><span class="ftype" style="--c:${FT[fileType(x.name)].c}">${ic(FT[fileType(x.name)].i, 14)}</span><div class="grow"><div class="row"><span class="trunc">${esc(x.name)}</span><span class="sp"></span><span class="faint num" id="upct-${esc(x.id)}" style="font-size:11px">${x.pct}%</span></div><div class="prog" style="margin-top:5px"><i id="upbar-${esc(x.id)}" style="width:${x.pct}%"></i></div></div></div>`).join('')}
-        ${t.attachments.length ? `<div class="att">${t.attachments.map(f => `<div class="attc" data-a="filePreview" data-tid="${esc(t.id)}" data-aid="${esc(f.id)}" role="button" tabindex="0">${filePrev(f)}<div class="fi"><div class="trunc" style="font-weight:500">${esc(f.name)}</div><div class="faint">${FT[f.type]?.n || 'File'} · ${esc(f.size)}</div></div><button class="ibtn ibtn-xs x" data-a="rmAttach" data-id="${esc(t.id)}" data-aid="${esc(f.id)}" aria-label="Remove attachment">${ic('x', 12)}</button></div>`).join('')}</div>` : !ups.length ? `<label class="dropzone" style="padding:12px" data-dropzone-task="${esc(t.id)}">${ic('paperclip', 15)}<span>Drop files or click to attach</span><input type="file" multiple hidden data-in="uploadFiles" data-task="${esc(t.id)}" data-project="${esc(t.project)}"></label>` : ''}
+      <div class="dsec"><div class="dsec-h"><h3>Attachments</h3><span class="cnt">${t.attachments.length}</span><div class="acts"><button class="btn btn-sm btn-ghost" data-a="pickFiles" data-task="${esc(t.id)}" data-project="${esc(t.project)}">${ic('upload', 13)}Upload</button></div></div>
+        ${ups.map(x => `<div class="upl" style="margin-bottom:6px"><span class="ftype" style="--c:${FT[fileType(x.name)].c}">${ic(FT[fileType(x.name)].i, 14)}</span><div class="grow"><div class="row"><span class="trunc">${esc(x.name)}</span><span class="sp"></span><span class="faint num" id="upct-${esc(x.id)}" style="font-size:11px">${x.pct}%</span></div><div class="prog" style="margin-top:5px"><i id="upbar-${esc(x.id)}" style="--p:${x.pct / 100}"></i></div></div></div>`).join('')}
+        ${t.attachments.length ? `<div class="att">${t.attachments.map(a => attachmentHtml(t, a)).join('')}</div>` : !ups.length ? `<div class="dropzone" style="padding:12px" data-dropzone-task="${esc(t.id)}" data-a="pickFiles" data-task="${esc(t.id)}" data-project="${esc(t.project)}">${ic('paperclip', 15)}<span>Drop files or click to attach</span></div>` : ''}
       </div>
 
       <div class="dsec">
@@ -122,7 +123,7 @@ export function drawerHtml(t) {
           ${cs.length ? cs.map(commentHtml).join('') : `<p class="faint" style="font-size:13px;margin:10px 0">No comments yet. Start the conversation.</p>`}
           <div class="row" style="align-items:flex-start;gap:10px;margin-top:8px">${av(D().me, 'md', false)}<div class="grow" style="position:relative">
             <div class="cbox"><textarea id="d-cmt" data-in="draft" data-id="${esc(t.id)}" data-key-mod-enter="postComment" placeholder="Leave a comment… type @ to mention" aria-label="Comment" rows="2" data-autosize>${esc(u.drafts[t.id] || '')}</textarea>
-            <div class="row"><button class="ibtn ibtn-xs" data-a="insertAt" data-id="${esc(t.id)}" data-tip="Mention someone" aria-label="Mention">${ic('at-sign', 14)}</button><label class="ibtn ibtn-xs" data-tip="Attach file" style="cursor:pointer">${ic('paperclip', 14)}<input type="file" multiple hidden data-in="uploadFiles" data-task="${esc(t.id)}" data-project="${esc(t.project)}"></label><span class="sp"></span><span class="faint hide-m" style="font-size:11px">${MOD}+Enter</span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${esc(t.id)}">Comment</button></div></div>
+            <div class="row"><button class="ibtn ibtn-xs" data-a="insertAt" data-id="${esc(t.id)}" data-tip="Mention someone" aria-label="Mention">${ic('at-sign', 14)}</button><button class="ibtn ibtn-xs" data-a="pickFiles" data-task="${esc(t.id)}" data-project="${esc(t.project)}" data-tip="Attach file" aria-label="Attach file">${ic('paperclip', 14)}</button><span class="sp"></span><span class="faint hide-m" style="font-size:11px">${MOD}+Enter</span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${esc(t.id)}">Comment</button></div></div>
             ${ment.length ? `<div class="pop" style="position:absolute;top:auto;bottom:calc(100% + 4px);left:0">${ment.map(m => `<button class="mi" data-a="pickMention" data-id="${esc(t.id)}" data-name="${esc(m.name)}">${av(m.id, 'sm', false)}${esc(m.name)}<span class="r">${esc(m.title)}</span></button>`).join('')}</div>` : ''}
           </div></div>`
             : `
@@ -133,6 +134,16 @@ export function drawerHtml(t) {
     }
     </div>
   </aside>`;
+}
+/* One attachment tile. An attachment points to a files record (by id); the record's own name, type and size are what is shown, so a
+   rename in the Files tab shows here too. An attachment whose file cannot be found shows what it carries itself, with no download. */
+function attachmentHtml(t, a) {
+  const f = fileOf(t, a);
+  const v = f || a;
+  const dl = f?.file
+    ? `<button class="ibtn ibtn-xs dl" data-a="downloadFile" data-id="${esc(f.id)}" data-tip="Download" aria-label="Download ${esc(v.name)}">${ic('download', 12)}</button>`
+    : '';
+  return `<div class="attc" data-a="filePreview" data-tid="${esc(t.id)}" data-aid="${esc(a.id)}" role="button" tabindex="0">${filePrev(v)}<div class="fi"><div class="trunc" style="font-weight:500">${esc(v.name)}</div><div class="faint">${FT[v.type].n} · ${esc(v.size)}</div></div>${dl}<button class="ibtn ibtn-xs x" data-a="rmAttach" data-id="${esc(t.id)}" data-aid="${esc(a.id)}" aria-label="Remove attachment">${ic('x', 12)}</button></div>`;
 }
 export function commentHtml(c) {
   const m = mem(c.by);

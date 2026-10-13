@@ -8,7 +8,6 @@ import { effectiveDark } from '../core/theme.js';
 import { go, render } from '../shell/render.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { searchAll } from '../pages/search.js';
-import { openModal } from './modals.js';
 import { A } from '../actions/actions.js';
 
 export function commands() {
@@ -161,7 +160,7 @@ export function paletteItems() {
         name: f.name,
         sub: proj(f.project).name,
         r: f.size,
-        run: () => openModal({ type: 'filePreview', file: f, tid: f.task }),
+        run: () => A.previewFile({ dataset: { id: f.id } }),
       })),
     });
   if (sc === 'all' || sc === 'comments')
