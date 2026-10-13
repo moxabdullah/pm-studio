@@ -6,9 +6,11 @@
    Run each record through normalizeRecord() when it is loaded or patched, before it reaches S.data, or the
    whole workspace through normalizeData(). Fields the UI always reads are coerced to their type and added when
    missing; optional fields are coerced only when present; unknown fields are kept. Well-formed data, such as
-   seed(), comes out unchanged.
+   seed(), comes out unchanged. This is about not crashing, not about markup: text still goes through esc() and
+   colours through safeColor() where they are rendered.
    ===================================================================== */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const str = v => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
 const ref = v => (typeof v === 'string' && v ? v : null); // an id, or nothing
 const text = v => (typeof v === 'string' && v ? v : null); // free text that may be absent
@@ -51,7 +53,7 @@ const KINDS = {
       id: str, key: str, name: str, icon: str, color: str, status: withDefault(str, 'planning'), team: str, desc: str, fav: bool, members: strs,
       milestones: list(shape({ name: str, date }), m => m.date),
     },
-    { lead: ref, due: date, start: date, last: num, private: bool, archived: bool, archivedAt: numOrNull, perms: strMap(str), access: withDefault(str, 'workspace') },
+    { workspace: str, lead: ref, due: date, start: date, last: num, private: bool, archived: bool, archivedAt: numOrNull, perms: strMap(str), access: withDefault(str, 'workspace') },
   ),
   task: shape(
     {
@@ -71,15 +73,23 @@ const KINDS = {
     id: str, project: str, name: str, type: withDefault(str, 'list'),
     filters: list(shape({ f: str, op: v => (v === 'not' ? 'not' : 'is'), v: strs }), f => f.f),
   }),
-  team: shape({ id: str, name: str, desc: str, icon: str, c: str }),
-  workspace: shape({ id: str, name: str, c: str }, { plan: str, brand: bool }),
-  session: shape({ id: str, dev: str, loc: str, at: str }, { cur: bool }),
-  invoice: shape({ id: str, date: v => date(v) || '', amt: str, st: str }),
+  team: shape({ id: str, name: str, desc: str, icon: str, c: str }, { workspace: str }),
+  workspace: shape({ id: str, name: str, c: str }, { brand: bool }),
 }; // prettier-ignore
 
-/* One record: kind is member, project, task, comment, activity, notif, file, event, savedView, team, workspace, session or invoice. */
+/* The keys of S.data (and so of sync-map's COLLECTIONS) name the same kinds in the plural. */
+const KIND_OF = {
+  members: 'member', projects: 'project', tasks: 'task', comments: 'comment', activity: 'activity', notifs: 'notif', files: 'file',
+  events: 'event', savedViews: 'savedView', teams: 'team', workspaces: 'workspace',
+}; // prettier-ignore
+
+/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team or workspace, or the
+   S.data key of that list (members, projects, tasks, ..., savedViews, teams, workspaces), so a caller that knows the
+   collection can pass keyOf(coll). Returns a new object; the argument is not touched. Throws on any other kind. */
 export function normalizeRecord(kind, rec) {
-  return KINDS[kind](isObj(rec) ? rec : {});
+  const name = own(KIND_OF, kind) ? KIND_OF[kind] : kind;
+  if (!own(KINDS, name)) throw new Error(`normalize: unknown kind "${kind}"`);
+  return KINDS[name](isObj(rec) ? rec : {});
 }
 
 /* The whole S.data object, in place. Records without an id are dropped. */
@@ -101,14 +111,10 @@ export function normalizeData(d) {
   each('savedViews', 'savedView');
   each('workspaces', 'workspace');
   if (d.teams !== undefined) each('teams', 'team');
-  if (d.sessions !== undefined) each('sessions', 'session');
-  if (d.invoices !== undefined) each('invoices', 'invoice');
   d.projOrder = strs(d.projOrder);
   d.recentSearches = strs(d.recentSearches);
   d.me = str(d.me);
-  d.tfa = bool(d.tfa);
   d.notifPrefs = strMap(bool)(d.notifPrefs);
-  d.ws = shape({ name: str, url: str, c: str }, { brand: bool })(isObj(d.ws) ? d.ws : {});
-  if (d.plan !== undefined) d.plan = str(d.plan);
+  d.ws = shape({ name: str, url: str, c: str }, { id: str, brand: bool })(isObj(d.ws) ? d.ws : {});
   return d;
 }
