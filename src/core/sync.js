@@ -124,19 +124,57 @@ function resetBase() {
   base = new Map([...COLLECTIONS.map(c => c.key), USER_PREFS].map(k => [k, new Map()]));
 }
 resetBase();
-/* Records we deleted a moment ago. An older update of one that is still on its way over the live stream must not bring it back. */
+/* Records we are deleting or deleted a moment ago. An older update of one that is still on its way over the live stream must not
+   bring it back, and the server's report of the delete (and of the rows it removed along with it) is our own echo. */
 const deleted = new Map();
 const DELETED_MS = 10000;
 const wasDeleted = (key, id) => Date.now() - (deleted.get(`${key}/${id}`) || 0) < DELETED_MS;
+/* A delete event that our own delete caused: the record itself, or a row that hangs off it (a task's comments, a project's tasks). */
+const ownDelete = (key, id, b) => wasDeleted(key, id) || (!!b && (wasDeleted('tasks', b.p.task) || wasDeleted('projects', b.p.project)));
 
 /* ---------- payloads ---------- */
 /* The canonical payload of a server record, comparable with what toRecords() makes of the app's own objects. */
 const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, order: rec.order });
-/* The payload of one live app object. Projects keep their order in D().projOrder, not on the object. */
+/* The `order` to write for each project, as Map(id -> value). D().projOrder ranks only the projects this user can see, but the
+   server's column ranks all of them (a member does not see a private project), so the position in that list cannot be the value:
+   it would collide with the hidden ones. The server's own values are kept and handed out in the local order, so moving a project
+   swaps two values and rewrites nothing else, and a project the server has not seen yet gets a value between its neighbours. */
+function projectOrders() {
+  const known = base.get('projects');
+  const have = new Set(D().projects.map(p => p.id));
+  const ids = [
+    ...D().projOrder.filter(id => have.has(id)),
+    ...D()
+      .projects.map(p => p.id)
+      .filter(id => !D().projOrder.includes(id)),
+  ];
+  const sorted = ids
+    .filter(id => known.has(id))
+    .map(id => known.get(id).p.order)
+    .sort((a, b) => a - b);
+  const out = new Map();
+  let k = 0;
+  for (const id of ids) if (known.has(id)) out.set(id, sorted[k++]);
+  for (let i = 0; i < ids.length;) {
+    if (out.has(ids[i])) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < ids.length && !out.has(ids[j])) j++;
+    const lo = i > 0 ? out.get(ids[i - 1]) : undefined;
+    const hi = j < ids.length ? out.get(ids[j]) : undefined;
+    for (let x = 0; x < j - i; x++) {
+      if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : hi - (j - i) + x);
+      else out.set(ids[i + x], hi === undefined ? lo + x + 1 : lo + ((hi - lo) * (x + 1)) / (j - i + 1));
+    }
+    i = j;
+  }
+  return out;
+}
+/* The payload of one live app object. */
 function payloadOf(key, obj) {
-  if (key !== 'projects') return toRecord(key, obj, { me: D().me });
-  const i = D().projOrder.indexOf(obj.id);
-  return toRecord(key, obj, { me: D().me, order: i >= 0 ? i : D().projOrder.length });
+  return toRecord(key, obj, { me: D().me, order: key === 'projects' ? projectOrders().get(obj.id) : undefined });
 }
 /* The top-level fields of `after` that differ from `before`. */
 function changedFields(before, after) {
@@ -241,6 +279,7 @@ function applyRecord(key, rec, force = false) {
   const obj = find(key, rec.id);
   if (!obj && !b && !force && wasDeleted(key, rec.id)) return false; // news about something we have just deleted
   const before = key === 'projects' ? serverOrder() : null;
+  const mine = obj ? payloadOf(key, obj) : null; // before the baseline moves on
   known.set(rec.id, entryOf(theirs, rec.updated));
   let changed = false;
   if (!obj) {
@@ -253,7 +292,6 @@ function applyRecord(key, rec, force = false) {
       if (key === 'projects' && st.ready && !st.reloading) adoptChildren(rec.id);
     }
   } else {
-    const mine = payloadOf(key, obj);
     const merged = force ? theirs : b ? merge3(b.p, mine, theirs) : mine;
     changed = !same(merged, mine);
     if (changed) {
@@ -285,13 +323,13 @@ function applyPrefsRecord(rec, force) {
 /* Removes a record the server no longer has. `local` also removes an object the server never knew (after it refused it). */
 function removeRecord(key, id, local = false) {
   const known = base.get(key);
+  const b = known.get(id);
   const before = key === 'projects' ? serverOrder() : null;
-  const had = known.delete(id);
-  if (!had && !local) return false; // not something the server told us about: an unsent create of ours, or already gone
+  if (!known.delete(id) && !local) return false; // not something the server told us about: an unsent create of ours, or already gone
   const list = D()[key];
   const i = list.findIndex(x => x.id === id);
   if (i >= 0) list.splice(i, 1);
-  journalAdd({ key, id, action: 'delete' });
+  if (!ownDelete(key, id, b)) journalAdd({ key, id, action: 'delete' });
   forgetUi(key, id);
   if (key === 'projects') reorderProjects(before);
   if (key === 'workspaces') refreshWs();
@@ -415,8 +453,8 @@ async function subscribeAll() {
   await Promise.all(colls.map(coll => pb.collection(coll).subscribe('*', e => onEvent(coll, e))));
   await pb.realtime.subscribe('PB_CONNECT', onConnect); // fires on every (re)connect
 }
-async function ensureSubscribed() {
-  if (pb.realtime.isConnected) return;
+/* A new stream, for when the old one cannot be trusted. Never throws: the safety net tries again. */
+async function resubscribe() {
   try {
     await subscribeAll();
   } catch (err) {
@@ -479,7 +517,12 @@ function computeDiff() {
   for (const { key, coll, updateOnly } of COLLECTIONS) {
     const known = base.get(key);
     const seen = new Set();
-    for (const p of toRecords(key, D())) {
+    const payloads = toRecords(key, D());
+    if (key === 'projects') {
+      const orders = projectOrders();
+      for (const p of payloads) p.order = orders.get(p.id);
+    }
+    for (const p of payloads) {
       if (seen.has(p.id)) continue;
       seen.add(p.id);
       const b = known.get(p.id);
@@ -503,6 +546,13 @@ export function pendingChanges() {
   return d.creates.length + d.updates.length + d.deletes.length;
 }
 export const hasUnsaved = () => !!st.flushing || pendingChanges() > 0;
+/* What pendingChanges() counts, one line per op ("update projects/p1 order"), settings included. For diagnosis. */
+export function pendingDetails() {
+  const d = computeDiff();
+  return [...d.creates, ...d.updates, ...d.deletes, ...(d.prefs ? [d.prefs] : [])].map(
+    o => `${o.type} ${o.key}/${o.id}${o.fields ? ' ' + Object.keys(o.fields).join(',') : ''}`,
+  );
+}
 
 /* Ops grouped by collection, in the order the collections first appear. */
 const byColl = ops => {
@@ -534,12 +584,14 @@ function settle(op, rec) {
 async function sendOne(op, options) {
   const api = pb.collection(op.coll);
   let rec;
+  if (op.type === 'delete') deleted.set(`${op.key}/${op.id}`, Date.now()); // its echo may beat the answer
   try {
     if (op.type === 'create') rec = await api.create(op.payload, options);
     else if (op.type === 'update') rec = await api.update(op.id, op.fields, options);
     else await api.delete(op.id, options);
   } catch (err) {
     if (op.type === 'delete' && err?.status === 404) return { op, status: 'ok', changed: settle(op) }; // already gone: a cascade got there first
+    if (op.type === 'delete') deleted.delete(`${op.key}/${op.id}`);
     const status = classify(err);
     // An id (or a second user_prefs record) that already exists means an earlier attempt got through after all.
     const silent = status === 'rejected' && op.type === 'create' && !!(err.response?.data?.id || err.response?.data?.user);
@@ -670,7 +722,7 @@ function recover() {
       await ping();
       if (!(await flush({ recovering: true }))) return false;
       await resync();
-      await ensureSubscribed();
+      await resubscribe(); // after an outage the old stream may be dead without the browser knowing
     } catch (err) {
       if (reloadFailure(err) !== 'other') return false;
       // The server answers but refuses the reload. Staying offline would never end, so carry on with what is loaded.
@@ -683,18 +735,20 @@ function recover() {
     return true;
   });
 }
-/* After the live stream was down for a moment: reload quietly, nothing is shown unless the server turns out to be unreachable. */
+/* Reloads and merges, showing nothing unless the server turns out to be unreachable. */
+async function reloadQuietly() {
+  try {
+    if (await resync()) hooks.render();
+  } catch (err) {
+    const failure = reloadFailure(err);
+    if (failure === 'offline') goOffline();
+    else if (failure === 'other') console.warn('sync: reload failed', err);
+  }
+}
+/* After the live stream was down for a moment, events may have been missed. */
 function quietResync() {
   if (!st.ready || st.offline || st.busy) return;
-  exclusive(async () => {
-    try {
-      if (await resync()) hooks.render();
-    } catch (err) {
-      const failure = reloadFailure(err);
-      if (failure === 'offline') goOffline();
-      else if (failure === 'other') console.warn('sync: reload failed', err);
-    }
-  });
+  exclusive(reloadQuietly);
 }
 export async function retryNow() {
   if (!st.active) return false;
@@ -735,7 +789,7 @@ export async function startSync({ boot = false } = {}) {
     st.ready = true;
     for (const [coll, e] of st.queue.splice(0)) applyEvent(coll, e); // events that arrived during the load
     setOffline(false);
-    st.netT = setInterval(safetyNet, 30000);
+    st.netT = setInterval(safetyNet, NET_MS);
     return true;
   } catch (err) {
     await teardown();
@@ -793,10 +847,26 @@ authStore.onChange(() => {
   // Another tab signed out, or signed in as somebody else: never keep writing as the wrong person.
   if (st.active && !st.stopping && (!authStore.isValid || authStore.record?.id !== st.me)) expire('Your session ended in another tab. Sign in again.');
 });
-/* Safety net for a live stream that never connects (a proxy that buffers it): reload now and then so the page does not go stale. */
+/* Safety net, every 20 s. The live stream can die without anyone noticing (a server killed behind a proxy, a network that dropped):
+   the browser keeps calling it open and no event ever arrives, so the page would go stale in silence. PocketBase forgets a stream's
+   client id when it restarts, and answers 404 when asked to confirm the subscriptions of one it does not know. A stream that is
+   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded. */
+const NET_MS = 20000;
 function safetyNet() {
-  if (!st.ready || st.offline || pb.realtime.isConnected) return;
-  ensureSubscribed().then(quietResync);
+  if (!st.ready || st.offline || st.busy) return;
+  exclusive(async () => {
+    const gen = st.gen;
+    try {
+      if (!pb.realtime.isConnected) throw Object.assign(new Error('no live stream'), { status: 404 });
+      await pb.send('/api/realtime', { method: 'POST', body: { clientId: pb.realtime.clientId, subscriptions: pb.realtime.lastSentSubscriptions } });
+    } catch (err) {
+      const kind = classify(err);
+      if (kind === 'network' || kind === 'abort') return goOffline();
+      if (kind === 'auth') return expire();
+      await resubscribe();
+      if (gen === st.gen) await reloadQuietly();
+    }
+  });
 }
 
 /* Adds a record the caller created on the server itself. */
