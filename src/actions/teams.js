@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, uid } from '../core/utils.js';
 import { PCOLORS } from '../core/constants.js';
-import { D, S, mem, team, teamsList } from '../core/store.js';
+import { D, S, allTeams, mem, team, teamsList } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
@@ -74,8 +74,8 @@ A.submitTeam = () => {
         if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
       });
     } else {
-      t = { id: uid('tm'), name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
-      teamsList().push(t);
+      t = { id: uid('tm'), workspace: D().ws.id, name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
+      allTeams().push(t);
     }
     f.members.forEach(id => {
       const x = mem(id);
@@ -107,7 +107,7 @@ A.delTeam = el => {
       const snap = snapshot();
       if (
         mutate(() => {
-          D().teams = teamsList().filter(x => x !== t);
+          D().teams = allTeams().filter(x => x !== t);
           D().members.forEach(x => {
             if (x.team === t.id) x.team = '';
           });
