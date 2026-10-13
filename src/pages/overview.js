@@ -36,7 +36,7 @@ export function pageOverview() {
             const ts = tasksOf(p.id);
             const pr = progressOf(p.id);
             const ov = ts.filter(isOver).length;
-            return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${p.id}" data-tab="overview"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span class="trunc" style="font-weight:500">${esc(p.name)}</span></span></td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}<span class="muted trunc">${esc(mem(p.lead)?.name.split(' ')[0])}</span></span></td><td style="text-align:left">${pStatus(p.status)}</td><td><span class="row">${progBar(pr, p.status === 'complete' ? 'green' : p.status === 'risk' ? 'red' : '')}<span class="num faint" style="font-size:11.5px;width:30px">${pr}%</span></span></td><td class="num">${ts.filter(t => t.status !== 'done').length}</td><td class="num" style="${ov ? 'color:var(--red)' : 'color:var(--text-3)'}">${ov}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td></tr>`;
+            return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="overview"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span class="trunc" style="font-weight:500">${esc(p.name)}</span></span></td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}<span class="muted trunc">${esc(mem(p.lead)?.name.split(' ')[0])}</span></span></td><td style="text-align:left">${pStatus(p.status)}</td><td><span class="row">${progBar(pr, p.status === 'complete' ? 'green' : p.status === 'risk' ? 'red' : '')}<span class="num faint" style="font-size:11.5px;width:30px">${pr}%</span></span></td><td class="num">${ts.filter(t => t.status !== 'done').length}</td><td class="num" style="${ov ? 'color:var(--red)' : 'color:var(--text-3)'}">${ov}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td></tr>`;
           })
           .join('')}
         </tbody></table></div>
@@ -50,7 +50,7 @@ export function pageOverview() {
           ${load
             .map(
               l =>
-                `<div class="row" style="height:30px;font-size:13px;cursor:pointer" data-a="go" data-r="member" data-id="${l.m.id}">${av(l.m.id, 'sm', false)}<span style="width:96px" class="trunc">${esc(l.m.name.split(' ')[0])}</span><span class="grow" style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-3)"><span style="display:flex;width:${(l.ts.length / maxL) * 100}%">${STATUSES.filter(
+                `<div class="row" style="height:30px;font-size:13px;cursor:pointer" data-a="go" data-r="member" data-id="${esc(l.m.id)}">${av(l.m.id, 'sm', false)}<span style="width:96px" class="trunc">${esc(l.m.name.split(' ')[0])}</span><span class="grow" style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-3)"><span style="display:flex;width:${(l.ts.length / maxL) * 100}%">${STATUSES.filter(
                   s => s.id !== 'done',
                 )
                   .map(s => {
@@ -62,7 +62,7 @@ export function pageOverview() {
             .join('')}
         </div></section>
         <section class="panel"><div class="panel-h"><h2>Upcoming milestones</h2></div><div class="panel-b">
-          ${ms.map(m => `<div class="row" style="height:32px;font-size:13px;cursor:pointer" data-a="go" data-r="project" data-id="${m.p.id}" data-tab="timeline"><span style="width:9px;height:9px;transform:rotate(45deg);background:${pColor(m.p)};border-radius:2px;flex-shrink:0;margin:0 3px"></span><span class="grow trunc">${esc(m.name)} <span class="faint">· ${esc(m.p.name)}</span></span><span class="num muted">${relDate(m.date)}</span></div>`).join('') || '<div class="faint">No upcoming milestones</div>'}
+          ${ms.map(m => `<div class="row" style="height:32px;font-size:13px;cursor:pointer" data-a="go" data-r="project" data-id="${esc(m.p.id)}" data-tab="timeline"><span style="width:9px;height:9px;transform:rotate(45deg);background:${pColor(m.p)};border-radius:2px;flex-shrink:0;margin:0 3px"></span><span class="grow trunc">${esc(m.name)} <span class="faint">· ${esc(m.p.name)}</span></span><span class="num muted">${relDate(m.date)}</span></div>`).join('') || '<div class="faint">No upcoming milestones</div>'}
         </div></section>
       </div>
     </div>

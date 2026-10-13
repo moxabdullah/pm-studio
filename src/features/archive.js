@@ -12,7 +12,7 @@ export function pageArchive() {
     .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
   const ps = D().projects.filter(p => p.archived);
   const row = (lead, title, sub, when, restoreAct, delAct, id) =>
-    `<div class="mini" style="min-height:52px;cursor:default;gap:12px">${lead}<div class="grow" style="min-width:0"><div class="trunc" style="font-weight:500">${title}</div><div class="faint trunc" style="font-size:12px">${sub}</div></div><span class="faint hide-m" style="font-size:12px;white-space:nowrap">${when}</span><button class="btn btn-secondary btn-sm" data-a="${restoreAct}" data-id="${id}">${ic('rotate-ccw', 13)}Restore</button><button class="ibtn ibtn-sm" data-a="${delAct}" data-id="${id}" data-tip="Delete permanently" aria-label="Delete permanently" style="color:var(--red)">${ic('trash-2', 15)}</button></div>`;
+    `<div class="mini" style="min-height:52px;cursor:default;gap:12px">${lead}<div class="grow" style="min-width:0"><div class="trunc" style="font-weight:500">${title}</div><div class="faint trunc" style="font-size:12px">${sub}</div></div><span class="faint hide-m" style="font-size:12px;white-space:nowrap">${when}</span><button class="btn btn-secondary btn-sm" data-a="${restoreAct}" data-id="${esc(id)}">${ic('rotate-ccw', 13)}Restore</button><button class="ibtn ibtn-sm" data-a="${delAct}" data-id="${esc(id)}" data-tip="Delete permanently" aria-label="Delete permanently" style="color:var(--red)">${ic('trash-2', 15)}</button></div>`;
   const body =
     tab === 'tasks'
       ? ts.length
@@ -22,7 +22,7 @@ export function pageArchive() {
               return row(
                 stIcon(t.status, 15),
                 esc(t.title),
-                `<span class="mono">${t.key}</span> · ${esc(p.name)}`,
+                `<span class="mono">${esc(t.key)}</span> · ${esc(p.name)}`,
                 t.archivedAt ? 'Archived ' + ago(t.archivedAt) : 'Archived',
                 'restoreTask',
                 'purgeTask',

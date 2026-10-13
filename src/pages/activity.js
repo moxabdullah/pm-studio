@@ -11,11 +11,11 @@ export function pageActivity() {
   if (f !== 'all')
     as = as.filter(a =>
       f === 'comments'
-        ? a.verb.includes('comment')
+        ? String(a.verb).includes('comment')
         : f === 'status'
           ? /moved|completed|reopened/.test(a.verb)
           : f === 'projects'
-            ? a.verb.includes('project')
+            ? String(a.verb).includes('project')
             : true,
     );
   if (who !== 'all') as = as.filter(a => a.by === who);
@@ -32,7 +32,7 @@ export function pageActivity() {
       .map(([k, n]) => `<button class="${f === k ? 'on' : ''}" data-a="set" data-k="actFilter" data-v="${k}">${n}</button>`)
       .join('')}</div>
     <select class="select" style="height:26px;width:auto;font-size:12px" data-in="actWho" aria-label="Filter by person"><option value="all">Everyone</option>${D()
-      .members.map(m => `<option value="${m.id}" ${who === m.id ? 'selected' : ''}>${esc(m.name)}</option>`)
+      .members.map(m => `<option value="${esc(m.id)}" ${who === m.id ? 'selected' : ''}>${esc(m.name)}</option>`)
       .join('')}</select></div>
     ${
       as.length

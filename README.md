@@ -71,6 +71,11 @@ Dependencies point downward:
   design-system menu and keeps the native element as the source of truth.
 - **Icons:** call `ic('name')` with any [Lucide](https://lucide.dev) icon name. The
   `virtual:icons` plugin bundles only the icons the source uses.
+- **Stored data is untrusted:** every signed-in user can write the records everyone else
+  renders. Put text and attribute values in HTML through `esc()`, colours through
+  `safeColor()`, task descriptions through `sanitizeHtml()`, and read status, priority and
+  similar keys from the tables in `core/constants.js`, which fall back instead of throwing
+  (`core/safe.js`).
 
 ## Continuous integration
 
