@@ -16,8 +16,6 @@ export const DEFAULT_PREFS = {
   motion: 'system',
   home: 'home',
   openTasks: 'drawer',
-  name: 'Tanjim Islam',
-  title: 'Head of Product',
 };
 export function load() {
   try {
@@ -39,9 +37,6 @@ export const S = {
   ui: {
     fx: {},
     auth: null,
-    authStep: 'login',
-    onb: 0,
-    onbData: { use: 'product', team: 'kanban', size: '2-10', ws: '', proj: 'Website Launch', tmpl: 'web', invites: '' },
     route: 'home',
     params: {},
     history: [],
@@ -97,18 +92,29 @@ export function save() {
 /* ---------- lookups ---------- */
 export const D = () => S.data;
 export const me = () => D().members.find(m => m.id === D().me);
+export const isAdmin = () => me()?.role === 'Admin';
 export const mem = id => D().members.find(m => m.id === id);
 export const proj = id => D().projects.find(p => p.id === id);
 export const task = id => D().tasks.find(t => t.id === id);
 export const pColor = p => PCOLORS[p?.color] || PCOLORS.slate;
+/* A project (or team) belongs to the current workspace. Data saved before workspaces had ids (no D().ws.id) shows everything. */
+export const inWs = x => !!x && (!D().ws.id || x.workspace === D().ws.id);
 export const visibleProjects = () =>
   D()
     .projOrder.map(proj)
     .filter(Boolean)
-    .filter(p => !p.archived);
+    .filter(p => !p.archived && inWs(p));
 export const canSee = p => !p.private || p.members.includes(D().me);
 export const tasksOf = pid => D().tasks.filter(t => t.project === pid && !t.archived);
-export const allTasks = () => D().tasks.filter(t => !t.archived && canSee(proj(t.project)));
+export const allTasks = () =>
+  D().tasks.filter(t => {
+    const p = proj(t.project);
+    return !t.archived && inWs(p) && canSee(p);
+  });
+/* Events, files and activity hang off projects, so they follow the project's workspace. */
+export const wsEvents = () => D().events.filter(e => inWs(proj(e.project)));
+export const wsFiles = () => D().files.filter(f => inWs(proj(f.project)));
+export const wsActivity = () => D().activity.filter(a => !a.project || inWs(proj(a.project)));
 export const isOver = t => t.due && t.status !== 'done' && diffD(parse(t.due), TODAY) < 0;
 export const commentsOf = tid => D().comments.filter(c => c.task === tid);
 export function progressOf(pid) {
@@ -130,12 +136,15 @@ export function logAct(verb, t, extra = '') {
 
 /* ---------- teams (workspace data, seeded on first use) ---------- */
 export const NO_TEAM = { id: '', name: 'No team', icon: 'users', c: '#8A867E', desc: '' };
-export function teamsList() {
+/* Every team in every workspace: the storage behind the lists below. */
+export function allTeams() {
   const d = D();
   if (!d.teams) d.teams = TEAMS_SEED.map(t => ({ ...t }));
   return d.teams;
 }
+/* The current workspace's teams, for lists and pickers. */
+export const teamsList = () => allTeams().filter(inWs);
 export function team(id) {
-  return teamsList().find(t => t.id === id) || null;
+  return allTeams().find(t => t.id === id) || null;
 }
 export const TM = new Proxy({}, { get: (_, k) => team(k) || NO_TEAM });

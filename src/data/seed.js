@@ -7,7 +7,7 @@ export function seed() {
       id: 'm1',
       name: 'Tanjim Islam',
       email: 'hello@gr8rstudio.com',
-      role: 'Owner',
+      role: 'Admin',
       team: 'product',
       title: 'Head of Product',
       c: '#5A67D8',
@@ -91,11 +91,11 @@ export function seed() {
       id: 'm8',
       name: 'Diego Alvarez',
       email: 'diego@freelance.io',
-      role: 'Guest',
+      role: 'Member',
       team: 'mkt',
       title: 'Freelance Copywriter',
       c: '#C0612B',
-      status: 'invited',
+      status: 'active',
       last: null,
       tz: 'Madrid',
     },
@@ -103,6 +103,7 @@ export function seed() {
   const projects = [
     {
       id: 'p1',
+      workspace: 'w1',
       key: 'WEB',
       name: 'Website Redesign',
       icon: 'globe',
@@ -124,6 +125,7 @@ export function seed() {
     },
     {
       id: 'p2',
+      workspace: 'w1',
       key: 'MOB',
       name: 'Mobile App',
       icon: 'smartphone',
@@ -144,6 +146,7 @@ export function seed() {
     },
     {
       id: 'p3',
+      workspace: 'w1',
       key: 'MKT',
       name: 'Marketing Campaign',
       icon: 'megaphone',
@@ -164,6 +167,7 @@ export function seed() {
     },
     {
       id: 'p4',
+      workspace: 'w1',
       key: 'LCH',
       name: 'Product Launch',
       icon: 'rocket',
@@ -184,6 +188,7 @@ export function seed() {
     },
     {
       id: 'p5',
+      workspace: 'w1',
       key: 'DS',
       name: 'Design System',
       icon: 'component',
@@ -201,6 +206,7 @@ export function seed() {
     },
     {
       id: 'p6',
+      workspace: 'w1',
       key: 'CP',
       name: 'Customer Portal',
       icon: 'building-2',
@@ -219,6 +225,7 @@ export function seed() {
     },
     {
       id: 'p7',
+      workspace: 'w1',
       key: 'MW',
       name: 'Marketing Website',
       icon: 'layout-grid',
@@ -498,11 +505,11 @@ export function seed() {
   const tmp = tk('t3');
   tmp.updated = minsAgo(38);
   return {
-    ws: { name: 'Gr8r Studio', url: 'gr8rstudio', c: '#1D1C1A', brand: true },
+    ws: { id: 'w1', name: 'Gr8r Studio', url: 'gr8rstudio', c: '#1D1C1A', brand: true },
     workspaces: [
-      { id: 'w1', name: 'Gr8r Studio', c: '#1D1C1A', plan: 'Team', brand: true },
-      { id: 'w2', name: 'Personal', c: '#3D8E5F', plan: 'Free' },
-      { id: 'w3', name: 'Acme Labs', c: '#3B82C4', plan: 'Business' },
+      { id: 'w1', name: 'Gr8r Studio', c: '#1D1C1A', brand: true },
+      { id: 'w2', name: 'Personal', c: '#3D8E5F' },
+      { id: 'w3', name: 'Acme Labs', c: '#3B82C4' },
     ],
     me: 'm1',
     members,
@@ -516,18 +523,6 @@ export function seed() {
     projOrder: projects.map(p => p.id),
     savedViews: [{ id: 'v1', project: 'p1', name: 'High priority', type: 'list', filters: [{ f: 'priority', op: 'is', v: ['urgent', 'high'] }] }],
     recentSearches: ['homepage', 'Sarah', 'wireframes'],
-    sessions: [
-      { id: 'se1', dev: 'MacBook Pro · Chrome', loc: 'San Francisco, US', at: 'Active now', cur: true },
-      { id: 'se2', dev: 'iPhone 15 · Gr8r app', loc: 'San Francisco, US', at: '2 hours ago' },
-      { id: 'se3', dev: 'Windows · Edge', loc: 'Oakland, US', at: 'Sep 12' },
-    ],
-    invoices: [
-      { id: 'INV-2026-009', date: dOff(-23), amt: '$96.00', st: 'Paid' },
-      { id: 'INV-2026-008', date: dOff(-53), amt: '$96.00', st: 'Paid' },
-      { id: 'INV-2026-007', date: dOff(-84), amt: '$80.00', st: 'Paid' },
-      { id: 'INV-2026-006', date: dOff(-114), amt: '$80.00', st: 'Paid' },
-    ],
-    tfa: false,
     notifPrefs: {
       email_mention: true,
       email_assign: true,

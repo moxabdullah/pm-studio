@@ -1,7 +1,7 @@
 /* ---------- SEARCH RESULTS ---------- */
 import { ago, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, allTasks, canSee, mem, pColor, proj, task, visibleProjects } from '../core/store.js';
+import { D, S, allTasks, canSee, inWs, mem, pColor, proj, task, visibleProjects, wsFiles } from '../core/store.js';
 import { FT, av, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
 
 export function searchAll(q) {
@@ -14,8 +14,8 @@ export function searchAll(q) {
       .slice(0, 30),
     projects: visibleProjects().filter(p => has(p.name) || has(p.desc)),
     people: D().members.filter(m => has(m.name) || has(m.email) || has(m.title)),
-    files: D().files.filter(f => has(f.name) && canSee(proj(f.project))),
-    comments: D().comments.filter(c => has(c.text) && task(c.task) && canSee(proj(task(c.task).project))),
+    files: wsFiles().filter(f => has(f.name) && canSee(proj(f.project))),
+    comments: D().comments.filter(c => has(c.text) && task(c.task) && inWs(proj(task(c.task).project)) && canSee(proj(task(c.task).project))),
   };
 }
 export function pageSearch() {
