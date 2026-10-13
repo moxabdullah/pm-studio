@@ -47,7 +47,7 @@ docs/phase-1-backend.md the plan for the PocketBase backend
 scripts/                get-pocketbase.sh / .ps1 (pinned PocketBase download) and the helpers behind npm run server and seed:dev
 server/                 the PocketBase side
   pb_migrations/        JS migrations: every collection and API rule, applied when the server starts
-  pb_hooks/             server hooks (401 for requests that are not signed in, new-account defaults, no stale app page)
+  pb_hooks/             server hooks (401 when not signed in, new-account defaults, no stale app page, field-by-field saves)
   pb_public/            the built app (git-ignored; npm run build:server writes it)
   pb_data/              database and uploaded files (git-ignored; this is what gets backed up)
 src/
