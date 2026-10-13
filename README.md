@@ -4,21 +4,33 @@ A calm, structured project management workspace: home dashboard, inbox, my tasks
 board / list / table / calendar / timeline / files views, members, teams, activity and settings.
 
 Built with plain JavaScript ES modules and CSS, bundled by [Vite](https://vite.dev). There is no
-UI framework and no runtime dependency.
+UI framework. The one runtime dependency is the [PocketBase](https://pocketbase.io) JS SDK: the app
+keeps its data on a PocketBase server, which also serves the built app.
 
 ![Gr8r Studio home dashboard](docs/preview.png)
 
 ## Getting started
 
-Requires Node.js 18 or newer (`.nvmrc` pins 22).
+Requires Node.js 18 or newer (`.nvmrc` pins 22). The app needs a PocketBase server, so development
+runs two processes.
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173 with hot reload
-npm run build     # production build in dist/
-npm run preview   # serve the production build locally
-npm run lint      # ESLint
-npm run format    # Prettier
+scripts/get-pocketbase.sh   # once: downloads the pinned PocketBase into server/ (Windows: scripts\get-pocketbase.ps1)
+npm run server              # terminal 1: PocketBase on http://127.0.0.1:8090
+npm run seed:dev            # once: demo users and data; prints the sign-in details
+npm run dev                 # terminal 2: http://localhost:5173 with hot reload, /api proxied to PocketBase
+```
+
+Sign in with one of the accounts that `seed:dev` prints. It only runs against a local, empty dev
+server and refuses anything else; never run it on production.
+
+```bash
+npm run build         # production build in dist/
+npm run build:server  # production build into server/pb_public, served by PocketBase
+npm run preview       # serve the production build locally
+npm run lint          # ESLint
+npm run format        # Prettier
 ```
 
 ## Project structure
@@ -30,6 +42,14 @@ vite.config.js          Vite config, including the Lucide icon-subset plugin
 eslint.config.js        lint rules (ESLint flat config); formatting by Prettier (.prettierrc.json)
 .github/workflows/      CI: lint, format check, build
 docs/preview.png        README screenshot
+docs/deploy.md          install, HTTPS, users, backups and upgrades for the company server
+docs/phase-1-backend.md the plan for the PocketBase backend
+scripts/                get-pocketbase.sh / .ps1 (pinned PocketBase download) and the helpers behind npm run server and seed:dev
+server/                 the PocketBase side
+  pb_migrations/        JS migrations: every collection and API rule, applied when the server starts
+  pb_hooks/             server hooks (rejects record requests that are not signed in)
+  pb_public/            the built app (git-ignored; npm run build:server writes it)
+  pb_data/              database and uploaded files (git-ignored; this is what gets backed up)
 src/
   main.js               entry: imports styles and modules, then boots the app
   styles/
@@ -39,6 +59,9 @@ src/
     views/              list, board, table, calendar, timeline, projects & files
     pages/              settings, auth & onboarding
   core/                 utilities, constants, icons, store (state + lookups), theme
+    pb.js               PocketBase client (server URL, sign-in state)
+    sync.js             sync engine: loads data, saves changes, applies live updates
+    sync-map.js         maps app objects to PocketBase records and back
   data/seed.js          demo workspace data
   ui/                   shared render helpers, toasts, the select dropdown
   shell/                render loop and router, sidebar/topbar layout, skeletons, view engine
@@ -79,4 +102,8 @@ Every push and pull request runs lint, the format check and a production build
 
 ## Deploy
 
-`vercel.json` builds with Vite and serves `dist/`.
+The app runs on one company server, served by PocketBase. `docs/deploy.md` covers installing it as
+a service, HTTPS, creating the first admin and users, nightly backups, restoring and upgrading.
+
+`vercel.json` still builds the front end alone and serves `dist/`. A static host has no PocketBase
+behind it, so the app cannot load or save data there.
