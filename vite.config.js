@@ -49,5 +49,18 @@ function lucideSubset() {
 
 export default defineConfig({
   plugins: [lucideSubset()],
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    /* The app talks to PocketBase on the same origin. In dev that means this proxy; in production PocketBase serves the app.
+       Realtime updates are a long-lived server-sent-events stream on /api/realtime. http-proxy passes it through unbuffered and
+       sets no timeouts of its own. When PocketBase is down the browser should see a network failure, as it does in production,
+       so the connection is dropped instead of answering with Vite's HTTP 500. */
+    proxy: {
+      '/api': {
+        target: process.env.PB_URL || 'http://127.0.0.1:8090',
+        changeOrigin: true,
+        configure: proxy => proxy.on('error', (_err, _req, res) => res?.destroy?.()),
+      },
+    },
+  },
 });

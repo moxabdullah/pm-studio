@@ -5,3 +5,11 @@ dist/
 __MACOSX/
 *.log
 .env*
+
+# PocketBase: the binary is fetched by scripts/get-pocketbase.*, never committed.
+# pb_data holds the database and uploaded files (this is the backup); pb_public is the built app.
+server/pocketbase
+server/pocketbase.exe
+server/.get-pocketbase.*
+server/pb_data/
+server/pb_public/
