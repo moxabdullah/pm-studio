@@ -8,6 +8,13 @@
    missing; optional fields are coerced only when present; unknown fields are kept. Well-formed data, such as
    seed(), comes out unchanged. This is about not crashing, not about markup: text still goes through esc() and
    colours through safeColor() where they are rendered.
+
+   NOT WIRED IN YET. The natural place is the end of fromRecord() in sync-map.js, but two things must be settled first:
+   - project.fav is per user (it lives in user_prefs and fromRecord leaves it out). Adding fav: false here would make
+     the sync engine's in-place patch clear the user's favourite on every remote update to a project.
+   - The sync baseline is toRecord(fromRecord(rec)). Any value the app itself writes that this coerces differently
+     ('' -> null, a dropped list entry) would never match the baseline, and the record would be re-sent over and over.
+   Until then, safely() in ui/helpers.js contains a malformed record to the panel that renders it.
    ===================================================================== */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
