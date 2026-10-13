@@ -5,6 +5,7 @@ import globals from 'globals';
 const pocketbaseVm = {
   migrate: 'readonly',
   routerUse: 'readonly',
+  onRecordCreate: 'readonly',
   Collection: 'readonly',
   Field: 'readonly',
   UnauthorizedError: 'readonly',

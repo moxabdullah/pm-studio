@@ -31,6 +31,10 @@
      numbers live inside doc and are untouched. Empty relations come back as null for assignee, lead and activity.project/task/by,
      comments.by and files.by, and as '' for team and workspace. Extras: members keep `email` ('' when the account hides it);
      files get `file`, the stored file name for download URLs (see fileUrl in pb.js). Not restored: `fav` (call applyFavs / applyUserPrefs).
+     Members get defaults for what a dashboard-created account leaves blank: c '#6B7280', status 'active', role 'Member', title '',
+     team '', tz '\u2014' (an em dash), last null, and name = the email's local part ('Unnamed user' when the email is hidden too).
+     toRecord leaves those defaults out again, so a bare account loads, round-trips and saves without anyone writing a value they
+     didn't choose (a stored role is always sent: roles are never blank, see server/pb_hooks/users_defaults.pb.js).
    toRecords(coll, data)        -> payloads for every object of data[key], with ctx (me, order) filled from `data`.
    toFormData(payload, blob, filename)
                                 -> the payload as multipart FormData plus the upload in the `file` field. Use it to create a files
@@ -38,6 +42,8 @@
                                    plain JSON payload.
    stableStringify(v)           JSON with object keys sorted at every level (same content -> same string).
    samePayload(a, b)            stableStringify(a) === stableStringify(b); the check to use when diffing against a snapshot.
+     Snapshot what was loaded as toRecord(fromRecord(rec)), never as the raw record: defaults, `doc: null` -> {} and the
+     boolean flags are then part of the baseline and can't look like a change.
    projOrderFrom(records)       ids of project records (anything with { id, order }) sorted by order: rebuilds D().projOrder.
 
    Field names that differ: comments.by <-> author, files.by <-> uploaded_by, members.c <-> color, workspaces.c <-> color.
@@ -76,11 +82,22 @@ const IDS = { to: ids, from: ids };
 const ONE = empty => ({ to: id, from: v => id(v) || empty }); // one relation; `empty` is how the app writes "none"
 const ROLE = { to: serverRole, from: appRole };
 
+/* Accounts that admins create by hand in the dashboard have a blank colour, status and doc. Members read back with the values the
+   app expects, and those values are left out of the payload again: a loaded account never differs from itself because of its
+   defaults, and the app never writes a value nobody chose. */
+const MEMBER_COLOR = '#6B7280';
+const UNNAMED = 'Unnamed user';
+const localPart = email => String(email || '').split('@')[0];
+const BLANKABLE = fallback => ({ to: v => (v == null || v === '' || v === fallback ? '' : String(v)), from: v => str(v) || fallback });
+const isDefault = (value, fallback) => value === fallback || (typeof fallback === 'string' && value === '');
+
 /* One entry per collection.
    cols     [appKey, column, codec] in payload order
    ctxCols  [ctxKey, column, codec, required] columns the app object doesn't carry
    readOnly [appKey, column] read back by fromRecord but never sent
-   skip     app keys that are kept out of doc (and out of the payload) */
+   skip     app keys that are kept out of doc (and out of the payload)
+   docDefaults { docKey: value } what a missing doc key reads as; a doc key holding that value is not written
+   afterRead(out) / beforeWrite(payload, obj)  last touches for fromRecord / toRecord */
 const SPECS = {
   members: {
     key: 'members',
@@ -89,12 +106,20 @@ const SPECS = {
     cols: [
       ['name', 'name', TEXT],
       ['title', 'title', TEXT],
-      ['c', 'color', TEXT],
-      ['status', 'status', TEXT],
+      ['c', 'color', BLANKABLE(MEMBER_COLOR)],
+      ['status', 'status', BLANKABLE('active')],
       ['role', 'role', ROLE],
     ],
     readOnly: [['email', 'email']],
     skip: ['email', 'password', 'passwordConfirm', 'verified'],
+    docDefaults: { team: '', tz: '\u2014', last: null },
+    // no name: the email's local part, or a placeholder when the account hides its email too
+    afterRead: out => {
+      out.name = out.name || localPart(out.email) || UNNAMED;
+    },
+    beforeWrite: (out, obj) => {
+      if (out.name === UNNAMED || (obj.email && out.name === localPart(obj.email))) out.name = '';
+    },
   },
   workspaces: {
     key: 'workspaces',
@@ -233,8 +258,10 @@ export function toRecord(coll, obj, ctx = {}) {
     if (required && !ctx[ctxKey]) throw new Error(`sync-map: toRecord(${s.coll}) needs ctx.${ctxKey}`);
     out[column] = codec.to(ctx[ctxKey]);
   }
+  s.beforeWrite?.(out, obj);
   const rest = {};
   for (const k of Object.keys(obj)) if (!claimed.has(k) && obj[k] !== undefined) rest[k] = obj[k];
+  for (const [k, fallback] of Object.entries(s.docDefaults || {})) if (k in rest && isDefault(rest[k], fallback)) delete rest[k];
   out.doc = clone(rest);
   return out;
 }
@@ -243,8 +270,10 @@ export function fromRecord(coll, rec) {
   const s = specOf(coll);
   const out = Object.assign({ id: rec.id }, clone(docOf(rec)));
   for (const k of s.skip || []) delete out[k];
+  for (const [k, fallback] of Object.entries(s.docDefaults || {})) if (out[k] === undefined || isDefault(out[k], fallback)) out[k] = fallback;
   for (const [appKey, column, codec] of s.cols) out[appKey] = codec.from(rec[column]);
   for (const [appKey, column] of s.readOnly || []) out[appKey] = str(rec[column]);
+  s.afterRead?.(out);
   out.id = rec.id;
   return out;
 }

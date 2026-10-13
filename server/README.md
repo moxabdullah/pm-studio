@@ -6,7 +6,7 @@
 | ------------------------------ | ----------------------------------------------------------------------------------------- | ------ |
 | `pocketbase`, `pocketbase.exe` | the pinned binary, fetched by `scripts/get-pocketbase.sh` or `scripts/get-pocketbase.ps1` | no     |
 | `pb_migrations/`               | JS migrations: every collection, field, index and access rule                             | yes    |
-| `pb_hooks/`                    | server hooks. `auth_required.pb.js` answers 401 to anonymous record requests              | yes    |
+| `pb_hooks/`                    | server hooks, one concern per file (see the comment at the top of each)                   | yes    |
 | `pb_public/`                   | the built app, from `npm run build:server`                                                | no     |
 | `pb_data/`                     | the database and uploaded files. **This folder is the backup.**                           | no     |
 
@@ -25,4 +25,5 @@ npm run build:server        # build the app into pb_public so PocketBase serves 
 - Editing a collection in the dashboard while `npm run server` runs writes a migration file into `pb_migrations/` for you. Commit it. Pass `--automigrate=false` to turn that off, for example on a production server.
 - `server/pocketbase migrate create name` writes an empty migration here, and `migrate down 1` reverts the last one.
 - Access rules and the reasoning behind them are written at the top of `pb_migrations/1791849600_init_schema.js`.
+- New accounts are created by an admin in the dashboard. `pb_hooks/users_defaults.pb.js` gives them the `member` role and a public email; email addresses are case-insensitive (`1791849601_users_email_nocase.js`).
 - PocketBase is pinned in the two `get-pocketbase` scripts. Upgrading is a deliberate change: bump the version and the checksums together, then run the migrations and the checks you care about against a copy of `pb_data`.
