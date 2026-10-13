@@ -1,3 +1,5 @@
 dist
 node_modules
 package-lock.json
+server/pb_public
+server/pb_data
