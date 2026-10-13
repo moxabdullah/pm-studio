@@ -118,7 +118,9 @@ export function fsize(b) {
   if (b < 1048576) return Math.round(b / 1024) + ' KB';
   return (b / 1048576).toFixed(1) + ' MB';
 }
-export function filePrev(f) {
+/* The preview tile of a file: an icon-style drawing for its type. With `src` (a file URL of a raster image, see isRaster in
+   core/files.js) the real image is laid over the drawing; if it fails to load it is hidden and the drawing shows. */
+export function filePrev(f, src = '') {
   const t = FT[f.type] || FT.other;
   let art;
   if (f.type === 'img')
@@ -130,5 +132,6 @@ export function filePrev(f) {
   else art = `<div class="art"><i class="h"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i></div>`;
   const fname = String(f.name ?? '');
   const ext = (fname.split('.').pop() || '').slice(0, 4);
-  return `<div class="fprev">${art}<span class="ext" style="--c:${t.c}">${esc(ext)}</span></div>`;
+  const img = src ? `<img class="fimg" src="${esc(src)}" alt="${esc(fname)}" data-fid="${esc(f.id)}" decoding="async">` : '';
+  return `<div class="fprev">${art}${img}<span class="ext" style="--c:${t.c}">${esc(ext)}</span></div>`;
 }

@@ -322,7 +322,8 @@
 .attc .fi {
   padding: 7px 9px;
 }
-.attc .x {
+.attc .x,
+.attc .dl {
   position: absolute;
   top: 5px;
   right: 5px;
@@ -330,7 +331,13 @@
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--border);
 }
-.attc:hover .x {
+.attc .dl {
+  right: 31px;
+}
+.attc:hover .x,
+.attc:hover .dl,
+.attc:focus-within .x,
+.attc:focus-within .dl {
   opacity: 1;
 }
 .cmt {

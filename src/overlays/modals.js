@@ -3,6 +3,7 @@ import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
 import { D, S, mem, pColor, proj, task, teamsList } from '../core/store.js';
+import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
@@ -83,7 +84,7 @@ export function taskModal(m, H) {
       <div class="inwrap">${ic('plus', 14)}<input class="input" id="f-sub" data-key-enter="formAddSub" placeholder="Add a subtask and press Enter"></div></div>
     <div class="field"><span class="label">Attachments</span>
       ${f.files.length ? `<div class="col" style="gap:4px">${f.files.map((x, i) => `<div class="upl" style="padding:6px 10px"><span class="ftype" style="--c:${FT[x.type].c};width:22px;height:22px">${ic(FT[x.type].i, 12)}</span><span class="grow trunc">${esc(x.name)}</span><span class="faint" style="font-size:11.5px">${esc(x.size)}</span><button type="button" class="ibtn ibtn-xs" data-a="formRmFile" data-i="${i}" aria-label="Remove">${ic('x', 12)}</button></div>`).join('')}</div>` : ''}
-      <label class="dropzone" style="padding:10px">${ic('paperclip', 14)}<span>Attach files</span><input type="file" multiple hidden data-in="formFiles"></label></div>
+      <div class="dropzone" style="padding:10px" data-a="pickFormFiles">${ic('paperclip', 14)}<span>Attach files</span></div></div>
   </form>
   <div class="modal-f">${m.edit ? '' : `<label class="row" style="gap:8px;font-size:12.5px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="toggle" id="f-more" data-in="formMore" ${f.more ? 'checked' : ''}>Create more</label>`}<span class="sp"></span>
     <span class="faint hide-m" style="font-size:11.5px"><kbd>${MOD}</kbd> <kbd>↵</kbd></span>
@@ -266,11 +267,21 @@ export const SHORTCUTS = [
 export function shortcutsModal(H) {
   return `${H('Keyboard shortcuts')}<div class="modal-b" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">${SHORTCUTS.map(([g, list]) => `<div><div class="eyebrow" style="margin-bottom:6px">${g}</div>${list.map(([n, k]) => `<div class="row" style="height:30px;font-size:13px;border-bottom:1px solid var(--divider)"><span class="grow">${n}</span>${k.map((x, i) => `${i && k[0] === 'G' ? '<span class="faint" style="font-size:11px">then</span>' : ''}<kbd>${x}</kbd>`).join('')}</div>`).join('')}</div>`).join('')}</div>`;
 }
+/* m.file is a files object (or, for an attachment that points to no file, the attachment itself); m.src is a file URL, set by
+   openFilePreview in actions.js, for the raster images that get a real picture. Everything is stored data: names, types and sizes
+   go through esc(). */
 export function filePreviewModal(m, H) {
-  const f = m.file;
+  const served = !!m.file.file; // there is a stored file behind it
+  const live = served ? D().files.find(x => x.id === m.file.id) : null; // the current version: a rename elsewhere shows, a deletion is noticed
+  const f = live || m.file;
+  const gone = served && !live;
+  const canDownload = served && !gone;
   const t = FT[f.type] || FT.other;
+  const prev = filePrev(f, !gone && isRaster(f) ? m.src : '').replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"');
+  const note = gone ? 'This file was deleted.' : !served ? "This attachment isn't linked to an uploaded file, so there is nothing to download." : '';
   return `${H(esc(f.name), `${t.n} · ${esc(f.size)} · Uploaded by ${esc(mem(f.by)?.name || 'you')} ${ago(f.at)}`)}
-  <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${filePrev(f).replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"')}</div>
+  <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${prev}</div>
+  ${note ? `<div class="alert info">${ic('info', 14)}<span>${note}</span></div>` : ''}
   ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}Attached to <button class="link" data-a="openTask" data-id="${esc(m.tid)}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>
-  <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-fid="${esc(f.id)}">${ic('link', 14)}Copy link</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">Close</button></div>`;
+  <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-fid="${esc(f.id)}">${ic('link', 14)}Copy link</button><span class="sp"></span><button class="btn ${canDownload ? 'btn-secondary' : 'btn-primary'}" data-a="closeModal">Close</button>${canDownload ? `<button class="btn btn-primary" data-a="downloadFile" data-id="${esc(f.id)}">${ic('download', 14)}Download</button>` : ''}</div>`;
 }

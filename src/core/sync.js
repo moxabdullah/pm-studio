@@ -19,6 +19,10 @@
                     Runs one at a time; a call during a run makes it go round once more. Resolves true when nothing was left behind.
      retryNow()     Tries to leave the offline state right now (flush, reload, resubscribe). Resolves true when back online. Wired to
                     the "Try again" button and the offline toast.
+     resubscribe() / quietResync()
+                    For when the account's token was replaced (the password was changed, actions.js savePassword): PocketBase then
+                    keeps the live stream open but unauthenticated, so nothing arrives on it any more. resubscribe() opens a new stream
+                    with the current token, quietResync() reloads and merges what was missed meanwhile. Neither throws.
      adopt(key, record)
                     Puts a record the caller already created on the server (a file upload, say) into S.data and the sync baseline
                     without sending it again. `key` is the app key or collection name ('files'), `record` the raw PocketBase record
@@ -519,7 +523,7 @@ async function subscribeAll() {
   await pb.realtime.subscribe('PB_CONNECT', onConnect); // fires on every (re)connect
 }
 /* A new stream, for when the old one cannot be trusted. Never throws: the safety net tries again. */
-async function resubscribe() {
+export async function resubscribe() {
   try {
     await subscribeAll();
   } catch (err) {
@@ -890,7 +894,7 @@ async function reloadQuietly() {
   }
 }
 /* After the live stream was down for a moment, events may have been missed. */
-function quietResync() {
+export function quietResync() {
   if (!st.ready || st.offline || st.busy) return;
   exclusive(reloadQuietly);
 }
