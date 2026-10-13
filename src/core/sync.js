@@ -38,11 +38,17 @@
                record's `updated` time. It only ever advances to a state the server confirmed (a load, a live update, or the answer
                to our own request), never to what we merely sent. So while a write is in flight it still shows what the server had,
                and the user's edit is still recognisably "mine" if someone else's change to the same record arrives meanwhile.
-     flush     Diffs S.data against base and sends creates and updates (only the top-level fields that changed; `doc` as a whole)
-               together, a create that needs a parent created in the same flush after it, then deletes. A 404 on delete counts as
-               done. The server's answer to each create and update is applied like a live update. Network failure -> offline.
-               401 -> sign-in page. Any other 4xx -> one toast, and the server's version of the record replaces the local one (so
-               a rejected change is never sent again).
+     flush     Diffs S.data against base and sends creates and updates together, a create that needs a parent created in the same
+               flush after it, then deletes. A create carries the whole record. An update carries only the top-level fields that
+               changed, and of `doc` only the keys that changed (docPatch: key -> new value, docUnset: keys that went away), which
+               the server applies to its own copy, so nobody's change to one key undoes somebody else's change to another
+               (server/pb_hooks/doc_patch.pb.js). A server that does not confirm them (no X-Doc-Patch header on the answer: the hook is not
+               loaded) is remembered for the session, and `doc` goes whole from then on. A 404 on delete counts as done. The server's answer
+               to each create and update is applied like a live update. Network failure -> offline. 401 -> sign-in page. Any other
+               4xx -> one toast, and the server's version of the record replaces the local one (so a rejected change is never sent
+               again). An update that the server stores differently from what was sent (it rewrites the value) is not sent again once that
+               is clear: one console.error names the record and fields, and the server's version is taken, without a toast
+               (see stuck()).
      live      One subscription per collection. An event is dropped when it is older than base (by `updated`: a late echo of an
                earlier write) or equal to it (our own echo). Otherwise it is merged per top-level field and per top-level `doc` key
                (3-way against base): fields with an unsent local edit keep the local value, the rest take the remote one. The
@@ -190,11 +196,56 @@ function projectOrders() {
 function payloadOf(key, obj) {
   return toRecord(key, obj, { me: D().me, order: key === 'projects' ? projectOrders().get(obj.id) : undefined });
 }
-/* The top-level fields of `after` that differ from `before`. */
+let wholeDoc = false; // the server turned out to ignore docPatch: send `doc` whole for the rest of the session
+/* What an update request carries: the top-level fields of `after` that differ from `before`. Columns go as they are. `doc` goes as
+   the keys that changed (docPatch: key -> new value) and the keys that went away (docUnset), which the server applies to its own
+   copy of the doc. Sent whole, a doc built a moment ago would put back the old value of every key somebody else changed since.
+   (Creates, which have no older copy to spoil, still send everything.) */
 function changedFields(before, after) {
   const out = {};
-  for (const f of Object.keys(after)) if (f !== 'id' && !same(after[f], before[f])) out[f] = after[f];
+  for (const f of Object.keys(after)) if (f !== 'id' && f !== 'doc' && !same(after[f], before[f])) out[f] = after[f];
+  const was = before.doc || {};
+  const now = after.doc || {};
+  if (wholeDoc) {
+    if (!same(now, was)) out.doc = now;
+    return out;
+  }
+  const patch = {};
+  const unset = [];
+  for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    if (same(now[k], was[k])) continue;
+    if (now[k] === undefined) unset.push(k);
+    else patch[k] = now[k];
+  }
+  if (Object.keys(patch).length) out.docPatch = patch;
+  if (unset.length) out.docUnset = unset;
   return out;
+}
+/* Does this update carry docPatch/docUnset? Then the server's answer must carry an X-Doc-Patch header (see patchFetch()), or it ignored them. */
+const isPatch = op => !!(op.fields?.docPatch || op.fields?.docUnset);
+/* What an update sent that the answer (a canonical payload) does not hold: [{ field, got, was }], where `was` is what the field held
+   when we sent. A column is named by itself, a doc key as doc.<key>, a whole doc as doc. Empty when the server stored what it was given. */
+function notStored(op, theirs) {
+  const out = [];
+  const was = op.was || {};
+  const doc = theirs.doc || {};
+  const wasDoc = was.doc || {};
+  for (const [f, v] of Object.entries(op.fields || {})) {
+    if (f === 'docPatch') {
+      for (const [k, x] of Object.entries(v)) if (!same(doc[k], x)) out.push({ field: `doc.${k}`, got: doc[k], was: wasDoc[k] });
+    } else if (f === 'docUnset') {
+      for (const k of v) if (k in doc) out.push({ field: `doc.${k}`, got: doc[k], was: wasDoc[k] });
+    } else if (!same(theirs[f], v)) out.push({ field: f, got: theirs[f], was: was[f] });
+  }
+  return out;
+}
+/* The names an update op writes, for diagnosis: columns, and doc.<key> / -doc.<key> for patched and removed doc keys. */
+function fieldNames(fields) {
+  return Object.keys(fields).flatMap(f => {
+    if (f === 'docPatch') return Object.keys(fields.docPatch).map(k => `doc.${k}`);
+    if (f === 'docUnset') return fields.docUnset.map(k => `-doc.${k}`);
+    return [f];
+  });
 }
 /* The user_prefs payload the app would write now. */
 const prefsPayload = id => toRecord(USER_PREFS, buildUserPrefs(S, id), { me: D().me });
@@ -542,7 +593,7 @@ function computeDiff() {
       const b = known.get(p.id);
       if (!b) {
         if (!updateOnly) creates.push({ type: 'create', key, coll, id: p.id, payload: p });
-      } else if (differs(p, b)) updates.push({ type: 'update', key, coll, id: p.id, fields: changedFields(b.p, p) });
+      } else if (differs(p, b)) updates.push({ type: 'update', key, coll, id: p.id, fields: changedFields(b.p, p), was: b.p });
     }
     if (!updateOnly) for (const id of known.keys()) if (!seen.has(id)) deletes.push({ type: 'delete', key, coll, id });
   }
@@ -551,7 +602,7 @@ function computeDiff() {
   const p = prefsPayload(id);
   let prefs = null;
   if (!cur) prefs = { type: 'create', key: USER_PREFS, coll: USER_PREFS, id, payload: p };
-  else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p) };
+  else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p), was: cur.p };
   return { creates, updates, deletes: deletes.reverse(), prefs };
 }
 export function pendingChanges() {
@@ -560,14 +611,15 @@ export function pendingChanges() {
   return d.creates.length + d.updates.length + d.deletes.length;
 }
 export const hasUnsaved = () => !!st.flushing || pendingChanges() > 0;
-/* What pendingChanges() counts, one line per op ("update projects/p1 order"), settings included. For diagnosis. */
+/* What pendingChanges() counts, one line per op ("update tasks/t3 status,doc.title"), settings included. For diagnosis. */
 export function pendingDetails() {
   const d = computeDiff();
   return [...d.creates, ...d.updates, ...d.deletes, ...(d.prefs ? [d.prefs] : [])].map(
-    o => `${o.type} ${o.key}/${o.id}${o.fields ? ' ' + Object.keys(o.fields).join(',') : ''}`,
+    o => `${o.type} ${o.key}/${o.id}${o.fields ? ' ' + fieldNames(o.fields).join(',') : ''}`,
   );
 }
 
+const NOT_RELATIONS = ['id', 'doc', 'docPatch', 'docUnset']; // the payload fields that never hold the id of another record
 /* The ops in the rounds they go out in. Creates, updates and the user's settings go together, except that one that points at a
    record created in this same flush (a task in a new project, a comment on a new task) waits for it. Deletes go last: an update
    may move a child out of the record being deleted. Everything within a round is sent at once, so an ordinary save is one round
@@ -577,7 +629,7 @@ function rounds(diff) {
   const creating = new Set(diff.creates.map(op => op.id));
   const waitsFor = op => {
     const ids = [];
-    for (const [field, value] of Object.entries(op.payload || op.fields)) if (field !== 'id' && field !== 'doc') ids.push(...[].concat(value));
+    for (const [field, value] of Object.entries(op.payload || op.fields)) if (!NOT_RELATIONS.includes(field)) ids.push(...[].concat(value));
     return ids.filter(id => creating.has(id) && id !== op.id);
   };
   const out = [];
@@ -595,6 +647,41 @@ function rounds(diff) {
   }
   return [...out, diff.deletes];
 }
+/* ---------- a write that never sticks ---------- */
+/* An update whose answer holds something other than what was sent leaves the record different from the server's copy. That is only
+   possible when the server stores values differently from how the app writes them (a mapping that does not round-trip, a server-side
+   hook), and the app then cannot get that record to match: it keeps sending the same update, or, when the answer happens to equal the
+   baseline, keeps it as "unsent" for ever. Either way, once it is clear that sending again will not help, stop: one console.error
+   names the record and the fields, and the server's version is taken, as for a refused change but without a toast. That is clear when
+     - the same update (identical fields) was answered with something other than what it sent more than LOOP_MAX times within LOOP_MS
+       (the answers keep changing: a request every save() delay, for ever), or
+     - the same update was answered the same way twice in a row, or
+     - the answer keeps the old value of everything that did not stick.
+   A different update to the record, or one the server stores as sent, starts the count over, so typing, however fast, never gets here. */
+const LOOP_MAX = 5;
+const LOOP_MS = 30000;
+const loops = new Map(); // 'key/id' -> { sig, n, ans, since } for the last update that was not stored as sent
+function stuck(op, theirs) {
+  const mark = `${op.key}/${op.id}`;
+  const bad = notStored(op, theirs);
+  if (!bad.length) {
+    loops.delete(mark);
+    return false;
+  }
+  const sig = stableStringify(op.fields);
+  const ans = stableStringify(theirs);
+  const now = Date.now();
+  const last = loops.get(mark);
+  const again = !!last && last.sig === sig && now - last.since < LOOP_MS;
+  const n = again ? last.n + 1 : 1;
+  loops.set(mark, { sig, n, ans, since: again ? last.since : now });
+  if (n <= LOOP_MAX && !(again && last.ans === ans) && !bad.every(d => same(d.got, d.was))) return false;
+  loops.delete(mark);
+  console.error(
+    `sync: the server stores ${op.coll}/${op.id} differently from what is sent (${bad.map(d => d.field).join(', ')}). Not sending it again; taking the server's version.`,
+  );
+  return true;
+}
 /* The server accepted an op: its answer is the new baseline. An answer that carries more than what was sent (someone else's change
    to the same record got in first) is merged like a live update. Returns true when S.data changed. */
 function settle(op, rec) {
@@ -606,12 +693,27 @@ function settle(op, rec) {
       return false;
     }
     deleted.delete(mark);
+    if (op.type === 'update') {
+      if (isPatch(op) && op.patched !== true) {
+        // No X-Doc-Patch header: the server dropped the doc part of this update without a word (no doc_patch hook: an older
+        // deployment, hooks that were not loaded). Send `doc` whole instead, from now on.
+        if (!wholeDoc) console.warn('sync: the server does not apply doc patches (no doc_patch hook loaded?). Sending `doc` whole from now on.');
+        wholeDoc = true;
+        st.again = true; // the answer holds the old doc, so nothing else would send the edit again: go round once more
+      } else if (stuck(op, canon(op.key, rec))) return applyRecord(op.key, rec, true);
+    }
     return applyRecord(op.key, rec);
   } catch (err) {
     console.error("sync: could not apply the server's answer", err);
     return false;
   }
 }
+/* A fetch for an update that carries a docPatch: it notes whether the server says it applies them (doc_patch.pb.js sets X-Doc-Patch). */
+const patchFetch = op => async (url, init) => {
+  const res = await fetch(url, init);
+  op.patched = res.headers.get('X-Doc-Patch') === 'yes';
+  return res;
+};
 /* Sends one op. Never throws: resolves { op, status, changed } with status 'ok', 'network', 'auth', 'abort' or 'rejected'. */
 async function sendOne(op, options) {
   const api = pb.collection(op.coll);
@@ -619,7 +721,7 @@ async function sendOne(op, options) {
   if (op.type === 'delete') deleted.set(`${op.key}/${op.id}`, Date.now()); // its echo may beat the answer
   try {
     if (op.type === 'create') rec = await api.create(op.payload, options);
-    else if (op.type === 'update') rec = await api.update(op.id, op.fields, options);
+    else if (op.type === 'update') rec = await api.update(op.id, op.fields, isPatch(op) ? { ...options, fetch: patchFetch(op) } : options);
     else await api.delete(op.id, options);
   } catch (err) {
     if (op.type === 'delete' && err?.status === 404) return { op, status: 'ok', changed: settle(op) }; // already gone: a cascade got there first
@@ -670,6 +772,7 @@ export function flush(options = {}) {
   const request = options.keepalive ? { keepalive: true } : undefined; // lets the request finish while the page unloads
   const run = (async () => {
     for (const [k, t] of deleted) if (Date.now() - t > DELETED_MS) deleted.delete(k);
+    for (const [k, e] of loops) if (Date.now() - e.since > LOOP_MS) loops.delete(k);
     let ok = true;
     try {
       do {
@@ -759,8 +862,8 @@ function recover() {
     const gen = st.gen;
     try {
       await ping();
-      // Merge first, then send. The reload keeps unsent edits (it merges, it does not replace), and `doc` is written whole: sent
-      // first, an edit built on a stale copy would overwrite what other people changed in the same record meanwhile.
+      // Merge first, then send. The reload keeps unsent edits (it merges, it does not replace), so what goes out is worked out
+      // against the server's current copy: only what we really changed, and nothing the server already holds.
       await resync();
       if (!(await flush({ recovering: true }))) return false;
       await resubscribe(); // after an outage the old stream may be dead without the browser knowing
@@ -808,6 +911,8 @@ export async function startSync({ boot = false } = {}) {
   if (st.active) await teardown();
   const gen = ++st.gen;
   Object.assign(st, { active: true, ready: false, me: authStore.record?.id || '', queue: [] });
+  wholeDoc = false; // a new session finds out again whether the server patches
+  loops.clear();
   resetBase();
   const cancelled = () => Object.assign(new Error('sync stopped'), { cancelled: true });
   try {
@@ -870,6 +975,7 @@ async function teardown() {
   S.ui.offline = false;
   resetBase();
   deleted.clear();
+  loops.clear();
   journal.length = 0;
   try {
     await pb.realtime.unsubscribe();
@@ -891,7 +997,10 @@ authStore.onChange(() => {
 /* Safety net, every 20 s. The live stream can die without anyone noticing (a server killed behind a proxy, a network that dropped):
    the browser keeps calling it open and no event ever arrives, so the page would go stale in silence. PocketBase forgets a stream's
    client id when it restarts, and answers 404 when asked to confirm the subscriptions of one it does not know. A stream that is
-   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded. */
+   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded.
+   The SDK has no call for "is my stream still known to the server", so this repeats the request it makes itself when it subscribes,
+   with its `clientId` and `lastSentSubscriptions`. Those are SDK internals (not in its documented API) that this relies on, which is
+   why package.json pins pocketbase to an exact version (0.28.1): look at them again before upgrading. */
 const NET_MS = 20000;
 function safetyNet() {
   if (!st.ready || st.offline || st.busy) return;

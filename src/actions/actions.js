@@ -1902,7 +1902,7 @@ function signInError(err, stage) {
   if (s === 0 || s === 502 || s === 503 || s === 504) return "Can't reach the server. Check your connection and try again.";
   if (stage === 'password' && (s === 400 || s === 401 || s === 403 || s === 404)) return "That email and password don't match.";
   const why = err?.response?.message || err?.message || 'unknown error';
-  return stage === 'password' ? `Couldn't sign in: ${why}` : `You're signed in, but your data couldn't be loaded: ${why}`;
+  return stage === 'password' ? `Couldn't sign in: ${why}` : `Couldn't load your data: ${why}`;
 }
 A.doLogin = async () => {
   if (S.ui.signingIn) return;
