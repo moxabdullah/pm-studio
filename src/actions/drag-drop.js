@@ -145,7 +145,7 @@ document.addEventListener('drop', e => {
   DRAG = null;
   clearDropMarks();
   if (d.type === 'card' && d.col) {
-    const t = task(d.id);
+    let t = task(d.id);
     const colTs = D()
       .tasks.filter(x => x.status === d.col && x.id !== t.id && !x.archived)
       .sort((a, b) => a.order - b.order);
@@ -159,6 +159,7 @@ document.addEventListener('drop', e => {
     const moved = t.status !== d.col;
     mutate(
       () => {
+        t = task(d.id); // by id: sync or Undo can replace the task while a refused move waits for "Try again"
         fxSet({ moved: t.id });
         t.order = order;
         if (moved) applyPatch(t, { status: d.col });
@@ -166,12 +167,13 @@ document.addEventListener('drop', e => {
       () => {
         if (moved) toast(`Moved “${t.title}” to ${ST[d.col].name}`, { ms: 2200 });
       },
+      () => !!task(d.id), // not for a task that has gone since
     );
   } else if (d.type === 'row' && d.target) {
-    const t = task(d.id),
-      tg = task(d.target);
+    let t = task(d.id);
+    const tg = task(d.target);
     const key = d.lkey;
-    const v = key ? viewOf(key) : null;
+    let v = key ? viewOf(key) : null;
     const all = D()
       .tasks.filter(x => !x.archived && x.id !== t.id)
       .sort((a, b) => a.order - b.order);
@@ -189,6 +191,8 @@ document.addEventListener('drop', e => {
     let switched = false;
     mutate(
       () => {
+        t = task(d.id); // by id: sync or Undo can replace the task (and the view) while a refused move waits for "Try again"
+        v = key ? viewOf(key) : null;
         t.order = order;
         applyPatch(t, patch);
         if (v && v.sort.f !== 'manual') {
@@ -199,17 +203,20 @@ document.addEventListener('drop', e => {
       () => {
         if (switched) toast('Sorted manually to keep your order', { kind: 'info', ms: 2200 });
       },
+      () => !!task(d.id), // not for a task that has gone since
     );
   } else if (d.type === 'cal' && d.day) {
-    const t = task(d.id);
+    let t = task(d.id);
     if (t.due === d.day) return;
     const len = t.start && t.due ? diffD(parse(t.due), parse(t.start)) : null;
     mutate(
       () => {
+        t = task(d.id); // by id: sync or Undo can replace the task while a refused reschedule waits for "Try again"
         fxSet({ moved: t.id });
         applyPatch(t, { due: d.day, ...(len != null ? { start: iso(addD(parse(d.day), -len)) } : {}) });
       },
       () => toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 }),
+      () => !!task(d.id), // not for a task that has gone since
     );
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);

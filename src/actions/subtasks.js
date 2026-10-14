@@ -35,14 +35,20 @@ A.subNav = el => {
   }
 };
 BLUR.commitSubTitle = el => {
-  const t = task(el.dataset.id);
-  const s = subOf(t, el.dataset.sid);
+  const { id, sid } = el.dataset;
+  const s = subOf(task(id), sid);
   const v = el.value.trim();
   if (s && v && v !== s.title)
-    mutate(() => {
-      s.title = v;
-      t.updated = Date.now();
-    });
+    mutate(
+      () => {
+        // by id: sync or Undo can replace the task and its subtasks while a refused rename waits for "Try again"
+        const t = task(id);
+        subOf(t, sid).title = v;
+        t.updated = Date.now();
+      },
+      undefined,
+      () => !!subOf(task(id), sid), // not for a subtask that has gone since
+    );
 };
 IN.subNote = el => {
   const t = task(el.dataset.id);

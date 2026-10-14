@@ -70,24 +70,26 @@ A.submitTeam = () => {
     return;
   }
   if (!m.edit && needWorkspace()) return; // the workspace went away while the form was open
-  const admin = isAdmin();
+  // what was validated: the form stays editable after a refusal, so "Try again" must not read it again
+  const v = { name: f.name, desc: f.desc, icon: f.icon, color: f.color, members: [...f.members] };
   const fresh = latest(m);
   let t;
   mutate(
     () => {
+      const admin = isAdmin(); // here, not at the click: the reconnect can change who is an admin
       if (m.edit) {
-        t = team(m.edit);
-        Object.assign(t, { name: f.name, desc: f.desc, icon: f.icon, c: PCOLORS[f.color] });
+        t = team(m.edit); // by id: sync or Undo can replace the team while a refused edit waits for "Try again"
+        Object.assign(t, { name: v.name, desc: v.desc, icon: v.icon, c: PCOLORS[v.color] });
         if (admin)
           D().members.forEach(x => {
-            if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
+            if (x.team === t.id && !v.members.includes(x.id)) x.team = '';
           });
       } else {
-        t = { id: uid('tm'), workspace: D().ws.id, name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
+        t = { id: uid('tm'), workspace: D().ws.id, name: v.name, desc: v.desc || 'No description yet.', icon: v.icon, c: PCOLORS[v.color] };
         allTeams().push(t);
       }
       if (admin)
-        f.members.forEach(id => {
+        v.members.forEach(id => {
           const x = mem(id);
           if (x) x.team = t.id;
         });
@@ -97,13 +99,13 @@ A.submitTeam = () => {
       S.ui.modals.pop();
       if (m.edit) {
         render();
-        toast(`Saved ${t.name}`);
+        toast(`Saved ${v.name}`);
       } else {
         go('team', { id: t.id });
-        toast(`Created ${t.name}`);
+        toast(`Created ${v.name}`);
       }
     },
-    () => isTop(m) && fresh(),
+    () => isTop(m) && fresh() && (!m.edit || !!team(m.edit)),
   );
 };
 /* Deleting a team also clears it from each member's own account (their `team` field), which only an admin can write, so only an admin
@@ -113,7 +115,8 @@ A.delTeam = el => {
     toast('Only admins can delete a team.', { kind: 'err' });
     return;
   }
-  const t = team(el.dataset.id);
+  const { id } = el.dataset;
+  const t = team(id);
   const n = D().members.filter(x => x.team === t.id).length;
   const np = D().projects.filter(p => p.team === t.id).length;
   S.ui.modals.pop();
@@ -124,21 +127,24 @@ A.delTeam = el => {
     danger: true,
     icon: 'users',
     run: () => {
-      const snap = snapshot();
-      if (
-        mutate(() => {
-          D().teams = allTeams().filter(x => x !== t);
+      let snap;
+      mutate(
+        () => {
+          snap = snapshot(); // here, not before mutate: a retry runs on whatever the data is by then
+          D().teams = allTeams().filter(x => x.id !== id); // by id: sync or Undo can replace the team object while a refused delete waits
           D().members.forEach(x => {
-            if (x.team === t.id) x.team = '';
+            if (x.team === id) x.team = '';
           });
           D().projects.forEach(p => {
-            if (p.team === t.id) p.team = '';
+            if (p.team === id) p.team = '';
           });
-        })
-      ) {
-        if (S.ui.route === 'team') go('teams');
-        toast(`Deleted ${t.name}`, { action: 'Undo', onAction: () => restore(snap) });
-      }
+        },
+        () => {
+          if (S.ui.route === 'team') go('teams');
+          toast(`Deleted ${t.name}`, { action: 'Undo', onAction: () => restore(snap) });
+        },
+        () => !!team(id), // not deleted already
+      );
     },
   });
 };
