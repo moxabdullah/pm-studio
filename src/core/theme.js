@@ -1,11 +1,12 @@
 /* ---------- theme ---------- */
-import { setDateFormat } from './utils.js';
+import { setDateFormat, setTimeFormat } from './utils.js';
 import { S } from './store.js';
 
 export function applyPrefs() {
   const r = document.documentElement,
     p = S.prefs;
   setDateFormat(p.dateFmt);
+  setTimeFormat(p.timeFmt);
   if (p.theme === 'system') r.removeAttribute('data-theme');
   else r.setAttribute('data-theme', p.theme);
   if (p.accent === 'indigo') r.removeAttribute('data-accent');
@@ -14,6 +15,9 @@ export function applyPrefs() {
   r.setAttribute('data-density', p.density);
   if (p.motion === 'reduce') r.setAttribute('data-motion', 'reduce');
   else r.removeAttribute('data-motion');
+  // spellcheck is inherited, so the root turns it off for every field; when on, each field keeps the browser's own default.
+  if (p.spell === false) r.setAttribute('spellcheck', 'false');
+  else r.removeAttribute('spellcheck');
 }
 export function effectiveDark() {
   if (S.prefs.theme === 'dark') return true;

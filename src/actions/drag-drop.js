@@ -4,7 +4,7 @@ import { PR, ST } from '../core/constants.js';
 import { D, S, proj, save, task } from '../core/store.js';
 import { latestFields, mutate, toast } from '../ui/toast.js';
 import { fxSet, render } from '../shell/render.js';
-import { viewOf } from '../shell/view-engine.js';
+import { peekView, viewOf } from '../shell/view-engine.js';
 import { applyPatch, handleFiles, updateTask } from './actions.js';
 
 export let DRAG = null;
@@ -175,7 +175,7 @@ document.addEventListener('drop', e => {
   } else if (d.type === 'row' && d.target) {
     let t = task(d.id);
     const key = d.lkey;
-    let v = key ? viewOf(key) : null;
+    let v = key ? peekView(key) : null; // read only: a drop that leaves the sort alone must not store the view
     const patch = {};
     if (v && d.group) {
       const g = v.group;
@@ -189,7 +189,7 @@ document.addEventListener('drop', e => {
     mutate(
       () => {
         t = task(d.id); // by id: sync or Undo can replace the task (and the view) while a refused move waits for "Try again"
-        v = key ? viewOf(key) : null;
+        v = key ? peekView(key) : null;
         const tg = task(d.target);
         const all = D()
           .tasks.filter(x => !x.archived && x.id !== t.id)
@@ -199,7 +199,7 @@ document.addEventListener('drop', e => {
         t.order = nb ? (tg.order + nb.order) / 2 : tg.order + (d.pos === 'before' ? -1 : 1);
         applyPatch(t, patch);
         if (v && v.sort.f !== 'manual') {
-          v.sort = { f: 'manual', dir: 1 };
+          v.sort = { f: 'manual', dir: 1 }; // only a stored view gets here: the seed's sort is already manual
           switched = true;
         }
       },
@@ -239,8 +239,7 @@ document.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();
     const c = rz.dataset.rsz,
-      key = rz.dataset.key,
-      v = viewOf(key);
+      key = rz.dataset.key;
     const col = $(`col[data-col="${c}"]`);
     const tbl = rz.closest('table');
     const w0 = col.getBoundingClientRect().width || parseFloat(col.style.width);
@@ -252,10 +251,16 @@ document.addEventListener('pointerdown', e => {
       col.style.width = w + 'px';
       tbl.style.width = tw0 + w - w0 + 'px';
     };
-    const up = ev => {
+    const end = () => {
       removeEventListener('pointermove', mv);
       removeEventListener('pointerup', up);
-      v.colW[c] = Math.max(64, Math.round(w0 + ev.clientX - x0));
+      removeEventListener('pointercancel', cancel);
+    };
+    // The view is looked up when the drag ends, not when it starts: a press the browser takes over (a touch pan) stores nothing, and
+    // a settings record that arrives during the drag (it replaces S.views) does not take the new width with the object it replaced.
+    const up = ev => {
+      end();
+      viewOf(key).colW[c] = Math.max(64, Math.round(w0 + ev.clientX - x0));
       save();
       S.ui.justResized = true;
       setTimeout(() => {
@@ -263,8 +268,13 @@ document.addEventListener('pointerdown', e => {
       }, 60);
       render();
     };
+    const cancel = () => {
+      end();
+      render(); // puts the column back as it was
+    };
     addEventListener('pointermove', mv);
     addEventListener('pointerup', up);
+    addEventListener('pointercancel', cancel);
     return;
   }
   const b = e.target.closest?.('[data-bar]');

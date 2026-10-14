@@ -67,6 +67,17 @@ export function fmtDate(s, long) {
   if (fmt === 'yyyy-MM-dd') return iso(d);
   return `${MON[d.getMonth()]} ${d.getDate()}${long || d.getFullYear() !== TODAY.getFullYear() ? ', ' + d.getFullYear() : ''}`;
 }
+/* Set from preferences on every render too. An event's time is stored as 'HH:MM'; this is only how it is shown. */
+export let timeFormat = '12';
+export function setTimeFormat(f) {
+  timeFormat = f || '12';
+}
+export function fmtTime(s) {
+  const m = /^(\d\d):(\d\d)$/.exec(s);
+  if (!m || +m[1] > 23 || +m[2] > 59) return s; // not a time of day: shown as it was written
+  if (timeFormat === '24') return s;
+  return `${+m[1] % 12 || 12}:${m[2]} ${+m[1] < 12 ? 'AM' : 'PM'}`;
+}
 export function relDate(s) {
   if (!s) return '';
   const n = diffD(parse(s), TODAY);

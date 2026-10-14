@@ -2,13 +2,13 @@
 import { TODAY, dOff, diffD, esc, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, isOver } from '../core/store.js';
-import { applyView, viewOf, viewToolbar } from '../shell/view-engine.js';
+import { applyView, peekView, viewToolbar } from '../shell/view-engine.js';
 import { listHtml } from '../components/task-list.js';
 import { calendarHtml } from '../views/calendar.js';
 
 export function pageMyTasks() {
   const key = 'mytasks';
-  const v = viewOf(key);
+  const v = peekView(key);
   const mine = applyView(
     allTasks().filter(t => t.assignee === D().me),
     v.sort.f === 'manual' ? { ...v, sort: { f: 'due', dir: 1 } } : v,

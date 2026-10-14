@@ -64,7 +64,10 @@
    DEFAULT_PREFS                what each setting is until the user changes it (the page's S.prefs starts as a copy, store.js)
    buildUserPrefs(S, id)        -> that object from the live store: S.prefs, S.views, S.ui.collapsed, S.data.notifPrefs,
                                    S.data.recentSearches, S.data.ws.id and the favourites (fav flags, ids sorted). `id` is the record
-                                   id (omit it before the record exists).
+                                   id (omit it before the record exists). A view equal to defaultView() is left out (it is not a change).
+   defaultView()                a fresh view state, the start of every view the view engine makes (seedView() in shell/view-engine.js,
+                                   which also hides the Project column in a project's views); what a page's view with no entry in
+                                   S.views reads as, so cleanPrefs() and buildUserPrefs() both leave a view equal to it out.
    applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs, a value only when prefOk() accepts
                                    it; a workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
                                    task. Parts missing from `obj` are left alone.
@@ -369,32 +372,62 @@ export const DEFAULT_PREFS = {
   openTasks: 'drawer',
   defaultTab: 'board',
   showDoneBoard: true,
+  // The page no longer shows these two; they stay so that a record holding them reads as it did before.
   permCreate: true,
   permPublic: false,
   confirmDel: true,
 };
+// The settings that pick a page, a project tab or a clock: the options of the selects "Open on launch", "Default project view" and
+// "Time format" in pages/settings.js. A select cannot show a value it does not offer, nor let the user pick the default again, and most
+// other strings are a page the router does not know or a tab the project page does not have, which render not-found. Keep these in step
+// with those selects: a value the select writes that is not listed here is turned back into the default on every echo. Each setting's
+// default is in its list.
+const PREF_OPTIONS = {
+  home: ['home', 'mytasks', 'inbox'],
+  defaultTab: ['board', 'list', 'table', 'overview', 'timeline'],
+  timeFmt: ['12', '24'],
+};
 /* Is `v` a value the setting `k` may hold? A setting keeps the type of its default (a week start that is not a number would break the
-   calendar); a key without a default may be anything simple, except "__proto__": S.prefs cannot hold it as a key, so a record that
-   kept it would never match the page's copy. */
+   calendar), and the three above one of their options; a key without a default may be anything simple, except a name Object.prototype
+   has ("__proto__", "constructor", "toString"): S.prefs is a plain object, so keeping it would shadow a method of S.prefs, or for
+   "__proto__" never match the page's copy, which cannot hold it as a key. Other unknown keys are kept, so that a page that does not know
+   a newer setting still sends it back when it sends the whole object. */
 function prefOk(k, v) {
-  if (k === '__proto__') return false;
+  if (k in Object.prototype) return false;
   if (!Object.prototype.hasOwnProperty.call(DEFAULT_PREFS, k)) return ['string', 'number', 'boolean'].includes(typeof v);
+  if (typeof v !== typeof DEFAULT_PREFS[k]) return false;
   // the week start also indexes the weekday names, so only a whole day from 0 to 6 will do
-  return typeof v === typeof DEFAULT_PREFS[k] && (k !== 'weekStart' || (Number.isInteger(v) && v >= 0 && v <= 6));
+  if (k === 'weekStart') return Number.isInteger(v) && v >= 0 && v <= 6;
+  return !PREF_OPTIONS[k] || PREF_OPTIONS[k].includes(v);
 }
 
 /* A user_prefs object as read from the server, with every part of the wrong type dropped, so applyUserPrefs() leaves what the store
    already holds for it (the defaults, at sign-in). Lists and maps keep their well-formed entries. The settings are the exception: they
    come out whole, DEFAULT_PREFS with the record's well-formed entries over it, so a key the record lacks (an older record, the dev seed's
    `prefs: {}`) reads as its default. The baseline of a loaded record is then the settings the page builds for itself, and a thin record
-   does not look like an unsent change. What the app writes comes out unchanged (buildUserPrefs()'s shapes, the views viewOf() makes),
-   so cleaning never makes a record differ from its baseline. */
+   does not look like an unsent change. What the app writes comes out unchanged (buildUserPrefs()'s shapes), so cleaning never makes a
+   record differ from its baseline. A view equal to the default (defaultView()) is the one thing it drops that is well formed: it is
+   where a view starts, so it is not a change (an action may put a view back to it), and buildUserPrefs() leaves the same views out. The two must strip identically,
+   or an old record that holds an explicit default view would look like an unsent change. */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const texts = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 // The filter fields and groupings the view engine knows: the keys of FIELDS and the cases of groupTasks() in shell/view-engine.js.
 // Any other name makes the filter chips or the grouping throw. Keep these in step with that file.
 const VIEW_FIELDS = ['status', 'assignee', 'priority', 'due', 'project', 'labels', 'created', 'updated'];
 const VIEW_GROUPS = ['status', 'priority', 'assignee', 'project', 'due', 'none'];
+// A view nobody has changed: where a page's view starts (seedView() in shell/view-engine.js), so a view put back to it leaves nothing
+// to send. A fresh object each time, since the callers change it in place.
+export const defaultView = () => ({
+  filters: [],
+  sort: { f: 'manual', dir: 1 },
+  group: 'status',
+  q: '',
+  hidden: ['start', 'created', 'deps'],
+  colW: {},
+  showDone: true,
+});
+// Not a change, and not stored: the record and the store both leave it out (cleanPrefs(), buildUserPrefs()).
+const isDefaultView = v => samePayload(v, defaultView());
 // A view's state as the table, board and filter menus read it: they call .every, .includes, .map, .join and .toLowerCase on these, turn
 // column widths into numbers, and read .sort.f (an unknown sort falls back to manual order).
 const wellFormedView = v =>
@@ -410,6 +443,9 @@ const wellFormedView = v =>
   Object.values(v.colW).every(x => Number.isFinite(x) && x >= 0);
 function cleanPrefs(obj) {
   const out = { ...obj };
+  // A top-level key Object.prototype has ("toString", "constructor") is never one the page writes, and the diff would read the
+  // inherited method where the page has none, so the record would look changed on every save and its op never clear.
+  for (const k of Object.keys(out)) if (k in Object.prototype) delete out[k];
   const fix = (k, ok, make = x => x) => {
     if (out[k] === undefined) return;
     if (ok(out[k])) out[k] = make(out[k]);
@@ -419,7 +455,7 @@ function cleanPrefs(obj) {
   const only = (map, ok) => Object.fromEntries(Object.entries(map).filter(([, x]) => ok(x)));
   // (not fix(): the settings are there even when the record has none, and spread, like fromEntries, keeps "__proto__" a plain key)
   out.prefs = { ...DEFAULT_PREFS, ...Object.fromEntries(Object.entries(isObj(out.prefs) ? out.prefs : {}).filter(([k, x]) => prefOk(k, x))) };
-  fix('views', isObj, m => only(m, wellFormedView));
+  fix('views', isObj, m => only(m, x => wellFormedView(x) && !isDefaultView(x)));
   fix('collapsed', x => typeof x === 'boolean');
   fix('notifPrefs', isObj, m => only(m, x => typeof x === 'boolean'));
   fix('recentSearches', Array.isArray, texts);
@@ -438,7 +474,7 @@ export function buildUserPrefs(S, recordId) {
   const out = recordId ? { id: recordId } : {};
   return Object.assign(out, {
     prefs: clone(S.prefs || {}),
-    views: clone(S.views || {}),
+    views: clone(Object.fromEntries(Object.entries(S.views || {}).filter(([, v]) => !isDefaultView(v)))),
     collapsed: !!S.ui?.collapsed,
     notifPrefs: clone(d.notifPrefs || {}),
     recentSearches: clone(d.recentSearches || []),
@@ -450,7 +486,8 @@ export function buildUserPrefs(S, recordId) {
 export function applyUserPrefs(S, obj) {
   const d = S.data;
   if (isObj(obj.prefs)) {
-    // only what prefOk() accepts, which never includes "__proto__", so nothing is assigned through S.prefs.__proto__
+    // only what prefOk() accepts, which never includes a name Object.prototype has, so nothing is assigned through S.prefs.__proto__
+    // and no method of S.prefs ("toString") is shadowed
     for (const [k, v] of Object.entries(obj.prefs)) if (prefOk(k, v)) S.prefs[k] = v;
   }
   if (obj.views) S.views = clone(obj.views);
