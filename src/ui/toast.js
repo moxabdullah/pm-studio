@@ -32,10 +32,13 @@ export function toast(msg, opt = {}) {
    `still`, when given, is checked after reconnecting: a toast can outlive its form, and the edit is re-applied only while it holds. */
 export function mutate(fn, done, still) {
   if (S.ui.offline) {
+    let tried = false; // once per toast: a double click while it fades out would apply the edit twice
     toast("Your changes couldn't be saved. You're offline.", {
       kind: 'err',
       action: 'Try again',
       onAction: async () => {
+        if (tried) return;
+        tried = true;
         if ((await retryNow()) && (!still || still())) mutate(fn, done, still);
       },
     });
@@ -46,4 +49,12 @@ export function mutate(fn, done, still) {
   render();
   done?.();
   return true;
+}
+/* Call on every submit, before mutate(), and pass the result as its `still`: it holds only while this is the newest attempt for `key`. */
+const attempts = { obj: new WeakMap(), str: new Map() };
+export function latest(key) {
+  const reg = typeof key === 'string' ? attempts.str : attempts.obj;
+  const n = (reg.get(key) || 0) + 1;
+  reg.set(key, n);
+  return () => reg.get(key) === n;
 }

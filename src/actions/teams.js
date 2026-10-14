@@ -4,7 +4,7 @@
 import { $, uid } from '../core/utils.js';
 import { PCOLORS } from '../core/constants.js';
 import { D, S, allTeams, isAdmin, mem, team, teamsList } from '../core/store.js';
-import { mutate, toast } from '../ui/toast.js';
+import { latest, mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
 import { A, IN, confirmDlg, isTop, needWorkspace, restore, snapshot } from './actions.js';
@@ -71,6 +71,7 @@ A.submitTeam = () => {
   }
   if (!m.edit && needWorkspace()) return; // the workspace went away while the form was open
   const admin = isAdmin();
+  const fresh = latest(m);
   let t;
   mutate(
     () => {
@@ -102,7 +103,7 @@ A.submitTeam = () => {
         toast(`Created ${t.name}`);
       }
     },
-    () => isTop(m),
+    () => isTop(m) && fresh(),
   );
 };
 /* Deleting a team also clears it from each member's own account (their `team` field), which only an admin can write, so only an admin

@@ -204,9 +204,13 @@ document.addEventListener('drop', e => {
     const t = task(d.id);
     if (t.due === d.day) return;
     const len = t.start && t.due ? diffD(parse(t.due), parse(t.start)) : null;
-    fxSet({ moved: t.id });
-    updateTask(t.id, { due: d.day, ...(len != null ? { start: iso(addD(parse(d.day), -len)) } : {}) });
-    if (!S.ui.offline) toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 });
+    mutate(
+      () => {
+        fxSet({ moved: t.id });
+        applyPatch(t, { due: d.day, ...(len != null ? { start: iso(addD(parse(d.day), -len)) } : {}) });
+      },
+      () => toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 }),
+    );
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);
     o.splice(o.indexOf(d.before), 0, d.id);

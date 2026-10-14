@@ -27,7 +27,7 @@ import { flush, hasUnsaved, pendingChanges, quietResync, restoreState, resubscri
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
-import { mutate, toast } from '../ui/toast.js';
+import { latest, mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { viewOf } from '../shell/view-engine.js';
@@ -648,6 +648,7 @@ A.submitTask = () => {
     return;
   }
   S.ui.errors = {};
+  const fresh = latest(m);
   const picked = f.files.map(x => x.blob).filter(Boolean);
   const base = {
     title,
@@ -662,7 +663,8 @@ A.submitTask = () => {
     subtasks: f.subtasks,
   };
   // What follows the save goes in mutate's `done`, so "Try again" after an offline refusal closes the form too, instead of leaving it to be submitted twice.
-  // `still`: that retry is skipped once the form is gone (closed, or submitted again meanwhile).
+  // `still`: that retry is skipped once the form is gone, or when a later submit of it has happened since (even one that went through).
+  const still = () => isTop(m) && fresh();
   if (m.edit) {
     const t = task(m.edit);
     mutate(
@@ -683,7 +685,7 @@ A.submitTask = () => {
         toast('Changes saved');
         handleFiles(picked, { project: t.project, task: t.id });
       },
-      () => isTop(m),
+      still,
     );
     return;
   }
@@ -707,7 +709,7 @@ A.submitTask = () => {
       toast(`Created ${t.key} in ${proj(t.project).name}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
       handleFiles(picked, { project: t.project, task: t.id });
     },
-    () => isTop(m),
+    still,
   );
 };
 
@@ -739,7 +741,12 @@ A.commitComposer = () => {
     return needProject();
   }
   if (c.ctx === 'mytasks') f.assignee = D().me;
-  mutate(() => createTask(f));
+  const fresh = latest(`composer:${c.ctx}:${c.group}`);
+  mutate(
+    () => createTask(f),
+    undefined,
+    () => fresh() && !!proj(f.project),
+  );
   setTimeout(() => $('#composer-in')?.focus(), 0);
 };
 KEY.commitTitle = el => DBL._commitTitle(el);
@@ -811,15 +818,21 @@ A.rmSub = el => {
   });
 };
 KEY.addSub = el => {
-  const t = task(el.dataset.id);
+  const id = el.dataset.id;
   const v = el.value.trim();
   if (!v) return;
   const nid = uid('s');
-  mutate(() => {
-    fxSet({ added: nid });
-    t.subtasks.push({ id: nid, title: v, done: false });
-    logAct('added subtask to', t, `“${v}”`);
-  });
+  const fresh = latest(`sub:${id}`);
+  mutate(
+    () => {
+      const t = task(id);
+      fxSet({ added: nid });
+      t.subtasks.push({ id: nid, title: v, done: false });
+      logAct('added subtask to', t, `“${v}”`);
+    },
+    undefined,
+    () => fresh() && !!task(id),
+  );
   setTimeout(() => $('#d-sub')?.focus(), 0);
 };
 A.expandRow = el => {
@@ -1080,15 +1093,19 @@ A.postComment = el => {
     $('#d-cmt, #inbox-reply')?.focus();
     return;
   }
-  const t = task(id);
+  const fresh = latest(`comment:${id}`);
   if (
-    mutate(() => {
-      D().comments.push({ id: uid('c'), task: id, by: D().me, at: Date.now(), text: txt, re: {} });
-      logAct('commented on', t);
-      S.ui.drafts[id] = '';
-      S.ui.mention = null;
-      S.ui.drawerTab = 'comments';
-    })
+    mutate(
+      () => {
+        D().comments.push({ id: uid('c'), task: id, by: D().me, at: Date.now(), text: txt, re: {} });
+        logAct('commented on', task(id));
+        S.ui.drafts[id] = '';
+        S.ui.mention = null;
+        S.ui.drawerTab = 'comments';
+      },
+      undefined,
+      () => fresh() && !!task(id),
+    )
   ) {
     if (S.ui.route === 'inbox') toast('Reply posted');
   }
@@ -1517,6 +1534,8 @@ A.submitProject = () => {
     $('#p-name')?.focus();
     return;
   }
+  const fresh = latest(m);
+  const still = () => isTop(m) && fresh();
   if (m.edit) {
     const p = proj(m.edit);
     mutate(
@@ -1536,7 +1555,7 @@ A.submitProject = () => {
         render();
         toast('Project updated');
       },
-      () => isTop(m),
+      still,
     );
     return;
   }
@@ -1551,7 +1570,7 @@ A.submitProject = () => {
       go('project', { id: p.id, tab: f.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
       toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
     },
-    () => isTop(m),
+    still,
   );
 };
 A.dupProject = el => {
@@ -1653,7 +1672,7 @@ A.shareAdd = el => {
       p.members.push(m.id);
     },
     () => toast(`${m.name} can now edit ${p.name}`),
-    () => !p.members.includes(m.id), // a replay would list them twice
+    () => !!proj(p.id) && !p.members.includes(m.id), // not for a project that has gone since; a replay would list them twice
   );
   S.ui.shareQ = '';
   render();
@@ -1676,7 +1695,7 @@ A.shareInvite = () => {
           p.members.push(ex.id);
         },
         shared,
-        () => !p.members.includes(ex.id), // a replay would list them twice
+        () => !!proj(p.id) && !p.members.includes(ex.id), // not for a project that has gone since; a replay would list them twice
       );
     S.ui.shareQ = '';
     render();
@@ -1905,14 +1924,15 @@ export function createWorkspace(then, why = '') {
         return;
       }
       const w = { id: uid('w'), name: v, c: ['#2F2E2A', '#5A67D8', '#23918A', '#C54B78'][D().workspaces.length % 4] };
+      const fresh = latest('workspace');
       mutate(
         () => D().workspaces.push(w),
         () => {
           A.switchWs({ dataset: { v: w.id } });
           then?.();
         },
-        // The prompt closes before this runs, so there is no modal to test: skip the retry if a workspace of that name has appeared since.
-        () => !D().workspaces.some(x => x.name.toLowerCase() === v.toLowerCase()),
+        // The prompt closes before this runs, so there is no modal to test: skip the retry if a later attempt has been made, or this one went in.
+        () => fresh() && !D().workspaces.some(x => x.id === w.id),
       );
     },
   });

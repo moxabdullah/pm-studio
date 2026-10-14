@@ -5,7 +5,7 @@
    - It does nothing unless you pass --dev-database ("npm run seed:dev -- --dev-database"): you vouch that this is a dev database.
      An empty database is not proof of that, because a brand-new production database is empty too.
    - It only talks to 127.0.0.1, localhost or ::1 (PB_URL, default http://127.0.0.1:8090). Any other host is refused before a request is made.
-   - It refuses to run if any collection it writes to already has records (delete server/pb_data and restart the server to reseed).
+   - It refuses to run if any collection it writes to already has records (only if it is a throwaway dev database: delete server/pb_data and restart the server to reseed).
    - The dev superuser is created with the local PocketBase binary, straight into the local data directory (PB_DIR, default
      server/pb_data), so its password exists nowhere else. That only happens after the database has been checked and found empty;
      the check itself signs in with a throwaway superuser that is deleted again.

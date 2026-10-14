@@ -53,12 +53,14 @@ IN.subNote = el => {
   }
 };
 A.promoteSub = el => {
-  const t = task(el.dataset.id);
-  const s = subOf(t, el.dataset.sid);
-  if (!s) return;
+  const { id, sid } = el.dataset;
+  if (!subOf(task(id), sid)) return;
   let n;
   mutate(
     () => {
+      // looked up again, by id: the task and its subtasks can be replaced (sync, Undo) while a refused conversion waits for "Try again"
+      const t = task(id);
+      const s = subOf(t, sid);
       n = createTask({
         title: s.title,
         project: t.project,
@@ -69,7 +71,7 @@ A.promoteSub = el => {
         labels: [...t.labels],
         desc: s.note ? `<p>${esc(s.note)}</p>` : '',
       });
-      t.subtasks = t.subtasks.filter(x => x !== s);
+      t.subtasks = t.subtasks.filter(x => x.id !== sid);
       logAct('converted a subtask of', t, `into ${n.key}`);
     },
     () => {
@@ -77,6 +79,6 @@ A.promoteSub = el => {
       render();
       toast(`Converted to ${n.key}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
     },
-    () => t.subtasks.includes(s), // not converted already
+    () => !!subOf(task(id), sid), // not converted already
   );
 };
