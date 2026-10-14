@@ -422,6 +422,9 @@ const wellFormedView = v =>
   Object.values(v.colW).every(x => Number.isFinite(x) && x >= 0);
 function cleanPrefs(obj) {
   const out = { ...obj };
+  // A top-level key Object.prototype has ("toString", "constructor") is never one the page writes, and the diff would read the
+  // inherited method where the page has none, so the record would look changed on every save and its op never clear.
+  for (const k of Object.keys(out)) if (k in Object.prototype) delete out[k];
   const fix = (k, ok, make = x => x) => {
     if (out[k] === undefined) return;
     if (ok(out[k])) out[k] = make(out[k]);
