@@ -1,5 +1,5 @@
 /* ---------------- POPOVERS ---------------- */
-import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
+import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, fmtTime, iso, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, ROLES, STATUSES } from '../core/constants.js';
 import { D, S, allTasks, canSee, isAdmin, me, mem, pColor, proj, task, visibleProjects, wsEvents } from '../core/store.js';
@@ -328,7 +328,7 @@ export function popHtml(p) {
         evs
           .map(
             e =>
-              `<button class="mi" data-a="go" data-r="project" data-id="${esc(e.project)}" data-tab="calendar">${ic('clock', 14)}${esc(e.title)}<span class="r">${esc(e.time)}</span></button>`,
+              `<button class="mi" data-a="go" data-r="project" data-id="${esc(e.project)}" data-tab="calendar">${ic('clock', 14)}${esc(e.title)}<span class="r">${esc(fmtTime(e.time))}</span></button>`,
           )
           .join('') +
         ts
@@ -344,7 +344,7 @@ export function popHtml(p) {
       const e = D().events.find(x => x.id === p.id);
       const pr = e && proj(e.project);
       if (!pr) break;
-      inner = `<div style="padding:10px 10px 6px"><div class="row" style="gap:8px;margin-bottom:6px"><span class="pdot" style="--c:${pColor(pr)};border-radius:50%"></span><b style="font-size:14px;font-weight:600">${esc(e.title)}</b></div><div class="muted" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px"><span class="row" style="gap:6px">${ic('calendar', 13)}${fmtDate(e.date, true)} · ${esc(e.time)}</span><span class="row" style="gap:6px">${ic('folder', 13)}${esc(pr.name)}</span><span class="row" style="gap:6px">${ic('users', 13)}${avStack(pr.members, 5)}</span></div></div><div class="msep"></div><button class="mi" data-a="go" data-r="project" data-id="${esc(pr.id)}" data-tab="overview">${ic('arrow-up-right', 14)}Open project</button>`;
+      inner = `<div style="padding:10px 10px 6px"><div class="row" style="gap:8px;margin-bottom:6px"><span class="pdot" style="--c:${pColor(pr)};border-radius:50%"></span><b style="font-size:14px;font-weight:600">${esc(e.title)}</b></div><div class="muted" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px"><span class="row" style="gap:6px">${ic('calendar', 13)}${fmtDate(e.date, true)} · ${esc(fmtTime(e.time))}</span><span class="row" style="gap:6px">${ic('folder', 13)}${esc(pr.name)}</span><span class="row" style="gap:6px">${ic('users', 13)}${avStack(pr.members, 5)}</span></div></div><div class="msep"></div><button class="mi" data-a="go" data-r="project" data-id="${esc(pr.id)}" data-tab="overview">${ic('arrow-up-right', 14)}Open project</button>`;
       style = 'width:270px';
       break;
     }
