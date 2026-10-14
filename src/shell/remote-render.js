@@ -159,10 +159,12 @@ function locate(root, offset) {
 }
 
 function capture() {
-  // Fields changed but not committed. A field whose value follows the model on every keystroke comes back right by itself.
+  // Fields changed but not committed. A field whose value follows the model on every keystroke comes back right by itself, and one
+  // that saves on every keystroke (`data-live`) is left to: keeping it would undo a refused change that sync has put back (putBack()),
+  // so the field would show the refused text and send it again with the next keystroke.
   const dirty = [];
   for (const el of document.querySelectorAll('textarea, input')) {
-    if (!isTextField(el) || el.value === el.defaultValue) continue;
+    if (!isTextField(el) || el.value === el.defaultValue || el.hasAttribute('data-live')) continue;
     const key = focusKey(el);
     if (key) dirty.push({ key, value: el.value });
   }

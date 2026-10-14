@@ -38,6 +38,9 @@ export function clearStickyToasts() {
     .forEach(t => t.remove());
 }
 /* guarded mutation: refuses edits while the server cannot be reached. "Try again" reconnects, and applies the edit if that works.
+   Not everything goes through here: inline editing (a description, a subtask's note), view settings (sort, group, filters, columns),
+   preferences, saved views, the project order, read state and Undo call save() themselves, so what they change is kept while offline
+   and sent once the connection is back. Their toasts must not say "saved" then.
    `done` is what the caller does once the edit is in (close the form, say what happened). It runs here, after the edit, so that
    "Try again" completes the whole operation: replaying only the edit would leave a submitted form open to be submitted again.
    `still`, when given, is checked after reconnecting: a toast can outlive its form, and the edit is re-applied only while it holds. */
