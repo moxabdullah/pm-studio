@@ -3,13 +3,14 @@
    ===================================================================== */
 import { $, uid } from '../core/utils.js';
 import { PCOLORS } from '../core/constants.js';
-import { D, S, mem, team, teamsList } from '../core/store.js';
+import { D, S, allTeams, isAdmin, mem, team, teamsList } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
-import { A, IN, confirmDlg, restore, snapshot } from './actions.js';
+import { A, IN, confirmDlg, needWorkspace, restore, snapshot } from './actions.js';
 
 A.newTeam = () => {
+  if (needWorkspace(A.newTeam)) return;
   S.ui.pop = null;
   S.ui.errors = {};
   S.ui.tform = { name: '', desc: '', icon: 'users', color: 'teal', members: [] };
@@ -42,7 +43,10 @@ A.tformSet = el => {
   S.ui.tform[el.dataset.f] = el.dataset.v;
   render();
 };
+/* Who is on a team is a field of each person's own account, so only an admin can change it (the server refuses anyone else; the dialog
+   does not offer it to them). */
 A.tformMember = el => {
+  if (!isAdmin()) return;
   const l = S.ui.tform.members;
   const id = el.dataset.id;
   S.ui.tform.members = l.includes(id) ? l.filter(x => x !== id) : [...l, id];
@@ -65,22 +69,26 @@ A.submitTeam = () => {
     $('#tm-name')?.focus();
     return;
   }
+  if (!m.edit && needWorkspace()) return; // the workspace went away while the form was open
+  const admin = isAdmin();
   let t;
   const ok = mutate(() => {
     if (m.edit) {
       t = team(m.edit);
       Object.assign(t, { name: f.name, desc: f.desc, icon: f.icon, c: PCOLORS[f.color] });
-      D().members.forEach(x => {
-        if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
-      });
+      if (admin)
+        D().members.forEach(x => {
+          if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
+        });
     } else {
-      t = { id: uid('tm'), name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
-      teamsList().push(t);
+      t = { id: uid('tm'), workspace: D().ws.id, name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
+      allTeams().push(t);
     }
-    f.members.forEach(id => {
-      const x = mem(id);
-      if (x) x.team = t.id;
-    });
+    if (admin)
+      f.members.forEach(id => {
+        const x = mem(id);
+        if (x) x.team = t.id;
+      });
   });
   if (!ok) return;
   S.ui.modals.pop();
@@ -107,10 +115,11 @@ A.delTeam = el => {
       const snap = snapshot();
       if (
         mutate(() => {
-          D().teams = teamsList().filter(x => x !== t);
-          D().members.forEach(x => {
-            if (x.team === t.id) x.team = '';
-          });
+          D().teams = allTeams().filter(x => x !== t);
+          if (isAdmin())
+            D().members.forEach(x => {
+              if (x.team === t.id) x.team = '';
+            });
           D().projects.forEach(p => {
             if (p.team === t.id) p.team = '';
           });

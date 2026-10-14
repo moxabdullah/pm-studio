@@ -11,16 +11,6 @@
     transform: none;
   }
 }
-@keyframes slideInR {
-  from {
-    opacity: 0;
-    transform: translateX(18px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
 @keyframes growX {
   from {
     transform: scaleX(0);
@@ -177,7 +167,7 @@
 .subt.fx-added {
   animation: riseIn 0.28s var(--ease) both;
 }
-/* auth + onboarding */
+/* auth */
 .auth-card.fx-auth > * {
   animation: riseIn 0.42s var(--ease) both;
 }
@@ -189,43 +179,6 @@
 }
 .auth-card.fx-auth > *:nth-child(n + 4) {
   animation-delay: 0.12s;
-}
-.onb.fx-step > *:not(.steps) {
-  animation: slideInR 0.36s var(--ease) both;
-}
-.onb.fx-step > *:nth-child(n + 4) {
-  animation-delay: 0.05s;
-}
-.steps i {
-  transform-origin: left;
-  transition: background 0.3s;
-}
-.onb.fx-step .steps i.cur {
-  animation: growX 0.45s var(--ease) both;
-}
-.onb.fx-step .ready-row {
-  animation: riseIn 0.4s var(--ease) both;
-}
-.onb.fx-step .ready-row:nth-child(2) {
-  animation-delay: 0.12s;
-}
-.onb.fx-step .ready-row:nth-child(3) {
-  animation-delay: 0.24s;
-}
-.onb.fx-step .ready-row .ok {
-  animation: popCheck 0.42s var(--spring) both;
-}
-.onb.fx-step .ready-row:nth-child(1) .ok {
-  animation-delay: 0.18s;
-}
-.onb.fx-step .ready-row:nth-child(2) .ok {
-  animation-delay: 0.3s;
-}
-.onb.fx-step .ready-row:nth-child(3) .ok {
-  animation-delay: 0.42s;
-}
-.onb.fx-step .ready-badge {
-  animation: popCheck 0.5s 0.05s var(--spring) both;
 }
 /* tactile micro-feedback */
 .check:active {
@@ -268,20 +221,15 @@
   .pbody.fx-tab > *,
   .pbody.fx-tab .kcard,
   .auth-card.fx-auth > *,
-  .onb.fx-step > *,
   .drawer.enter .drawer-b > *,
   .kcard.fx-moved,
   .cev.fx-moved,
   .wcard.fx-moved,
-  .fx-done .check,
-  .onb.fx-step .ready-row,
-  .onb.fx-step .ready-row .ok,
-  .onb.fx-step .ready-badge {
+  .fx-done .check {
     animation: fadeOnly 0.12s both !important;
   }
   .fx-route .prog > i,
-  .fx-route .stackbar i,
-  .onb.fx-step .steps i.cur {
+  .fx-route .stackbar i {
     animation: none !important;
   }
   .fx-done .tt,
@@ -299,7 +247,6 @@
 :root[data-motion='reduce'] .fx-route > .page > *,
 :root[data-motion='reduce'] .pbody.fx-tab > *,
 :root[data-motion='reduce'] .auth-card.fx-auth > *,
-:root[data-motion='reduce'] .onb.fx-step > *,
 :root[data-motion='reduce'] .drawer.enter .drawer-b > *,
 :root[data-motion='reduce'] .kcard.fx-moved {
   animation: fadeOnly 0.12s both !important;

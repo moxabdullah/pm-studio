@@ -38,20 +38,20 @@ All of this lives in a new module, `src/core/sync.js`. `store.js` calls into it,
 
 Each collection gets a few real columns that PocketBase needs for filtering and permission rules, plus one `doc` JSON field holding the rest of the app object as-is. This keeps the mapping small and stops new UI fields from breaking sync.
 
-| Collection | Real columns | In `doc` |
-|---|---|---|
-| `users` (auth) | email, name, title, color, status, role (`admin`, `manager`, `member`); role is stored now, enforced in Phase 2 | tz, other profile fields |
-| `workspaces` | name, color | brand flags |
-| `teams` | workspace, name | icon, colour, description |
-| `projects` | workspace, team, lead, private, members (relation to users), archived, order | key, name, icon, status, dates, everything else |
-| `tasks` | project, status, assignee, archived | title, priority, due, labels, est, subtasks, deps, recur, etc. |
-| `comments` | task, author | body, reactions |
-| `activity` | project, task, by | verb, extra |
-| `notifs` | recipient | everything else |
-| `files` | project, uploaded_by, file (real upload) | display name, type |
-| `events` | project | title, date, time |
-| `saved_views` | project, owner | name, type, filters |
-| `user_prefs` | user (unique) | prefs, views, collapsed, notifPrefs, recentSearches |
+| Collection     | Real columns                                                                                                    | In `doc`                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `users` (auth) | email, name, title, color, status, role (`admin`, `manager`, `member`); role is stored now, enforced in Phase 2 | tz, other profile fields                                       |
+| `workspaces`   | name, color                                                                                                     | brand flags                                                    |
+| `teams`        | workspace, name                                                                                                 | icon, colour, description                                      |
+| `projects`     | workspace, team, lead, private, members (relation to users), archived, order                                    | key, name, icon, status, dates, everything else                |
+| `tasks`        | project, status, assignee, archived                                                                             | title, priority, due, labels, est, subtasks, deps, recur, etc. |
+| `comments`     | task, author                                                                                                    | body, reactions                                                |
+| `activity`     | project, task, by                                                                                               | verb, extra                                                    |
+| `notifs`       | recipient                                                                                                       | everything else                                                |
+| `files`        | project, uploaded_by, file (real upload)                                                                        | display name, type                                             |
+| `events`       | project                                                                                                         | title, date, time                                              |
+| `saved_views`  | project, owner                                                                                                  | name, type, filters                                            |
+| `user_prefs`   | user (unique)                                                                                                   | prefs, views, collapsed, notifPrefs, recentSearches            |
 
 **IDs.** Change `uid()` to produce 15-character lowercase IDs that PocketBase accepts, and send them as the record `id` on create. The app can then keep creating objects synchronously, exactly as it does now. Store an optional prefix such as `t` in `doc` if anything depends on it.
 

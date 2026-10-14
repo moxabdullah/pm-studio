@@ -55,6 +55,12 @@ export const FIELDS = {
     ],
   },
 };
+/* A saved view's filters are shared data. Keep only well-formed ones: a real field, a valid operator, a list of ids. */
+export function cleanFilters(list) {
+  return (Array.isArray(list) ? list : [])
+    .filter(f => f && typeof f.f === 'string' && Object.prototype.hasOwnProperty.call(FIELDS, f.f))
+    .map(f => ({ f: f.f, op: f.op === 'not' ? 'not' : 'is', v: Array.isArray(f.v) ? f.v.map(String) : [] }));
+}
 export function viewOf(key) {
   if (!S.views[key])
     S.views[key] = {
@@ -90,7 +96,7 @@ export function applyView(ts, v) {
   let out = ts.filter(t => v.filters.every(f => matchF(t, f)));
   if (v.q) {
     const q = v.q.toLowerCase();
-    out = out.filter(t => t.title.toLowerCase().includes(q) || t.key.toLowerCase().includes(q));
+    out = out.filter(t => String(t.title).toLowerCase().includes(q) || String(t.key).toLowerCase().includes(q));
   }
   return sortTasks(out, v.sort);
 }
@@ -100,7 +106,7 @@ export function sortTasks(ts, s) {
   const key =
     {
       manual: t => t.order,
-      title: t => t.title.toLowerCase(),
+      title: t => String(t.title).toLowerCase(),
       due: t => t.due || '9999',
       start: t => t.start || '9999',
       priority: t => -PR[t.priority || 'none'].w,
@@ -157,10 +163,10 @@ export function filterChips(key) {
       const opts = F.opts();
       const names = f.v.map(id => opts.find(o => o.id === id)?.name || id);
       const val = names.length ? (names.length > 2 ? `${names.length} selected` : names.join(', ')) : 'any';
-      return `${i ? '<span>and</span>' : ''}<span class="chip"><button data-a="pop" data-pop="fvals" data-key="${key}" data-i="${i}" style="display:inline-flex;gap:5px;align-items:center">${ic(F.icon, 12)}<b>${F.name}</b> ${f.op === 'not' ? 'is not' : 'is'} <span>${esc(val)}</span></button><button class="ibtn" data-a="rmFilter" data-key="${key}" data-i="${i}" aria-label="Remove filter">${ic('x', 12)}</button></span>`;
+      return `${i ? '<span>and</span>' : ''}<span class="chip"><button data-a="pop" data-pop="fvals" data-key="${esc(key)}" data-i="${i}" style="display:inline-flex;gap:5px;align-items:center">${ic(F.icon, 12)}<b>${F.name}</b> ${f.op === 'not' ? 'is not' : 'is'} <span>${esc(val)}</span></button><button class="ibtn" data-a="rmFilter" data-key="${esc(key)}" data-i="${i}" aria-label="Remove filter">${ic('x', 12)}</button></span>`;
     })
     .join('');
-  return `<div class="chipsbar">${ic('list-filter', 13)}${chips}<button class="btn btn-sm btn-ghost" data-a="pop" data-pop="filter" data-key="${key}">${ic('plus', 12)}Add</button><span class="sp"></span><button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${key}">Clear all</button></div>`;
+  return `<div class="chipsbar">${ic('list-filter', 13)}${chips}<button class="btn btn-sm btn-ghost" data-a="pop" data-pop="filter" data-key="${esc(key)}">${ic('plus', 12)}Add</button><span class="sp"></span><button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${esc(key)}">Clear all</button></div>`;
 }
 export function viewToolbar(key, opt = {}) {
   const v = viewOf(key);
@@ -178,11 +184,11 @@ export function viewToolbar(key, opt = {}) {
     project: 'Project',
   }[v.sort.f];
   return `<div class="toolbar" role="toolbar">
-    <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="vq-${key}" data-in="viewQ" data-key="${key}" placeholder="Search tasks" value="${esc(v.q)}" aria-label="Search tasks"></div>
-    <button class="btn btn-ghost ${v.filters.length ? 'on' : ''}" data-a="pop" data-pop="filter" data-key="${key}">${ic('list-filter', 14)}Filter${v.filters.length ? ` <span class="badge accent" style="height:16px;padding:0 5px">${v.filters.length}</span>` : ''}</button>
-    <button class="btn btn-ghost" data-a="pop" data-pop="sort" data-key="${key}">${ic('arrow-up-down', 14)}<span class="hide-m">Sort:</span> ${sortName}</button>
-    ${opt.group !== false ? `<button class="btn btn-ghost" data-a="pop" data-pop="group" data-key="${key}">${ic('rows-3', 14)}<span class="hide-m">Group:</span> ${{ status: 'Status', priority: 'Priority', assignee: 'Assignee', project: 'Project', due: 'Due date', none: 'None' }[v.group]}</button>` : ''}
-    ${opt.cols ? `<button class="btn btn-ghost" data-a="pop" data-pop="cols" data-key="${key}">${ic('columns-3', 14)}Columns</button>` : ''}
+    <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="vq-${esc(key)}" data-in="viewQ" data-key="${esc(key)}" placeholder="Search tasks" value="${esc(v.q)}" aria-label="Search tasks"></div>
+    <button class="btn btn-ghost ${v.filters.length ? 'on' : ''}" data-a="pop" data-pop="filter" data-key="${esc(key)}">${ic('list-filter', 14)}Filter${v.filters.length ? ` <span class="badge accent" style="height:16px;padding:0 5px">${v.filters.length}</span>` : ''}</button>
+    <button class="btn btn-ghost" data-a="pop" data-pop="sort" data-key="${esc(key)}">${ic('arrow-up-down', 14)}<span class="hide-m">Sort:</span> ${sortName}</button>
+    ${opt.group !== false ? `<button class="btn btn-ghost" data-a="pop" data-pop="group" data-key="${esc(key)}">${ic('rows-3', 14)}<span class="hide-m">Group:</span> ${{ status: 'Status', priority: 'Priority', assignee: 'Assignee', project: 'Project', due: 'Due date', none: 'None' }[v.group]}</button>` : ''}
+    ${opt.cols ? `<button class="btn btn-ghost" data-a="pop" data-pop="cols" data-key="${esc(key)}">${ic('columns-3', 14)}Columns</button>` : ''}
     ${opt.extra || ''}
     <span class="sp"></span>
     ${opt.right || ''}

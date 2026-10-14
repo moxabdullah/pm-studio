@@ -104,6 +104,12 @@
   margin: 0;
   letter-spacing: -0.018em;
 }
+/* A page inside a project tab (Overview, Files, Activity) sits in a flex column. Its automatic side margins, which centre it, would
+   there make it as wide as its content (a Files page of one card was ~380px wide) instead of as wide as the tab. Its max-width still
+   caps it. */
+.pbody > .page {
+  width: 100%;
+}
 /* tabs bleed to the edges; the first label still starts on the gutter (tab has 10px side padding) */
 .proj-h .tabs {
   margin: 0 calc(-1 * var(--gutter));
@@ -263,7 +269,8 @@
   font-size: var(--fs-2xs);
   color: var(--text-3);
 }
-.fcard .more {
+.fcard .more,
+.fcard .dl {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -271,8 +278,50 @@
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--border);
 }
-.fcard:hover .more {
+.fcard .dl {
+  right: 32px;
+}
+.fcard:hover .more,
+.fcard:hover .dl,
+.fcard:focus-within .more,
+.fcard:focus-within .dl {
   opacity: 1;
+}
+/* A real picture over the drawing (see filePrev); the extension tag stays on top of it. */
+.fprev .fimg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--sunken);
+}
+.fprev .fimg ~ .ext {
+  z-index: 1;
+}
+/* The file name in the list view: looks like text, opens the preview. It shortens with an ellipsis like the name on a card does. */
+.fname {
+  font-weight: 500;
+  text-align: left;
+  color: inherit;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A table cell is as wide as its longest unbroken content, so a name of a few hundred characters would stretch the whole table. This
+   column instead takes whatever width the other columns leave (width: 100%) and counts for none of it (max-width: 0). */
+.perm-t td.fcell {
+  width: 100%;
+  max-width: 0;
+}
+.fcell > .row {
+  min-width: 0;
+}
+.fname:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .ftype {
   width: 28px;

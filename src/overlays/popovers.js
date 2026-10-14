@@ -1,8 +1,8 @@
 /* ---------------- POPOVERS ---------------- */
 import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
-import { D, S, allTasks, canSee, me, mem, pColor, proj, task, visibleProjects } from '../core/store.js';
+import { LABELS, PRIOS, PSTAT, ROLES, STATUSES } from '../core/constants.js';
+import { D, S, allTasks, canSee, isAdmin, me, mem, pColor, proj, task, visibleProjects, wsEvents } from '../core/store.js';
 import { av, avStack, prIcon, stIcon } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { FIELDS, viewOf } from '../shell/view-engine.js';
@@ -69,7 +69,7 @@ export function tgt(p) {
 export function popList(items, opt = {}) {
   const q = (S.ui.pop.q || '').toLowerCase();
   const list = items.filter(it => !q || it.name.toLowerCase().includes(q));
-  return `${opt.search ? `<div class="pin"><input data-pop-q data-in="popQ" id="pop-q" placeholder="${opt.search}" value="${esc(S.ui.pop.q || '')}" aria-label="${opt.search}"></div>` : ''}
+  return `${opt.search ? `<div class="pin"><input data-pop-q data-in="popQ" id="pop-q" placeholder="${opt.search}" value="${esc(S.ui.pop.q || '')}" aria-label="${esc(opt.search)}"></div>` : ''}
     ${list.map(it => `<button class="mi" data-a="${it.act || 'popPick'}" data-v="${esc(it.id)}" role="menuitemradio" aria-checked="${!!it.on}">${it.html || ''}<span class="trunc">${esc(it.name)}</span>${it.kbd ? `<span class="r"><kbd>${it.kbd}</kbd></span>` : ''}${it.on ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`).join('') || `<div class="mi faint" style="cursor:default">No matches</div>`}`;
 }
 export function miniCal(p, val) {
@@ -97,7 +97,7 @@ export function popHtml(p) {
   const t = ['status', 'priority', 'assignee', 'labels', 'date', 'project', 'deps', 'recur', 'estimate'].includes(p.type) ? tgt(p) : null;
   switch (p.type) {
     case 'create':
-      inner = `<div class="mh">Create</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}Task<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}Project<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}Team</button><div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}Invite member</button>`;
+      inner = `<div class="mh">Create</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}Task<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}Project<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}Team</button>`;
       style = 'width:220px';
       break;
     case 'subassignee': {
@@ -205,12 +205,10 @@ export function popHtml(p) {
       const m = mem(p.id);
       inner =
         `<div class="mh">Role for ${esc(m.name)}</div>` +
-        ['Admin', 'Member', 'Guest']
-          .map(
-            r =>
-              `<button class="mi" data-a="popPick" data-v="${r}" style="height:auto;padding:7px 8px;align-items:flex-start"><div class="grow" style="white-space:normal"><div style="font-weight:500">${r}</div><div class="faint" style="font-size:11.5px">${{ Admin: 'Manage members, settings, and all projects', Member: 'Create projects and work on tasks', Guest: 'Only sees projects they are invited to' }[r]}</div></div>${m.role === r ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
-          )
-          .join('');
+        ROLES.map(
+          r =>
+            `<button class="mi" data-a="popPick" data-v="${r}" style="height:auto;padding:7px 8px;align-items:flex-start"><div class="grow" style="white-space:normal"><div style="font-weight:500">${r}</div><div class="faint" style="font-size:11.5px">${{ Admin: 'Manage members, workspaces and all projects', Manager: 'Leads projects and teams', Member: 'Works on projects and tasks' }[r]}</div></div>${m.role === r ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+        ).join('');
       style = 'width:300px';
       break;
     }
@@ -218,16 +216,16 @@ export function popHtml(p) {
       inner = `<div class="mh">Workspaces</div>${D()
         .workspaces.map(
           w =>
-            `<button class="mi" data-a="switchWs" data-v="${w.id}">${wsLogo(w, 20)}<span class="grow">${esc(w.name)}</span><span class="faint" style="font-size:11px">${w.plan}</span>${w.name === D().ws.name ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+            `<button class="mi" data-a="switchWs" data-v="${esc(w.id)}">${wsLogo(w, 20)}<span class="grow">${esc(w.name)}</span>${w.id === D().ws.id ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
         )
         .join(
           '',
-        )}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button><button class="mi" data-a="invite">${ic('user-plus', 15)}Invite members</button><div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
+        )}<div class="msep"></div>${isAdmin() ? `<button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button>` : ''}<button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button><div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
       style = 'width:260px';
       break;
     case 'user':
-      inner = `<div class="row" style="padding:8px 8px 10px;gap:10px">${av(D().me, 'lg', false)}<div style="min-width:0"><div style="font-weight:600">${esc(S.prefs.name)}</div><div class="faint trunc" style="font-size:12px">${esc(me().email)}</div></div></div><div class="msep"></div>
-      <button class="mi" data-a="go" data-r="member" data-id="${D().me}">${ic('user', 15)}View profile</button><button class="mi" data-a="go" data-r="settings" data-sec="profile">${ic('settings', 15)}Account settings</button>
+      inner = `<div class="row" style="padding:8px 8px 10px;gap:10px">${av(D().me, 'lg', false)}<div style="min-width:0"><div style="font-weight:600">${esc(me().name)}</div><div class="faint trunc" style="font-size:12px">${esc(me().email)}</div></div></div><div class="msep"></div>
+      <button class="mi" data-a="go" data-r="member" data-id="${esc(D().me)}">${ic('user', 15)}View profile</button><button class="mi" data-a="go" data-r="settings" data-sec="profile">${ic('settings', 15)}Account settings</button>
       <div class="msep"></div><div class="mh">Theme</div><div style="padding:2px 6px 6px"><div class="seg" style="width:100%">${[
         ['light', 'sun', 'Light'],
         ['dark', 'moon', 'Dark'],
@@ -242,8 +240,7 @@ export function popHtml(p) {
       style = 'width:260px';
       break;
     case 'help':
-      inner = `<div class="mh">Help & resources</div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}Keyboard shortcuts<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="openPalette">${ic('command', 15)}Command menu<span class="r"><kbd>${MOD}K</kbd></span></button><button class="mi" data-a="go" data-r="system">${ic('component', 15)}Design system</button><button class="mi" data-a="go" data-r="states">${ic('layers', 15)}System states</button>
-      <div class="msep"></div><div class="mh">Prototype</div><button class="mi" data-a="startOnboarding">${ic('sparkles', 15)}Replay onboarding</button><button class="mi" data-a="toggleOffline">${ic(S.ui.offline ? 'wifi' : 'wifi-off', 15)}${S.ui.offline ? 'Go back online' : 'Simulate offline'}</button><button class="mi" data-a="go" data-r="nowhere">${ic('file-question', 15)}Open a broken link</button><button class="mi" data-a="resetDemo">${ic('rotate-ccw', 15)}Reset demo data</button>`;
+      inner = `<div class="mh">Help & resources</div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}Keyboard shortcuts<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="openPalette">${ic('command', 15)}Command menu<span class="r"><kbd>${MOD}K</kbd></span></button><button class="mi" data-a="go" data-r="system">${ic('component', 15)}Design system</button><button class="mi" data-a="go" data-r="states">${ic('layers', 15)}System states</button>`;
       style = 'width:260px';
       break;
     case 'sort': {
@@ -263,10 +260,10 @@ export function popHtml(p) {
         ]
           .map(
             ([k, n]) =>
-              `<button class="mi" data-a="setSort" data-key="${p.key}" data-v="${k}">${n}${v.sort.f === k ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+              `<button class="mi" data-a="setSort" data-key="${esc(p.key)}" data-v="${k}">${n}${v.sort.f === k ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
           )
           .join('') +
-        `<div class="msep"></div><div style="padding:4px 6px"><div class="seg" style="width:100%"><button class="${v.sort.dir > 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${p.key}" data-v="1">${ic('arrow-up', 12)}Ascending</button><button class="${v.sort.dir < 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${p.key}" data-v="-1">${ic('arrow-down', 12)}Descending</button></div></div>`;
+        `<div class="msep"></div><div style="padding:4px 6px"><div class="seg" style="width:100%"><button class="${v.sort.dir > 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${esc(p.key)}" data-v="1">${ic('arrow-up', 12)}Ascending</button><button class="${v.sort.dir < 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${esc(p.key)}" data-v="-1">${ic('arrow-down', 12)}Descending</button></div></div>`;
       style = 'width:240px';
       break;
     }
@@ -284,7 +281,7 @@ export function popHtml(p) {
         ]
           .map(
             ([k, n, i]) =>
-              `<button class="mi" data-a="setGroup" data-key="${p.key}" data-v="${k}">${ic(i, 15)}${n}${v.group === k ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+              `<button class="mi" data-a="setGroup" data-key="${esc(p.key)}" data-v="${k}">${ic(i, 15)}${n}${v.group === k ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
           )
           .join('');
       break;
@@ -296,10 +293,10 @@ export function popHtml(p) {
         TCOLS.filter(c => c[0] !== 'title')
           .map(
             c =>
-              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="toggleCol2" data-key="${p.key}" data-v="${c[0]}" ${v.hidden.includes(c[0]) ? '' : 'checked'}>${c[1]}</label>`,
+              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="toggleCol2" data-key="${esc(p.key)}" data-v="${esc(c[0])}" ${v.hidden.includes(c[0]) ? '' : 'checked'}>${c[1]}</label>`,
           )
           .join('') +
-        `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${p.key}">${ic('rotate-ccw', 14)}Reset widths</button>`;
+        `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${esc(p.key)}">${ic('rotate-ccw', 14)}Reset widths</button>`;
       break;
     }
     case 'filter':
@@ -317,27 +314,27 @@ export function popHtml(p) {
           .opts()
           .map(
             o =>
-              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${p.key}" data-i="${p.i}" data-v="${o.id}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`,
+              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${esc(p.key)}" data-i="${p.i}" data-v="${esc(o.id)}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`,
           )
           .join('');
       break;
     }
     case 'daylist': {
       const ds = p.date;
-      const evs = D().events.filter(e => e.date === ds);
+      const evs = wsEvents().filter(e => e.date === ds);
       const ts = allTasks().filter(x => x.due === ds);
       inner =
         `<div class="mh">${fmtDate(ds, true)}</div>` +
         evs
           .map(
             e =>
-              `<button class="mi" data-a="go" data-r="project" data-id="${e.project}" data-tab="calendar">${ic('clock', 14)}${esc(e.title)}<span class="r">${e.time}</span></button>`,
+              `<button class="mi" data-a="go" data-r="project" data-id="${esc(e.project)}" data-tab="calendar">${ic('clock', 14)}${esc(e.title)}<span class="r">${esc(e.time)}</span></button>`,
           )
           .join('') +
         ts
           .map(
             x =>
-              `<button class="mi" data-a="openTask" data-id="${x.id}">${stIcon(x.status)}<span class="trunc">${esc(x.title)}</span><span class="r">${av(x.assignee, 'sm', false)}</span></button>`,
+              `<button class="mi" data-a="openTask" data-id="${esc(x.id)}">${stIcon(x.status)}<span class="trunc">${esc(x.title)}</span><span class="r">${av(x.assignee, 'sm', false)}</span></button>`,
           )
           .join('');
       style = 'width:280px';
@@ -345,13 +342,14 @@ export function popHtml(p) {
     }
     case 'event': {
       const e = D().events.find(x => x.id === p.id);
-      const pr = proj(e.project);
-      inner = `<div style="padding:10px 10px 6px"><div class="row" style="gap:8px;margin-bottom:6px"><span class="pdot" style="--c:${pColor(pr)};border-radius:50%"></span><b style="font-size:14px;font-weight:600">${esc(e.title)}</b></div><div class="muted" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px"><span class="row" style="gap:6px">${ic('calendar', 13)}${fmtDate(e.date, true)} · ${e.time}</span><span class="row" style="gap:6px">${ic('folder', 13)}${esc(pr.name)}</span><span class="row" style="gap:6px">${ic('users', 13)}${avStack(pr.members, 5)}</span></div></div><div class="msep"></div><button class="mi" data-a="go" data-r="project" data-id="${pr.id}" data-tab="overview">${ic('arrow-up-right', 14)}Open project</button>`;
+      const pr = e && proj(e.project);
+      if (!pr) break;
+      inner = `<div style="padding:10px 10px 6px"><div class="row" style="gap:8px;margin-bottom:6px"><span class="pdot" style="--c:${pColor(pr)};border-radius:50%"></span><b style="font-size:14px;font-weight:600">${esc(e.title)}</b></div><div class="muted" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px"><span class="row" style="gap:6px">${ic('calendar', 13)}${fmtDate(e.date, true)} · ${esc(e.time)}</span><span class="row" style="gap:6px">${ic('folder', 13)}${esc(pr.name)}</span><span class="row" style="gap:6px">${ic('users', 13)}${avStack(pr.members, 5)}</span></div></div><div class="msep"></div><button class="mi" data-a="go" data-r="project" data-id="${esc(pr.id)}" data-tab="overview">${ic('arrow-up-right', 14)}Open project</button>`;
       style = 'width:270px';
       break;
     }
     case 'emoji':
-      inner = `<div class="row" style="gap:2px;padding:2px">${['👍', '🎉', '❤️', '👀', '🚀', '✅'].map(e => `<button class="ibtn" data-a="react" data-id="${p.id}" data-e="${e}" style="font-size:16px" aria-label="React ${e}">${e}</button>`).join('')}</div>`;
+      inner = `<div class="row" style="gap:2px;padding:2px">${['👍', '🎉', '❤️', '👀', '🚀', '✅'].map(e => `<button class="ibtn" data-a="react" data-id="${esc(p.id)}" data-e="${e}" style="font-size:16px" aria-label="React ${e}">${e}</button>`).join('')}</div>`;
       style = 'min-width:0';
       break;
     case 'ctx':
@@ -365,7 +363,7 @@ export function popHtml(p) {
       break;
     case 'bulk-assignee':
       inner = [{ id: '', name: 'Unassigned' }, ...D().members]
-        .map(m => `<button class="mi" data-a="bulkSet" data-f="assignee" data-v="${m.id}">${av(m.id || null, 'sm', false)}${esc(m.name)}</button>`)
+        .map(m => `<button class="mi" data-a="bulkSet" data-f="assignee" data-v="${esc(m.id)}">${av(m.id || null, 'sm', false)}${esc(m.name)}</button>`)
         .join('');
       break;
   }
@@ -381,18 +379,21 @@ export function filterBuilder(p) {
       const names = f.v.map(id => opts.find(o => o.id === id)?.name || id);
       const open = p.edit === i;
       return `<div class="frow"><span class="conj">${i ? 'and' : 'Where'}</span>
-      <select class="select" data-in="fField" data-key="${p.key}" data-i="${i}" aria-label="Field">${Object.entries(FIELDS)
+      <select class="select" data-in="fField" data-key="${esc(p.key)}" data-i="${i}" aria-label="Field">${Object.entries(FIELDS)
         .map(([k, x]) => `<option value="${k}" ${f.f === k ? 'selected' : ''}>${x.name}</option>`)
         .join('')}</select>
-      <select class="select" data-in="fOp" data-key="${p.key}" data-i="${i}" aria-label="Operator"><option value="is" ${f.op === 'is' ? 'selected' : ''}>is</option><option value="not" ${f.op === 'not' ? 'selected' : ''}>is not</option></select>
+      <select class="select" data-in="fOp" data-key="${esc(p.key)}" data-i="${i}" aria-label="Operator"><option value="is" ${f.op === 'is' ? 'selected' : ''}>is</option><option value="not" ${f.op === 'not' ? 'selected' : ''}>is not</option></select>
       <button class="valbtn" data-a="fEdit" data-i="${i}" aria-expanded="${open}"><span class="trunc grow">${names.length ? esc(names.join(', ')) : '<span class="faint">Select…</span>'}</span>${ic('chevron-down', 12)}</button>
-      <button class="ibtn ibtn-xs" data-a="rmFilter" data-key="${p.key}" data-i="${i}" aria-label="Remove filter">${ic('trash-2', 13)}</button></div>
-      ${open ? `<div style="margin-left:50px;border:1px solid var(--border);border-radius:var(--r);padding:4px;max-height:200px;overflow:auto">${opts.map(o => `<label class="mi" style="cursor:pointer;min-height:28px"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${p.key}" data-i="${i}" data-v="${o.id}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`).join('')}</div>` : ''}`;
+      <button class="ibtn ibtn-xs" data-a="rmFilter" data-key="${esc(p.key)}" data-i="${i}" aria-label="Remove filter">${ic('trash-2', 13)}</button></div>
+      ${open ? `<div style="margin-left:50px;border:1px solid var(--border);border-radius:var(--r);padding:4px;max-height:200px;overflow:auto">${opts.map(o => `<label class="mi" style="cursor:pointer;min-height:28px"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${esc(p.key)}" data-i="${i}" data-v="${esc(o.id)}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`).join('')}</div>` : ''}`;
     })
     .join('');
-  return `<div class="mh fb-h">Filter by${v.filters.length ? `<button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${p.key}">Clear all</button>` : ''}</div>
+  return `<div class="mh fb-h">Filter by${v.filters.length ? `<button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${esc(p.key)}">Clear all</button>` : ''}</div>
     ${rows ? `<div class="fb-rows">${rows}</div>` : '<p class="fb-empty">No filters applied. Combine filters to narrow the task list, e.g. Status is In Progress and Assignee is Sarah.</p>'}
     <div class="msep"></div><div class="fb-add"><span class="faint">Add filter:</span>${Object.entries(FIELDS)
-      .map(([k, x]) => `<button class="badge" style="cursor:pointer" data-a="addFilter" data-key="${p.key}" data-f="${k}">${ic(x.icon, 11)}${x.name}</button>`)
+      .map(
+        ([k, x]) =>
+          `<button class="badge" style="cursor:pointer" data-a="addFilter" data-key="${esc(p.key)}" data-f="${k}">${ic(x.icon, 11)}${x.name}</button>`,
+      )
       .join('')}</div>`;
 }

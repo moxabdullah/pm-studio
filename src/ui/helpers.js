@@ -2,23 +2,45 @@
 import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { LB, PR, PSTAT, ST } from '../core/constants.js';
+import { lookup, safeColor, sanitizeHtml } from '../core/safe.js';
 import { D, mem, pColor } from '../core/store.js';
 
+/* Hardening for stored data lives in core/safe.js; the render helpers re-export what templates need. */
+export { safeColor, sanitizeHtml };
+
+/* One bad record must not take the whole shell down: a region that throws renders as `fallback` and the error is logged. */
+export function safely(fn, fallback = '') {
+  try {
+    return fn();
+  } catch (e) {
+    console.error(e);
+    return fallback;
+  }
+}
+
+/* The name to print for the person who wrote a comment, did something or uploaded a file. When an admin has deleted the account the
+   record stays but nobody is left to name; the avatar is already the empty one (see av). Returns plain text: esc() it. */
+export const FORMER = 'Former member';
+export const nameOf = id => mem(id)?.name || FORMER;
+
+/* `tip` shows the name on hover. A string is what the empty avatar says instead of "Unassigned" (pass FORMER where a person wrote something). */
 export function av(id, cls = '', tip = true) {
   const m = mem(id);
-  if (!m) return `<span class="av empty ${cls}" ${tip ? 'data-tip="Unassigned"' : ''}>${ic('user', 11)}</span>`;
-  const ini = m.name
+  if (!m) return `<span class="av empty ${cls}" ${tip ? `data-tip="${esc(typeof tip === 'string' ? tip : 'Unassigned')}"` : ''}>${ic('user', 11)}</span>`;
+  const name = String(m.name ?? '');
+  const ini = name
     .split(' ')
     .map(x => x[0])
     .join('')
     .slice(0, 2);
-  return `<span class="av ${cls}" style="--c:${m.c}" ${tip ? `data-tip="${esc(m.name)}"` : ''} aria-label="${esc(m.name)}">${ini}</span>`;
+  return `<span class="av ${cls}" style="--c:${safeColor(m.c)}" ${tip ? `data-tip="${esc(name)}"` : ''} aria-label="${esc(name)}">${esc(ini)}</span>`;
 }
 export function avStack(ids, max = 4, cls = 'sm') {
   const v = ids.slice(0, max);
   return `<span class="avs">${v.map(i => av(i, cls)).join('')}${ids.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)">+${ids.length - max}</span>` : ''}</span>`;
 }
 export function stIcon(st, s = 14) {
+  if (!(typeof st === 'string' && st in ST)) st = 'backlog'; // an unknown status is stored data; draw the neutral one
   const c = `var(--st-${st})`;
   const r = 5.4;
   let inner = '';
@@ -35,7 +57,7 @@ export function stIcon(st, s = 14) {
 export function prIcon(p, s = 14) {
   if (p === 'urgent')
     return `<svg width="${s}" height="${s}" viewBox="0 0 14 14" aria-hidden="true" style="flex-shrink:0"><rect x="1" y="1" width="12" height="12" rx="3" fill="var(--red)"/><path d="M7 3.8v4" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><circle cx="7" cy="10.1" r=".95" fill="#fff"/></svg>`;
-  if (!p || p === 'none')
+  if (!p || p === 'none' || !(typeof p === 'string' && p in PR))
     return `<svg width="${s}" height="${s}" viewBox="0 0 14 14" aria-hidden="true" style="flex-shrink:0"><path d="M2.5 7h2M6 7h2M9.5 7h2" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
   const w = PR[p].w;
   const bar = (x, h, on) => `<rect x="${x}" y="${12 - h}" width="2.6" height="${h}" rx="1" fill="${on ? 'var(--text-2)' : 'var(--border-strong)'}"/>`;
@@ -56,9 +78,11 @@ export function progBar(v, cls = '') {
   return `<span class="prog ${cls}" role="progressbar" aria-valuenow="${v}" aria-valuemin="0" aria-valuemax="100"><i style="--p:${v / 100}"></i></span>`;
 }
 export function empty(icon, title, text, btn = '', cls = '', level = 2) {
-  return `<div class="empty-state ${cls}"><div class="glyph">${ic(icon, 20)}</div><h${level} class="es-h">${esc(title)}</h${level}><p>${esc(text)}</p>${btn}</div>`;
+  const h = Math.min(6, Math.max(1, Math.trunc(level) || 2));
+  return `<div class="empty-state ${cls}"><div class="glyph">${ic(icon, 20)}</div><h${h} class="es-h">${esc(title)}</h${h}><p>${esc(text)}</p>${btn}</div>`;
 }
 export function hl(text, q) {
+  text = String(text ?? '');
   if (!q) return esc(text);
   const i = text.toLowerCase().indexOf(q.toLowerCase());
   if (i < 0) return esc(text);
@@ -71,7 +95,7 @@ export function fmtComment(txt) {
   });
   return h;
 }
-export const FT = {
+const FILE_TYPES = {
   fig: { c: '#8662C9', i: 'pen-tool', n: 'Figma' },
   pdf: { c: '#C4473A', i: 'file-text', n: 'PDF' },
   zip: { c: '#6B7280', i: 'folder-archive', n: 'Archive' },
@@ -81,8 +105,11 @@ export const FT = {
   code: { c: '#C48A1E', i: 'file-code', n: 'Code' },
   other: { c: '#6B7280', i: 'file', n: 'File' },
 };
+/* f.type is stored data: an unknown type reads as the generic file instead of crashing. */
+export const FT = lookup(FILE_TYPES, FILE_TYPES.other);
 export function fileType(name) {
-  const e = (name.split('.').pop() || '').toLowerCase();
+  const n = String(name ?? '');
+  const e = (n.split('.').pop() || '').toLowerCase();
   if (e === 'fig') return 'fig';
   if (e === 'pdf') return 'pdf';
   if (['zip', 'rar', '7z'].includes(e)) return 'zip';
@@ -97,7 +124,9 @@ export function fsize(b) {
   if (b < 1048576) return Math.round(b / 1024) + ' KB';
   return (b / 1048576).toFixed(1) + ' MB';
 }
-export function filePrev(f) {
+/* The preview tile of a file: an icon-style drawing for its type. With `src` (a file URL of a raster image, see isRaster in
+   core/files.js) the real image is laid over the drawing; if it fails to load it is hidden and the drawing shows. */
+export function filePrev(f, src = '') {
   const t = FT[f.type] || FT.other;
   let art;
   if (f.type === 'img')
@@ -107,6 +136,8 @@ export function filePrev(f) {
     art = `<div class="art" style="flex-direction:row;gap:6px"><div style="flex:1;display:flex;flex-direction:column;gap:5px"><i class="h"></i><i></i><i style="width:70%"></i><i style="height:18px;background:color-mix(in srgb,${t.c} 20%,var(--surface))"></i></div><div style="width:34%;border-radius:3px;background:color-mix(in srgb,${t.c} 14%,var(--surface))"></div></div>`;
   else if (f.type === 'zip') art = `<div style="color:${t.c}">${ic('folder-archive', 30)}</div>`;
   else art = `<div class="art"><i class="h"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i></div>`;
-  const ext = (f.name.split('.').pop() || '').slice(0, 4);
-  return `<div class="fprev">${art}<span class="ext" style="--c:${t.c}">${esc(ext)}</span></div>`;
+  const fname = String(f.name ?? '');
+  const ext = (fname.split('.').pop() || '').slice(0, 4);
+  const img = src ? `<img class="fimg" src="${esc(src)}" alt="${esc(fname)}" data-fid="${esc(f.id)}" decoding="async">` : '';
+  return `<div class="fprev">${art}${img}<span class="ext" style="--c:${t.c}">${esc(ext)}</span></div>`;
 }

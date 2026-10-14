@@ -2,13 +2,12 @@
 import { MOD, clamp, esc } from '../core/utils.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
-import { D, S, allTasks, pColor, proj, save, task } from '../core/store.js';
+import { D, S, allTasks, inWs, pColor, proj, save, task } from '../core/store.js';
 import { FT, av, hl, stIcon } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { go, render } from '../shell/render.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { searchAll } from '../pages/search.js';
-import { openModal } from './modals.js';
 import { A } from '../actions/actions.js';
 
 export function commands() {
@@ -50,7 +49,6 @@ export function commands() {
       kbd: MOD + ' ⇧ L',
       run: () => A.toggleDark(),
     },
-    { id: 'c-inv', name: 'Invite member', icon: 'user-plus', run: () => A.invite() },
     { id: 'c-side', name: 'Toggle sidebar', icon: 'panel-left', kbd: '[', run: () => A.toggleSide() },
     { id: 'c-keys', name: 'Keyboard shortcuts', icon: 'keyboard', kbd: '?', run: () => A.shortcuts() },
     { id: 'c-out', name: 'Sign out', icon: 'log-out', run: () => A.signOut() },
@@ -66,7 +64,7 @@ export function paletteItems() {
       name: 'Switch workspace',
       items: D()
         .workspaces.filter(w => !q || w.name.toLowerCase().includes(ql))
-        .map(w => ({ html: `${wsLogo(w, 20)}`, name: w.name, sub: w.plan + ' plan', run: () => A.switchWs({ dataset: { v: w.id } }) })),
+        .map(w => ({ html: `${wsLogo(w, 20)}`, name: w.name, run: () => A.switchWs({ dataset: { v: w.id } }) })),
     });
     return groups;
   }
@@ -114,14 +112,19 @@ export function paletteItems() {
       items: [
         { icon: 'clock-alert', name: 'Overdue tasks', run: () => A.goTasks({ dataset: { f: 'overdue' } }) },
         { icon: 'user', name: 'Tasks assigned to me', run: () => go('mytasks') },
-        {
-          icon: 'signal-high',
-          name: 'High priority in Website Redesign',
-          run: () => {
-            go('project', { id: 'p1', tab: 'v:v1' });
-          },
-        },
-        { icon: 'paperclip', name: 'Files in Website Redesign', run: () => go('project', { id: 'p1', tab: 'files' }) },
+        // Shortcuts into the sample "Website Redesign" project, shown only where that project exists in this workspace.
+        ...(inWs(proj('p1'))
+          ? [
+              {
+                icon: 'signal-high',
+                name: 'High priority in Website Redesign',
+                run: () => {
+                  go('project', { id: 'p1', tab: 'v:v1' });
+                },
+              },
+              { icon: 'paperclip', name: 'Files in Website Redesign', run: () => go('project', { id: 'p1', tab: 'files' }) },
+            ]
+          : []),
       ],
     });
     return groups;
@@ -157,7 +160,7 @@ export function paletteItems() {
         name: f.name,
         sub: proj(f.project).name,
         r: f.size,
-        run: () => openModal({ type: 'filePreview', file: f, tid: f.task }),
+        run: () => A.previewFile({ dataset: { id: f.id } }),
       })),
     });
   if (sc === 'all' || sc === 'comments')

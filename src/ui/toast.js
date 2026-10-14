@@ -2,6 +2,7 @@
 import { $, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { S, save } from '../core/store.js';
+import { retryNow } from '../core/sync.js';
 import { render } from '../shell/render.js';
 
 export function toast(msg, opt = {}) {
@@ -25,10 +26,16 @@ export function toast(msg, opt = {}) {
   host.appendChild(el);
   setTimeout(kill, opt.ms || 4200);
 }
-/* guarded mutation: simulates offline failures for the "Failed to save" state */
+/* guarded mutation: refuses edits while the server cannot be reached. "Try again" reconnects, and applies the edit if that works. */
 export function mutate(fn, label) {
   if (S.ui.offline) {
-    toast("Your changes couldn't be saved. You're offline.", { kind: 'err', action: 'Try again', onAction: () => mutate(fn, label) });
+    toast("Your changes couldn't be saved. You're offline.", {
+      kind: 'err',
+      action: 'Try again',
+      onAction: async () => {
+        if (await retryNow()) mutate(fn, label);
+      },
+    });
     return false;
   }
   fn();

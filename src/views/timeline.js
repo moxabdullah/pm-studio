@@ -1,6 +1,7 @@
 /* ---------- TIMELINE ---------- */
 import { $, MON, MONL, TODAY, addD, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
+import { ST } from '../core/constants.js';
 import { S, allTasks, canSee, pColor, proj, task, taskProg, visibleProjects } from '../core/store.js';
 import { av, empty, stIcon } from '../ui/helpers.js';
 import { applyView, groupTasks, viewOf, viewToolbar } from '../shell/view-engine.js';
@@ -91,9 +92,9 @@ export function timelineHtml(ts, key, p) {
       const s = t.start && t.start <= t.due ? t.start : t.due;
       const x = X(s);
       const w = Math.max(dw, (diffD(parse(t.due), parse(s)) + 1) * dw);
-      const c = g === 'status' || g === 'none' ? pColor(pp) : `var(--st-${t.status})`;
+      const c = g === 'status' || g === 'none' ? pColor(pp) : `var(--st-${typeof t.status === 'string' && t.status in ST ? t.status : 'backlog'})`;
       const inside = w > 110;
-      return `<div class="tl-rowbg" style="top:${y}px"></div><div class="bar ${t.status === 'done' ? 'done' : ''}" style="--c:${c};left:${x}px;top:${y + 7}px;width:${w}px" data-bar="${t.id}" data-dw="${dw}" data-a="openTask" data-id="${t.id}" data-ctx="task" title="${esc(t.title)} · ${fmtDate(s)} → ${fmtDate(t.due)}"><span class="pf" style="width:${taskProg(t)}%"></span>${inside ? `${av(t.assignee, 'sm', false)}<span class="trunc">${esc(t.title)}</span>` : ''}</div>${inside ? '' : `<div class="bar-lbl" style="left:${x + w + 8}px;top:${y + 10}px">${esc(t.title)}</div>`}`;
+      return `<div class="tl-rowbg" style="top:${y}px"></div><div class="bar ${t.status === 'done' ? 'done' : ''}" style="--c:${c};left:${x}px;top:${y + 7}px;width:${w}px" data-bar="${esc(t.id)}" data-dw="${dw}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task" title="${esc(t.title)} · ${fmtDate(s)} → ${fmtDate(t.due)}"><span class="pf" style="width:${+taskProg(t) || 0}%"></span>${inside ? `${av(t.assignee, 'sm', false)}<span class="trunc">${esc(t.title)}</span>` : ''}</div>${inside ? '' : `<div class="bar-lbl" style="left:${x + w + 8}px;top:${y + 10}px">${esc(t.title)}</div>`}`;
     })
     .join('');
   // dependency paths
@@ -119,7 +120,7 @@ export function timelineHtml(ts, key, p) {
       if (r.type === 'g')
         return `<div class="tl-row g">${r.G.html || ''}${esc(r.G.name)}<span class="faint" style="font-weight:500">${r.G.tasks.length}</span></div>`;
       const t = r.t;
-      return `<div class="tl-row" data-a="openTask" data-id="${t.id}">${stIcon(t.status, 13)}<span class="trunc grow" style="${t.status === 'done' ? 'color:var(--text-3)' : ''}">${esc(t.title)}</span>${t.subtasks.length ? `<span class="faint num" style="font-size:11px">${t.subtasks.filter(s => s.done).length}/${t.subtasks.length}</span>` : ''}${av(t.assignee, 'sm')}</div>`;
+      return `<div class="tl-row" data-a="openTask" data-id="${esc(t.id)}">${stIcon(t.status, 13)}<span class="trunc grow" style="${t.status === 'done' ? 'color:var(--text-3)' : ''}">${esc(t.title)}</span>${t.subtasks.length ? `<span class="faint num" style="font-size:11px">${t.subtasks.filter(s => s.done).length}/${t.subtasks.length}</span>` : ''}${av(t.assignee, 'sm')}</div>`;
     })
     .join('');
   if (!rows.length)
@@ -127,12 +128,12 @@ export function timelineHtml(ts, key, p) {
       'chart-gantt',
       'Nothing on the timeline',
       'Give tasks a start and due date to see them here.',
-      `<button class="btn btn-primary btn-sm" data-a="newTask" ${p ? `data-project="${p.id}"` : ''}>${ic('plus', 14)}New task</button>`,
+      `<button class="btn btn-primary btn-sm" data-a="newTask" ${p ? `data-project="${esc(p.id)}"` : ''}>${ic('plus', 14)}New task</button>`,
     );
   const todayX = diffD(TODAY, rs) * dw;
-  return `<div class="tl" data-tl-today="${todayX}" data-tl-key="${key}">
+  return `<div class="tl" data-tl-today="${todayX}" data-tl-key="${esc(key)}">
     <div class="tl-left"><div class="tl-head">Task</div><div class="tl-rows" id="tl-rows">${left}<div style="height:40px"></div></div></div>
-    <div class="tl-right" id="tl-right" data-keep="tl:${key}:${S.ui.tlZoom}">
+    <div class="tl-right" id="tl-right" data-keep="tl:${esc(key)}:${esc(S.ui.tlZoom)}">
       <div class="tl-head" style="width:${W}px"><div class="tl-months">${months.map(m => `<div style="width:${m.n * dw}px"><span>${MONL[m.d.getMonth()]} ${m.d.getFullYear()}</span></div>`).join('')}</div><div class="tl-days">${days}</div></div>
       <div class="tl-grid" style="width:${W}px;height:${H + 40}px">
         ${weekend}${glines}
@@ -147,7 +148,7 @@ export function timelineHtml(ts, key, p) {
    the room up to the next diamond. Long names are cut with an ellipsis, cramped ones show just the
    diamond; the full name and date are always in the hover tooltip. Labels never overlap. */
 export function msLane(ms, X, dw, y) {
-  const byDate = {};
+  const byDate = Object.create(null); // milestone dates are stored data: a date like "__proto__" must not hit the prototype
   ms.forEach(m => (byDate[m.date] ||= []).push(m));
   const pts = Object.entries(byDate)
     .sort(([a], [b]) => (a > b ? 1 : -1))

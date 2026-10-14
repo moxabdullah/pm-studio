@@ -202,7 +202,6 @@
     max-height: 92vh;
     border-radius: 14px 14px 0 0;
   }
-  .opts,
   .tmpls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
