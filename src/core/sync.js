@@ -13,8 +13,10 @@
                     the load and the stream). Rejects when the load fails (a
                     ClientResponseError; check .status). With boot: true it first refreshes the stored session and, while the server
                     cannot be reached or fails on its own (a 5xx), shows the offline state and keeps trying (every 3 s; with doubling
-                    waits, up to 30 s, while it is the server that fails); it only rejects for a session the server refuses, or
-                    another 4xx. A start that stopSync() or a newer startSync() cut short rejects with .cancelled and touches nothing.
+                    waits, up to 30 s, while it is the server that fails); it only rejects for a session the server refuses, another
+                    4xx, or a server that has failed on its own for a minute in a row (at least 3 tries: see "a server that keeps failing"), so that the
+                    caller can say so instead of showing the skeleton for ever. A start that stopSync() or a newer startSync() cut
+                    short rejects with .cancelled and touches nothing.
      stopSync({ flush })
                     Ends the session's sync: unsubscribes, stops every timer, forgets what was loaded. With flush: true it first sends
                     any unsaved change (when online). Sign-out calls this; it does not touch the auth store or S.data.
@@ -59,13 +61,17 @@
                loaded) is remembered for the session, and `doc` goes whole from then on. A 404 on delete counts as done. The server's answer
                to each create and update is applied like a live update. Network failure -> offline. A server error (another 5xx)
                -> offline too: the change stays unsent and goes out when the server takes it, but not for ever: an op (collection and id)
-               that has failed with server errors for a minute in a row is refused like a 4xx, and the queue goes on (see weary()).
+               that has failed with server errors at least 3 times over a minute in a row is refused like a 4xx, and the queue goes on
+               (see weary()).
                401 -> sign-in page. Any other 4xx -> one toast, and the server's version of the record replaces the local one (so a
                rejected change is never sent again). Should that version not be readable right now (the server fails or cannot be
                reached: the page goes offline), the local one is taken as the baseline instead, so the change is still never sent
-               again, and the reload that recovery makes brings the server's version in; flush resolves false then. An update that the
-               server stores differently from what was sent (it rewrites the value) is not sent again once that is clear: one
-               console.error names the record and fields, and the server's version is taken, without a toast (see stuck()).
+               again, and the reload that recovery makes brings the server's version in; flush resolves false then. Should it be
+               unreadable for another reason (a 4xx on the read-back, a cancelled request), the local one is the baseline as well and a
+               quiet reload follows once no recovery or reload is running, so the refused value does not stay on screen (a 401 there
+               ends the session). An update that the server stores differently from what was sent (it rewrites the value) is not sent
+               again once that is clear: one console.error names the record and fields, and the server's version is taken, without a
+               toast (see stuck()).
      live      One subscription per collection. An event is dropped when it is older than base (by `updated`: a late echo of an
                earlier write) or equal to it (our own echo). Otherwise it is merged per top-level field and per top-level `doc` key
                (3-way against base): fields with an unsent local edit keep the local value, the rest take the remote one. The
@@ -73,7 +79,8 @@
      offline   Entered when a request cannot reach the server (or a proxy answers 502-504) or fails with a server error of its own,
                or the live stream stays down and the server does not answer a health check. Both causes are alike wherever the page
                decides between staying offline and carrying on: a health check, a reload or a send that fails either way keeps it
-               offline, so recovery never says "synced" after one. Polls on the SDK's reconnect and by timer: every 3 s while the
+               offline (a reload or health check only until it has failed for a minute: see below), so recovery never says "synced"
+               after one. Polls on the SDK's reconnect and by timer: every 3 s while the
                server cannot be reached, with the wait doubling up to 30 s while it answers but fails (each try is a ping, a stream,
                a full load and a send), and back to 3 s on a network failure or on success (see poll()). Recovery, in this order: a
                new stream, registered on the server before anything is read (so no change can fall between the reload and the
@@ -81,8 +88,9 @@
                the fresh copy, so it does not overwrite other people's changes to the same record). See recover(). A stream that
                cannot be registered (a proxy that buffers it) does not hold recovery or the first load back for ever: they go on
                without it, say so, and the safety net replaces the stream and reloads. So does the first load, once the stream has
-               come up late. A reload the server answers with a 4xx does not keep the page offline either (it could never end): the
-               page carries on with what it has and says so.
+               come up late. A reload the server answers with a 4xx, or fails on its own for a minute in a row (the same rule as for a write,
+               see weary()), does not keep the page offline either (it could never end): the page carries on with what it has, sends
+               what is unsent, and says so (it does not say "synced"). Nor does it say "synced" when that send was refused.
      access    PocketBase sends a client no event when it stops being able to see a record (it was taken off a private project's members,
                the project was made private ...): the open page would show the project for ever. So every round of the safety net
                (20 s) asks which projects the server still shows this user, and lets go of the others with their tasks, comments,
@@ -572,6 +580,7 @@ async function resync() {
     }
     if (all[USER_PREFS][0]) changed = applyRecord(USER_PREFS, all[USER_PREFS][0]) || changed;
     if (changed) sortLists(D());
+    readSick = null; // the server serves reads again
     return changed;
   } finally {
     if (gen === st.gen) st.reloading = false;
@@ -637,6 +646,7 @@ function applyEvent(coll, { action, record }) {
     if (key !== USER_PREFS) return removeRecord(key, record.id);
     base.get(USER_PREFS).delete(record.id); // the next flush creates a fresh one
     st.prefsInit = null;
+    save(); // (until then the settings count as an unsent change, see computeDiff())
     return false;
   } catch (err) {
     console.error('sync: could not apply a live update', coll, action, err);
@@ -781,16 +791,30 @@ function stuck(op, theirs) {
   );
   return true;
 }
-/* ---------- a write the server keeps failing ---------- */
-/* A server error (5xx other than 502-504) says nothing about the change, so it is tried again, from the offline poll. A record whose
-   writes always fail that way would keep the page offline for ever, so it is not tried for ever: an op (collection and id) that has
-   failed with a server error for SICK_MS in a row, counted from the first of them, is refused like a 4xx: one toast, the server's copy
-   taken (refuse()), and the rest of the queue goes on. In a row means that nothing else happened to the op in between (a success, or the
-   server saying no) and that no two failures were more than SICK_GAP_MS apart (an outage or a sleeping page in between breaks the
-   streak: what the server did meanwhile is unknown). Time, not a count, so the pace of the poll does not change what this means. */
+/* ---------- a server that keeps failing ---------- */
+/* A server error (5xx other than 502-504) says nothing about the change or the data, so it is tried again, from the offline poll. But
+   one record that cannot be written, or one read that always fails, would keep the page offline for ever (and a first load on the
+   skeleton), so it is not tried for ever. What gives up is a streak: at least SICK_TRIES failures with server errors, the last SICK_MS
+   or more after the first.
+   - A write: an op (collection and id) with such a streak is refused like a 4xx: one toast, the server's copy taken (refuse()), and
+     the rest of the queue goes on (weary()). A success or the server saying no ends the streak, and so does the op leaving the diff
+     (the user took the edit back, and what comes back is a new edit: flushOnce()).
+   - The reload (recovery's, a quiet one, the first load's): such a streak is taken as the server saying no, as for a 4xx (wearyReload()).
+   Failures more than SICK_GAP_MS apart are not a streak. That is a little over the longest wait of the offline poll, so a poll that has
+   backed off keeps one alive, while a page that is throttled or asleep (a timer a minute apart, say: two tries would then be "a minute
+   in a row") or an outage in between breaks it: what the server did meanwhile is unknown. Time and tries, not a count alone, so the
+   pace of the poll does not change what this means. */
 const SICK_MS = 60000;
-const SICK_GAP_MS = 120000;
-const sick = new Map(); // 'key/id' -> { since, last }: the first and the latest failure of the streak
+const SICK_TRIES = 3;
+const SICK_GAP_MS = POLL_MAX_MS + 15000;
+const sick = new Map(); // 'key/id' -> { since, last, n }: the first and the latest failure of the op's streak, and how many there were
+let readSick = null; // the same for the reload
+/* The streak after one more server error at `now`: `was` goes on when its latest failure is recent enough, else a new one starts. */
+function streakOf(was, now) {
+  const on = !!was && now - was.last <= SICK_GAP_MS;
+  return { since: on ? was.since : now, last: now, n: on ? was.n + 1 : 1 };
+}
+const worn = s => s.n >= SICK_TRIES && s.last - s.since >= SICK_MS; // long enough to give up on
 /* Notes how an attempt at `op` went. Returns true when the op has now failed with server errors for long enough to give up on. */
 function weary(op, status) {
   const mark = `${op.key}/${op.id}`;
@@ -798,16 +822,22 @@ function weary(op, status) {
     if (status === 'ok' || status === 'rejected') sick.delete(mark);
     return false;
   }
-  const now = Date.now();
-  const was = sick.get(mark);
-  const since = was && now - was.last <= SICK_GAP_MS ? was.since : now;
-  if (now - since < SICK_MS) {
-    sick.set(mark, { since, last: now });
+  const s = streakOf(sick.get(mark), Date.now());
+  if (!worn(s)) {
+    sick.set(mark, s);
     return false;
   }
   sick.delete(mark);
-  console.warn(`sync: ${mark} has failed with a server error for ${Math.round((now - since) / 1000)} s. Not sending it again; taking the server's version.`);
+  console.warn(
+    `sync: ${mark} has failed with a server error ${s.n} times over ${Math.round((s.last - s.since) / 1000)} s. Not sending it again; taking the server's version.`,
+  );
   return true;
+}
+/* Notes a reload that failed with a server error. Returns true when that has gone on long enough to stop waiting for the server to mend.
+   It stays true while the failures keep coming; a reload that works (resync()) or the end of the session starts it over. */
+function wearyReload() {
+  readSick = streakOf(readSick, Date.now());
+  return worn(readSick);
 }
 /* The server accepted an op: its answer is the new baseline. An answer that carries more than what was sent (someone else's change
    to the same record got in first) is merged like a live update. Returns true when S.data changed. */
@@ -868,6 +898,11 @@ async function flushOnce(options, gen) {
   const t0 = performance.now();
   const diff = computeDiff();
   stats.lastDiffMs = performance.now() - t0;
+  if (sick.size) {
+    // An op that has left the diff (the user took the change back) is a new one when it comes back: it does not inherit the streak.
+    const open = new Set([...diff.creates, ...diff.updates, ...diff.deletes, ...(diff.prefs ? [diff.prefs] : [])].map(op => `${op.key}/${op.id}`));
+    for (const mark of sick.keys()) if (!open.has(mark)) sick.delete(mark);
+  }
   const phases = rounds(diff).filter(p => p.length);
   stats.lastOps = phases.reduce((n, p) => n + p.length, 0);
   if (!phases.length) return true;
@@ -929,6 +964,7 @@ export function flush(options = {}) {
   st.flushing = run;
   return run;
 }
+let refusals = 0; // how many changes were refused and told so (a count that only grows): recover() compares it around its send
 /* The server refused some changes: say so once, and take its version of those records so the same change is never sent again.
    Resolves true when that put the page offline (a server copy could not be read back: see adoptServerTruth()). */
 async function refuse(list, gen) {
@@ -937,18 +973,30 @@ async function refuse(list, gen) {
   if (loud.length) {
     const more = loud.length > 1 ? ` (and ${loud.length - 1} more)` : '';
     hooks.toast(`Couldn't save: ${describe(loud[0].err)}${more}`, { kind: 'err', ms: 7000 });
+    refusals += loud.length;
   }
-  const down = await Promise.all(list.map(r => adoptServerTruth(r.op, gen)));
+  const left = await Promise.all(list.map(r => adoptServerTruth(r.op, gen)));
   if (gen === st.gen) hooks.render();
-  return down.includes(true);
+  if (left.includes('stale')) reloadSoon(gen);
+  return left.includes('down');
 }
-/* Takes the server's version of a record it refused a change to. Resolves true when it could not be read because the server failed or
-   cannot be reached (the page is offline then; the refused change is already out of the queue, see baseline()), else false. */
+/* A quiet reload, once a recovery or reload that is running has ended (quietResync() does nothing while one runs, and the version it
+   would bring in is not in that one: the refused change was sent after it read). It does nothing if the page is offline then: recovery
+   reloads. */
+function reloadSoon(gen) {
+  const go = () => gen === st.gen && quietResync();
+  if (st.busy) st.busy.then(go, go);
+  else go();
+}
+/* Takes the server's version of a record it refused a change to. Resolves 'down' when it could not be read because the server failed or
+   cannot be reached (the page is offline then, and the reload that recovery makes brings it in), 'stale' when it could not be read for
+   another reason (a 4xx, a request that was cancelled) and the page is not offline, so that a reload is needed to bring it in, else ''.
+   Either way the refused change is already out of the queue, see baseline(). */
 async function adoptServerTruth({ type, key, coll, id }, gen) {
   try {
     if (key === USER_PREFS) {
       const rec = (await pb.collection(coll).getFullList())[0];
-      if (gen !== st.gen) return false;
+      if (gen !== st.gen) return '';
       // A create the server refused because the user has a settings record already (another tab made it first, or an earlier try got
       // through) is about the id, not the content: this tab's unsent settings are merged into that record (applyPrefsRecord()), not
       // overwritten by it. Any other refusal takes the server's.
@@ -958,25 +1006,30 @@ async function adoptServerTruth({ type, key, coll, id }, gen) {
         // it): the next one is made when the settings differ from these.
         base.get(key).clear();
         st.prefsInit = type === 'create' ? prefsPayload(id).doc : null;
+        if (type !== 'create') save(); // the next flush makes it again: without this the settings would count as unsent until some other save
       }
     } else {
       const rec = await pb.collection(coll).getOne(id);
       if (gen === st.gen) applyRecord(key, rec, true);
     }
-    return false;
+    return '';
   } catch (err) {
-    if (gen !== st.gen) return false;
+    if (gen !== st.gen) return '';
     const kind = classify(err);
     if (err?.status === 404 && key !== USER_PREFS) {
       removeRecord(key, id, true); // gone, or not ours to see
-      return false;
+      return '';
     }
     // Cannot read it back. The server said no to the change: stop sending it, whatever the reason for not reading, rather than send it
     // for ever (or again and again when the server is merely failing right now).
     baseline(key, id);
-    if (!failing(kind)) return false;
+    if (kind === 'auth') {
+      expire(); // the session is over: nothing to reload
+      return '';
+    }
+    if (!failing(kind)) return 'stale'; // the refused value is still shown, and nothing else would bring in the server's
     goOffline(kind); // the reload that recovery makes brings the server's version in
-    return true;
+    return 'down';
   }
 }
 /* Takes the app's version of a record whose change the server refused as the baseline, so computeDiff() finds nothing to send. The
@@ -989,6 +1042,7 @@ function baseline(key, id) {
   if (key === USER_PREFS) {
     if (known.has(id)) known.set(id, entryOf(prefsPayload(id)));
     else st.prefsInit = prefsPayload(id).doc; // a refused create: nothing more to create until the settings differ from these
+    // (Known limitation: merged later with another tab's record, this tab's earlier unsent settings edits are part of "these", and lose.)
     return;
   }
   const obj = find(key, id);
@@ -1049,13 +1103,15 @@ function exclusive(fn) {
 const ping = () => pb.health.check({ signal: AbortSignal.timeout(5000) });
 /* Reacts to a failed reload (or health check). Returns 'offline' when the server cannot be reached or fails on its own (the page is
    offline then, or stays so: a server that 5xxs the reload is no more "back" than one that cannot be reached), 'ended' when the session
-   is over, else 'other' (the server answered and said no). */
+   is over, else 'other' (the server answered and said no, or has failed on its own for so long that the page stops waiting: it would
+   stay offline for ever, with no edit saved; see wearyReload()). */
 function reloadFailure(err) {
   const kind = classify(err);
   if (kind === 'auth') {
     expire();
     return 'ended';
   }
+  if (kind === 'server' && wearyReload()) return 'other';
   if (!failing(kind) && kind !== 'abort') return 'other';
   goOffline(causeOf(err));
   return 'offline';
@@ -1087,18 +1143,22 @@ function recover() {
       await resync();
     } catch (err) {
       if (gen !== st.gen || reloadFailure(err) !== 'other') return false;
-      // The server answers but refuses the reload. Staying offline would never end, so carry on with what is loaded.
+      // The server answers but refuses the reload (or has failed on it for so long that it is not worth waiting for). Staying offline
+      // would never end, so carry on with what is loaded.
       refused = describe(err);
     }
     // Back online only when the send worked too, or when the server said no to what it was sent; if it failed (cannot be reached, a
     // 5xx) the page stays offline, however well the reload went, and the next try is the poll's.
+    const before = refusals;
     if (!(await flush({ recovering: true })) || gen !== st.gen) return false;
     setOffline(false);
-    // "Synced" only when it is: the reload and the send worked. A stream that would not register does not keep the page offline (the
+    // "Synced" only when it is: the reload and the send worked, and the send was not refused (that was told, with its own toast, and
+    // the server's version of the record replaced the change). A stream that would not register does not keep the page offline (the
     // server answers, so changes can be saved, and a proxy that buffers the stream would otherwise never let go): the safety net
     // replaces it and reloads, in under 20 s.
     if (refused) hooks.toast(`Reconnected, but your data could not be reloaded: ${refused}`, { kind: 'err' });
-    else hooks.toast(live ? 'Reconnected. All changes are synced.' : 'Reconnected. Live updates will follow shortly.');
+    else if (!live) hooks.toast('Reconnected. Live updates will follow shortly.');
+    else hooks.toast(refusals === before ? 'Reconnected. All changes are synced.' : 'Reconnected.');
     flush(); // whatever was edited while this ran
     return true;
   });
@@ -1142,12 +1202,14 @@ export async function startSync({ boot = false } = {}) {
   wholeDoc = false; // a new session finds out again whether the server patches
   loops.clear();
   sick.clear();
+  readSick = null;
   resetBase();
   const cancelled = () => Object.assign(new Error('sync stopped'), { cancelled: true });
   try {
     let all;
     let late; // the stream's registration, when the load did not wait for it to finish
     let pause = POLL_MS; // the wait before the next try while the server is down
+    let failed = null; // the streak of server errors (see streakOf()): when it is long enough the server's answer is taken as final
     while (!all) {
       try {
         if (boot) await pb.collection('users').authRefresh();
@@ -1168,7 +1230,11 @@ export async function startSync({ boot = false } = {}) {
         if (gen !== st.gen) throw cancelled();
         const kind = classify(err);
         if (!boot || !failing(kind)) throw err;
-        if (kind === 'server') console.warn('sync: the server failed while loading; trying again', err);
+        if (kind === 'server') {
+          failed = streakOf(failed, Date.now());
+          if (worn(failed)) throw err; // it has failed for a minute in a row: the app says so, instead of showing the skeleton for ever
+          console.warn('sync: the server failed while loading; trying again', err);
+        }
         setOffline(true); // the server is down or failing: show the offline bar and try again (less often while it is failing)
         await new Promise(resolve => {
           st.wake = resolve;
@@ -1231,6 +1297,7 @@ async function teardown() {
   deleted.clear();
   loops.clear();
   sick.clear();
+  readSick = null;
   journal.length = 0;
   try {
     await pb.realtime.unsubscribe();
