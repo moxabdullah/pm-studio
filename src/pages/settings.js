@@ -1,7 +1,7 @@
 /* =====================================================================
    SETTINGS · AUTH · ONBOARDING · DESIGN SYSTEM · SYSTEM STATES
    ===================================================================== */
-import { dOff, esc, fmtDate } from '../core/utils.js';
+import { dOff, esc, fmtDate, fmtTime } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { D, S, inWs, isAdmin, me } from '../core/store.js';
 import { av, pIcon } from '../ui/helpers.js';
@@ -143,7 +143,7 @@ export function settingsBody(sec, title) {
           'The language used throughout the interface.',
           sel('lang', ['English (US)', 'English (UK)', 'Deutsch', 'Español', 'Français', '日本語'], P.lang),
         ) +
-        srow('Spellcheck', 'Check spelling in descriptions and comments.', tog('spell', P.spell !== false))
+        srow('Spellcheck', 'Check spelling as you type.', tog('spell', P.spell !== false))
       );
     case 'datetime':
       return (
@@ -232,7 +232,7 @@ export function settingsBody(sec, title) {
         srow('Mentions', 'When someone @mentions you.', tog('email_mention', np.email_mention, 'np')) +
         srow('Assignments', 'When a task is assigned to you.', tog('email_assign', np.email_assign, 'np')) +
         srow('Comments', 'On tasks you created or are assigned.', tog('email_comment', np.email_comment, 'np')) +
-        srow('Daily digest', 'A summary of what changed, every weekday at 8:00.', tog('email_digest', np.email_digest, 'np'))
+        srow('Daily digest', `A summary of what changed, every weekday at ${fmtTime('08:00')}.`, tog('email_digest', np.email_digest, 'np'))
       );
     case 'notif-push':
       return (
