@@ -7,6 +7,7 @@ import { PR, ST } from '../core/constants.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
 import { FORMER, av, dueHtml, empty, lbl, nameOf, prIcon, prPill, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
+import { peekView } from '../shell/view-engine.js';
 
 /* ---------- shared list renderer ---------- */
 export const LCOLS = {
@@ -81,13 +82,13 @@ export function listHtml(groups, key, opt = {}) {
         `<button class="btn btn-primary btn-sm" data-a="newTask" ${opt.project ? `data-project="${esc(opt.project)}"` : ''}>${ic('plus', 14)}New task</button>`,
       )
     );
-  const v = S.views[key];
+  const v = peekView(key);
   return `<div class="tlist" role="table" aria-label="Tasks">
     <div class="thead" style="--cols:${tpl}" role="row">
       <div></div>
       <div>${opt.complete ? '' : `<input type="checkbox" class="check" data-a="selAll" data-key="${esc(key)}" ${nSel && nSel === total ? 'checked' : ''} ${nSel && nSel < total ? 'data-indet="1"' : ''} aria-label="Select all">`}</div>
-      <div data-a="sortBy" data-key="${esc(key)}" data-f="title" style="cursor:pointer">Task ${v?.sort.f === 'title' ? ic(v.sort.dir > 0 ? 'arrow-up' : 'arrow-down', 11) : ''}</div>
-      ${cols.map(c => `<div data-a="sortBy" data-key="${esc(key)}" data-f="${c === 'labels' ? 'manual' : c}" style="cursor:pointer">${LCOLS[c][0]} ${v?.sort.f === c ? ic(v.sort.dir > 0 ? 'arrow-up' : 'arrow-down', 11) : ''}</div>`).join('')}
+      <div data-a="sortBy" data-key="${esc(key)}" data-f="title" style="cursor:pointer">Task ${v.sort.f === 'title' ? ic(v.sort.dir > 0 ? 'arrow-up' : 'arrow-down', 11) : ''}</div>
+      ${cols.map(c => `<div data-a="sortBy" data-key="${esc(key)}" data-f="${c === 'labels' ? 'manual' : c}" style="cursor:pointer">${LCOLS[c][0]} ${v.sort.f === c ? ic(v.sort.dir > 0 ? 'arrow-up' : 'arrow-down', 11) : ''}</div>`).join('')}
       <div></div>
     </div>
     ${groups

@@ -5,7 +5,7 @@ import { LABELS, PRIOS, PSTAT, ROLES, STATUSES } from '../core/constants.js';
 import { D, S, allTasks, canSee, isAdmin, me, mem, pColor, proj, task, visibleProjects, wsEvents } from '../core/store.js';
 import { av, avStack, prIcon, stIcon } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
-import { FIELDS, viewOf } from '../shell/view-engine.js';
+import { FIELDS, hiddenCols, peekView } from '../shell/view-engine.js';
 import { TCOLS } from '../views/table.js';
 import { startOfWeek } from '../views/calendar.js';
 import { ctxMenu } from './context-menu.js';
@@ -244,7 +244,7 @@ export function popHtml(p) {
       style = 'width:260px';
       break;
     case 'sort': {
-      const v = viewOf(p.key);
+      const v = peekView(p.key);
       inner =
         `<div class="mh">Sort by</div>` +
         [
@@ -268,7 +268,7 @@ export function popHtml(p) {
       break;
     }
     case 'group': {
-      const v = viewOf(p.key);
+      const v = peekView(p.key);
       inner =
         `<div class="mh">Group by</div>` +
         [
@@ -287,13 +287,14 @@ export function popHtml(p) {
       break;
     }
     case 'cols': {
-      const v = viewOf(p.key);
+      const v = peekView(p.key);
+      const hidden = hiddenCols(p.key, v);
       inner =
         `<div class="mh">Visible columns</div>` +
         TCOLS.filter(c => c[0] !== 'title')
           .map(
             c =>
-              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="toggleCol2" data-key="${esc(p.key)}" data-v="${esc(c[0])}" ${v.hidden.includes(c[0]) ? '' : 'checked'}>${c[1]}</label>`,
+              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="toggleCol2" data-key="${esc(p.key)}" data-v="${esc(c[0])}" ${hidden.includes(c[0]) ? '' : 'checked'}>${c[1]}</label>`,
           )
           .join('') +
         `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${esc(p.key)}">${ic('rotate-ccw', 14)}Reset widths</button>`;
@@ -305,7 +306,7 @@ export function popHtml(p) {
       style = 'max-width:560px';
       break;
     case 'fvals': {
-      const v = viewOf(p.key);
+      const v = peekView(p.key);
       const f = v.filters[p.i];
       if (!f) break;
       inner =
@@ -371,7 +372,7 @@ export function popHtml(p) {
   return `<div class="pop floating ${cls} ${S.ui.fx.pop ? 'enter' : ''}" role="menu" style="left:${p.x}px;top:${p.y}px;${style}" data-pop-root>${inner}</div>`;
 }
 export function filterBuilder(p) {
-  const v = viewOf(p.key);
+  const v = peekView(p.key);
   const rows = v.filters
     .map((f, i) => {
       const F = FIELDS[f.f];
