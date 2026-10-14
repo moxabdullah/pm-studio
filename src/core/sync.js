@@ -803,8 +803,10 @@ function stuck(op, theirs) {
    or more after the first.
    - A write: an op (collection and id) with such a streak is refused like a 4xx: one toast, the server's copy taken (refuse()), and
      the rest of the queue goes on (weary()). A success or the server saying no ends the streak, and so does the op leaving the diff
-     (the user took the edit back, and what comes back is a new edit: flushOnce()). A recovery that fails with a server error counts
-     as one more failure of each op already in a streak, though nothing is sent for it (stepSick()).
+     (the user took the edit back, and what comes back is a new edit: flushOnce()) or changing (the user edited the record again,
+     which the description editor allows while offline: what goes out is a new edit, and is not given up on with the old one: weary()).
+     A recovery that fails with a server error counts as one more failure of each op already in a streak, though nothing is sent for
+     it (stepSick()).
    - The reload (recovery's, a quiet one, the first load's): such a streak is taken as the server saying no, as for a 4xx (wearyReload()).
    Failures more than SICK_GAP_MS apart are not a streak. That is a little over the longest wait of the offline poll, so a poll that has
    backed off keeps one alive, while a page that is throttled or asleep (a timer a minute apart, say: two tries would then be "a minute
@@ -813,7 +815,7 @@ function stuck(op, theirs) {
 const SICK_MS = 60000;
 const SICK_TRIES = 3;
 const SICK_GAP_MS = POLL_MAX_MS + 15000;
-const sick = new Map(); // 'key/id' -> { since, last, n }: the first and the latest failure of the op's streak, and how many there were
+const sick = new Map(); // 'key/id' -> { since, last, n, sig }: the first and the latest failure of the op's streak, how many there were, and what it sent
 let readSick = null; // the same for the reload
 /* The streak after one more server error at `now`: `was` goes on when its latest failure is recent enough, else a new one starts. */
 function streakOf(was, now) {
@@ -821,6 +823,7 @@ function streakOf(was, now) {
   return { since: on ? was.since : now, last: now, n: on ? was.n + 1 : 1 };
 }
 const worn = s => s.n >= SICK_TRIES && s.last - s.since >= SICK_MS; // long enough to give up on
+const sigOf = op => `${op.type} ${stableStringify(op.fields || op.payload || {})}`; // what an op sends: a streak is of one version of it
 /* Notes how an attempt at `op` went. Returns true when the op has now failed with server errors for long enough to give up on. */
 function weary(op, status) {
   const mark = `${op.key}/${op.id}`;
@@ -828,7 +831,9 @@ function weary(op, status) {
     if (status === 'ok' || status === 'rejected') sick.delete(mark);
     return false;
   }
-  const s = streakOf(sick.get(mark), Date.now());
+  const sig = sigOf(op);
+  const was = sick.get(mark);
+  const s = { ...streakOf(was?.sig === sig ? was : null, Date.now()), sig }; // an op that has changed since it last failed is a new edit
   if (!worn(s)) {
     sick.set(mark, s);
     return false;
@@ -848,10 +853,11 @@ function wearyReload() {
 /* Notes a recovery that failed with a server error: that is a failed attempt of every change that is already failing and waiting
    behind it (recover() sends only after the reload, so nothing is sent for it). It never gives up on one itself: that happens on
    the next real send (weary()), which is what lets the write be given up on at the pace of the poll rather than after the reload
-   has been. An edit made during the outage has no entry, so its streak starts at its first real send. */
+   has been. An edit made during the outage has no entry, so its streak starts at its first real send; so does one made to a record
+   whose change was failing already, as the op it is sent in is not the one that failed (weary()). */
 function stepSick() {
   const now = Date.now();
-  for (const [mark, s] of sick) sick.set(mark, streakOf(s, now));
+  for (const [mark, s] of sick) sick.set(mark, { ...streakOf(s, now), sig: s.sig });
 }
 /* The server accepted an op: its answer is the new baseline. An answer that carries more than what was sent (someone else's change
    to the same record got in first) is merged like a live update. Returns true when S.data changed. */
@@ -1043,7 +1049,8 @@ function reloadSoon(gen) {
    cannot be reached (the page is offline then, and the reload that recovery makes brings it in), 'stale' when it could not be read for
    another reason (a 4xx, a request that was cancelled) and the page is not offline, so that a reload is needed to bring it in, else ''.
    Either way the refused change is already out of the queue, see putBack() and baseline(). */
-async function adoptServerTruth({ type, key, coll, id }, gen) {
+async function adoptServerTruth(op, gen) {
+  const { type, key, coll, id } = op;
   try {
     if (key === USER_PREFS) {
       const rec = (await pb.collection(coll).getFullList())[0];
@@ -1074,7 +1081,7 @@ async function adoptServerTruth({ type, key, coll, id }, gen) {
     // Cannot read it back. The server said no to the change: stop sending it, whatever the reason for not reading, rather than send it
     // for ever (or again and again when the server is merely failing right now).
     if (failing(kind)) {
-      putBack(type, key, id); // the page is offline for a while: an update's refused value is not left on screen until it is back
+      putBack(op); // the page is offline for a while: an update's refused value is not left on screen until it is back
       goOffline(kind); // the reload that recovery makes brings the server's version in
       return 'down';
     }
@@ -1086,31 +1093,51 @@ async function adoptServerTruth({ type, key, coll, id }, gen) {
     return 'stale'; // the refused value is still shown, and nothing else would bring in the server's
   }
 }
-/* A refused update of a collection record, when the server's version cannot be read: the record goes back to the copy the baseline
-   holds (the last one the page read or the server confirmed), as if that had just arrived, so the field snaps back where it was
-   edited rather than when the server is next reachable. A baseline entry is a payload, which has the columns of a record, so it stands
-   for one; what a payload leaves out (a member's email, a file's stored name) is read from the object. The baseline is left as it is,
-   so nothing differs and nothing is sent again, and the reload that recovery makes merges cleanly (and brings in whatever changed on
-   the server meanwhile). Where the copy would not make the diff empty (a project's order, say, which is kept in a list the entry does
-   not cover) the change is baselined as before: a change must never be sent again.
+/* A refused update of a collection record, when the server's version cannot be read: what was refused goes back to the copy the
+   baseline holds (the last one the page read or the server confirmed), so the field snaps back where it was edited rather than when
+   the server is next reachable. It comes in as a live update would, from what was sent to that copy: merge3() puts back each field
+   that still holds what was sent, and keeps one that was edited again since the request was built (the description editor saves
+   while offline), which stays unsent and goes out later. It is journaled like one too, so an Undo does not bring the refused value
+   back. A baseline entry is a payload, which has the columns of a record, so it stands for one; what a payload leaves out (a member's
+   email, a file's stored name) is read from the object. The baseline ends as that copy, so the refused change is not sent again, and
+   the reload that recovery makes merges cleanly (and brings in whatever changed on the server meanwhile). A change to a project's
+   order is put back whole (reorderProjects() would read the order from the stand-in), and where part of what was refused would still
+   be sent (that order, which is kept in a list the entry does not cover) the change is baselined as before: a change must never be
+   sent again.
    Everything else is baselined, as it was before, and settled by the reload that recovery makes:
    - a delete is not put back: a project put back goes last, and projectOrders() would send an `order` for every project after it.
    - a create is not removed: what was made with it and is not sent yet would be left without it (the palette and the search read
      `proj(t.project).name` unguarded).
    - the settings are not put back: a settings record with fewer keys than the page builds (the dev seed's `prefs: {}`) never matches
      the page's copy, so putting it back would not empty the diff. */
-function putBack(type, key, id) {
+function putBack(op) {
+  const { type, key, id } = op;
   const known = base.get(key);
   const old = known.get(id);
   const obj = key === USER_PREFS ? null : find(key, id);
   if (type !== 'update' || !old || !obj) return baseline(key, id);
   try {
-    applyRecord(key, { ...obj, ...old.p, updated: old.u }, true);
-    if (differs(payloadOf(key, find(key, id)), known.get(id))) baseline(key, id);
+    const rec = { ...obj, ...old.p, updated: old.u };
+    if ('order' in op.fields) applyRecord(key, rec, true);
+    else {
+      known.set(id, entryOf(withFields(old.p, op.fields), old.u)); // the stand-in: the server's copy, had it taken the change
+      applyRecord(key, rec);
+    }
+    if (notStored(op, payloadOf(key, find(key, id))).length < fieldNames(op.fields).length) baseline(key, id);
   } catch (err) {
     console.error('sync: could not put back the refused change', key, id, err);
     baseline(key, id);
   }
+}
+/* Payload `was` with update `fields` applied, as the server would store it. */
+function withFields(was, fields) {
+  const out = { ...was };
+  for (const [f, v] of Object.entries(fields)) {
+    if (f === 'docPatch') out.doc = { ...out.doc, ...v };
+    else if (f === 'docUnset') out.doc = Object.fromEntries(Object.entries(out.doc || {}).filter(([k]) => !v.includes(k)));
+    else out[f] = v;
+  }
+  return out;
 }
 /* Takes the app's version of a record whose change the server refused as the baseline, so computeDiff() finds nothing to send. The
    next reload then brings the server's version in as any remote change: the refused edit is "unchanged" against this baseline, so
