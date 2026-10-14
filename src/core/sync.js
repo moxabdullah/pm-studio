@@ -555,7 +555,8 @@ async function subscribeAll() {
   // While the SDK is retrying a lost connection by itself (it keeps trying for as long as the server is down, every 0.2 to 2 s),
   // subscribe() does not connect: it records the subscriptions and returns at once, and the SDK's next retry sends them. A caller
   // that has just seen the server answer must not mistake that for a live stream, so the retrying is ended here and the subscribes
-  // below connect right away.
+  // below connect right away. disconnect() is an SDK internal (private in its type definitions), like the clientId the safety net
+  // uses: another reason package.json pins pocketbase to an exact version.
   pb.realtime.disconnect();
   const colls = [...COLLECTIONS.map(c => c.coll), USER_PREFS];
   await Promise.all(colls.map(coll => pb.collection(coll).subscribe('*', e => onEvent(coll, e))));
