@@ -2152,6 +2152,8 @@ async function sessionEnded() {
   pb.authStore.clear();
   showLogin('Your session expired. Sign in again.');
 }
+// Why changes are still unsent, by offlineCause(). Online (null) a save failed for a bug in the page, and the server is not to blame.
+const WHY_UNSENT = { server: ', which is having trouble right now', network: ", which can't be reached right now" };
 A.signOut = async () => {
   S.ui.pop = null;
   const leave = async () => {
@@ -2164,7 +2166,7 @@ A.signOut = async () => {
   if (n) {
     confirmDlg({
       title: 'Sign out with unsent changes?',
-      body: `${n} change${n > 1 ? 's have' : ' has'} not reached the server, which ${offlineCause() === 'server' ? 'is having trouble' : "can't be reached"} right now. Signing out will discard ${n > 1 ? 'them' : 'it'}.`,
+      body: `${n} change${n > 1 ? 's have' : ' has'} not reached the server${WHY_UNSENT[offlineCause()] || ''}. Signing out will discard ${n > 1 ? 'them' : 'it'}.`,
       ok: 'Sign out and discard',
       icon: 'log-out',
       danger: true,

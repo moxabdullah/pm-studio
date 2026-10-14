@@ -26,8 +26,8 @@
                     the "Try again" button and the offline toast.
      sessionGen()   Changes whenever a session starts or stops, never while one recovers: a refused edit's "Try again" checks it so
                     that it never lands in a later sign-in.
-     offlineCause() Why the page is offline, while it is: 'server' (it answers, but fails) or 'network' (it cannot be reached). Sign-out
-                    words its warning about unsent changes by it.
+     offlineCause() Why the page is offline: 'server' (it answers, but fails) or 'network' (it cannot be reached); null while it is online,
+                    where a save can still fail (a bug in the page). Sign-out words its warning about unsent changes by it.
      resubscribe() / quietResync()
                     For when the account's token was replaced (the password was changed, actions.js savePassword): PocketBase then
                     keeps the live stream open but unauthenticated, so nothing arrives on it any more. resubscribe() opens a new stream
@@ -1338,7 +1338,7 @@ export function quietResync() {
   exclusive(reloadQuietly);
 }
 export const sessionGen = () => st.gen;
-export const offlineCause = () => st.cause;
+export const offlineCause = () => (st.offline ? st.cause : null);
 export async function retryNow() {
   if (!st.active) return false;
   if (!st.ready) {
