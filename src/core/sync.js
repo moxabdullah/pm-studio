@@ -93,8 +93,9 @@
                without it, say so, and the safety net replaces the stream and reloads. So does the first load, once the stream has
                come up late. A reload the server answers with a 4xx, or fails on its own for a minute in a row (the same rule as for a write,
                see weary()), does not keep the page offline either (it could never end): the page carries on with what it has, sends
-               what is unsent, and says so (it does not say "synced"). Nor does it say "synced" when a change was refused since the page
-               went offline.
+               what is unsent, and says so (it does not say "synced"). After a minute of 5xxs, though, it does so only once the server
+               has answered some request for data in that try (another list, a write): a server that fails everything keeps the page
+               offline until it mends. Nor does it say "synced" when a change was refused since the page went offline.
      access    PocketBase sends a client no event when it stops being able to see a record (it was taken off a private project's members,
                the project was made private ...): the open page would show the project for ever. So every round of the safety net
                (20 s) asks which projects the server still shows this user, and lets go of the others with their tasks, comments,
@@ -521,8 +522,13 @@ function sortLists(data) {
   data.comments.sort((a, b) => (a.at || 0) - (b.at || 0));
   data.tasks.sort((a, b) => (a.order || 0) - (b.order || 0));
 }
+/* How many reads and writes the server answered without failing on its own (a count that only grows): recover() looks at what moved
+   during one try, to tell a server that fails one list from one that fails everything. */
+let answered = 0;
+const SETTLE_MS = 3000;
 /* Every collection the user may read, in parallel, as { appKey: [records], user_prefs: [record] }. The activity feed and the
-   notification list load only their newest entries. */
+   notification list load only their newest entries. When one read fails, the others are given up to SETTLE_MS to land (and be
+   counted) before the failure is thrown. */
 async function loadAll() {
   const full = coll => pb.collection(coll).getFullList({ batch: 500, sort: 'created,id' });
   const newest = (coll, n) =>
@@ -532,8 +538,19 @@ async function loadAll() {
       .then(r => r.items);
   const jobs = COLLECTIONS.map(({ key, coll }) => [key, CAPS[key] ? newest(coll, CAPS[key]) : full(coll)]);
   jobs.push([USER_PREFS, full(USER_PREFS)]);
-  const done = await Promise.all(jobs.map(j => j[1]));
-  return Object.fromEntries(jobs.map((j, i) => [j[0], done[i]]));
+  const reads = jobs.map(j =>
+    j[1].then(r => {
+      answered++;
+      return r;
+    }),
+  );
+  try {
+    const done = await Promise.all(reads);
+    return Object.fromEntries(jobs.map((j, i) => [j[0], done[i]]));
+  } catch (err) {
+    await within(Promise.allSettled(reads), SETTLE_MS);
+    throw err;
+  }
 }
 /* Builds S.data from the loaded records and takes them as the baseline (as payloads of the built objects, so the first save finds
    no difference), then applies the user's settings. */
@@ -807,8 +824,9 @@ function stuck(op, theirs) {
      which the description editor allows while offline: what goes out is a new edit, and is not given up on with the old one: weary()).
      A recovery that fails with a server error counts as one more failure of each op already in a streak, though nothing is sent for
      it (stepSick()).
-   - The reload (recovery's, a quiet one, the first load's): such a streak is taken as the server saying no, as for a 4xx (wearyReload()),
-     except that recovery leaves the offline state only once the server has shown it works (recover()).
+   - The reload (recovery's or a quiet one): such a streak is taken as the server saying no, as for a 4xx (wearyReload()), except that
+     recovery leaves the offline state only once the server has answered a request for data (recover()). The first load keeps a streak of
+     its own, and fails at its end (startSync()).
    Failures more than SICK_GAP_MS apart are not a streak. That is a little over the longest wait of the offline poll, so a poll that has
    backed off keeps one alive, while a page that is throttled or asleep (a timer a minute apart, say: two tries would then be "a minute
    in a row") or an outage in between breaks it: what the server did meanwhile is unknown. Time and tries, not a count alone, so the
@@ -915,7 +933,6 @@ async function sendOne(op, options, gen) {
   if (gen !== st.gen) return { op, status: 'abort' };
   return { op, status: 'ok', changed: settle(op, rec) };
 }
-let stored = 0; // how many changes the server accepted (a count that only grows): recover() compares it
 async function flushOnce(options, gen) {
   const t0 = performance.now();
   const diff = computeDiff();
@@ -934,7 +951,7 @@ async function flushOnce(options, gen) {
   for (const phase of phases) {
     for (const r of await Promise.all(phase.map(op => sendOne(op, options, gen)))) {
       changed = changed || !!r.changed;
-      if (r.status === 'ok') stored++;
+      if (r.status === 'ok' || r.status === 'rejected') answered++; // (before weary() words a worn 5xx as refused)
       if (weary(r.op, r.status)) {
         r.status = 'rejected'; // told and refused like a 4xx: the queue goes on without it
         r.worn = true; // ... but for failing so long, not because the server said no: refuse() words it differently
@@ -1246,6 +1263,7 @@ function reloadFailure(err) {
 function recover() {
   return exclusive(async () => {
     const gen = st.gen;
+    const was = answered;
     let live = false;
     let refused = ''; // what the server said to the reload, when it answered but said no
     let tired = false; // ... and it was not a no, but failing on its own for so long (see wearyReload())
@@ -1260,21 +1278,24 @@ function recover() {
       const why = reloadFailure(err);
       if (why === 'offline' && classify(err) === 'server') stepSick(); // the server failed on its own: a network failure says nothing
       if (why !== 'other') return false;
-      // The server answers but refuses the reload (or has failed on it for so long that it is not worth waiting for). Staying offline
-      // would never end, so carry on with what is loaded.
+      // The server answers but refuses the reload (or has failed on it for so long that it is not worth waiting for). Waiting for it
+      // would never end, so carry on with what is loaded: send what is unsent, and go online (see below for a server that fails).
       refused = describe(err);
       tired = classify(err) === 'server';
     }
     // Back online only when the send worked too, or when the server said no to what it was sent; if it failed (cannot be reached, a
     // 5xx) the page stays offline, however well the reload went, and the next try is the poll's.
-    const was = stored;
     if (!(await flush({ recovering: true })) || gen !== st.gen) return false;
     // A server that has failed the reload for so long may be failing every request: having nothing to send (or giving up on what there
     // was) does not show that it is back. Going online then put the page offline again at its next request, and back online at the next
-    // try, every few seconds for as long as the outage lasted. So it stays offline until the server has shown, in this recovery, that it
-    // works for this session: the stream registered, or a change was stored. One list that always fails on a server that otherwise works
-    // passes that, and the page goes on without it.
-    if (tired && !live && stored === was) return false;
+    // try, about every 20 s for as long as the outage lasted. So it stays offline until the server has answered, in this try, a request
+    // for this session's data: a list read, or a change it stored or said no to. (Not the stream: that it registered says little about
+    // whether records can be read or written.) One list that always fails on a server that otherwise works passes that, the other lists
+    // being read, and the page goes on without it.
+    if (tired && answered === was) {
+      st.cause = 'server'; // reloadFailure() did not note it: the poll backs off as for any server that fails
+      return false;
+    }
     setOffline(false);
     // "Synced" only when it is: the reload and the send worked, and no change was refused since the page went offline (each was told,
     // with its own toast, and the server's version of the record replaced the change; but one given up on in an earlier try of the
