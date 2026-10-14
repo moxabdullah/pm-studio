@@ -38,11 +38,11 @@ import {
 } from '../core/sync.js';
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
-import { effectiveDark } from '../core/theme.js';
+import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
-import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
+import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
-import { viewOf } from '../shell/view-engine.js';
+import { hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
@@ -277,12 +277,14 @@ A.goTasks = el => {
         : f === 'overdue'
           ? [{ f: 'due', op: 'is', v: ['overdue'] }]
           : [];
+  save();
   go('tasks');
 };
 A.goFilteredList = el => {
   const v = viewOf('p:' + el.dataset.id);
   v.filters = [{ f: 'status', op: 'is', v: [el.dataset.st] }];
   v.group = 'status';
+  save();
   go('project', { id: el.dataset.id, tab: 'list' }, { tab: true });
 };
 
@@ -1352,6 +1354,7 @@ A.setViewMode = el => {
 };
 A.toggleCol2 = el => {
   const v = viewOf(el.dataset.key);
+  hideProjCol(el.dataset.key, v); // a project's view from an older version: the Project column the table showed as hidden is stored hidden first
   const c = el.dataset.v;
   v.hidden = v.hidden.includes(c) ? v.hidden.filter(x => x !== c) : [...v.hidden, c];
   save();
@@ -1365,6 +1368,7 @@ A.resetCols = el => {
 };
 IN.viewQ = el => {
   viewOf(el.dataset.key).q = el.value;
+  save();
   render();
 };
 A.addFilter = el => {
@@ -1421,7 +1425,7 @@ IN.fOp = el => {
 };
 A.saveView = el => {
   const k = 'p:' + el.dataset.id;
-  openModal({ type: 'saveView', pid: el.dataset.id, nf: viewOf(k).filters.length });
+  openModal({ type: 'saveView', pid: el.dataset.id, nf: peekView(k).filters.length });
 };
 /* A change that calls save() itself, not mutate(), is kept while offline and sent once the connection is back (merged with the
    server's copy first). Its toast then says that, not "saved". `offline` says what was done, without a full stop. The offline toast
@@ -1432,7 +1436,7 @@ A.saveViewSubmit = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const name = $('#sv-name').value.trim() || 'Untitled view';
   const type = $('#sv-type').value;
-  const sv = { id: uid('v'), project: m.pid, name, type, filters: JSON.parse(JSON.stringify(viewOf('p:' + m.pid).filters)) };
+  const sv = { id: uid('v'), project: m.pid, name, type, filters: JSON.parse(JSON.stringify(peekView('p:' + m.pid).filters)) };
   D().savedViews.push(sv);
   save();
   S.ui.modals.pop();
@@ -2249,6 +2253,7 @@ IN.noop = () => {};
 /* settings */
 IN.prefToggle = el => {
   S.prefs[el.dataset.k] = el.checked;
+  applyPrefs(); // a toggle does not re-render the page, and spellcheck is applied to the document
   save();
 };
 IN.npToggle = el => {
@@ -2461,7 +2466,7 @@ export function enterApp(msg) {
   S.ui.errors = {};
   S.ui.af = null;
   S.ui.showPw = false;
-  go(S.prefs.home || 'home');
+  go(ROUTE_NAMES[S.prefs.home] ? S.prefs.home : 'home');
   A.openLink?.(); // a link that was followed while signed out (src/actions/links.js)
   toast(msg);
 }

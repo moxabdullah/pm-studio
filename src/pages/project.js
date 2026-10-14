@@ -6,7 +6,7 @@ import { ic } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
 import { D, S, canSee, proj, tasksOf } from '../core/store.js';
 import { avStack, empty, pIcon } from '../ui/helpers.js';
-import { applyView, cleanFilters, groupTasks, viewOf, viewToolbar } from '../shell/view-engine.js';
+import { applyView, groupTasks, peekView, viewToolbar } from '../shell/view-engine.js';
 import { listHtml } from '../components/task-list.js';
 import { page404, stateDenied } from './errors.js';
 import { projActivity, projOverview } from '../views/project-overview.js';
@@ -41,16 +41,12 @@ export function pageProject() {
     if (!sv) body = page404();
     else {
       const k = 'sv:' + sv.id;
-      if (!S.views[k]) {
-        viewOf(k);
-        S.views[k].filters = cleanFilters(sv.filters);
-      }
-      body = taskViewBody(sv.type, applyView(ts, viewOf(k)), k, p);
+      body = taskViewBody(sv.type, applyView(ts, peekView(k)), k, p);
     }
   } else if (tab === 'overview') body = projOverview(p);
   else if (tab === 'files') body = filesHtml(p.id);
   else if (tab === 'activity') body = projActivity(p);
-  else body = taskViewBody(tab, applyView(ts, viewOf(key)), key, p);
+  else body = taskViewBody(tab, applyView(ts, peekView(key)), key, p);
 
   return `<div class="page flush">
     <div class="proj-h">
@@ -78,7 +74,7 @@ export function pageProject() {
   </div>`;
 }
 export function taskViewBody(type, ts, key, p) {
-  const v = viewOf(key);
+  const v = peekView(key);
   const addBtn = `<button class="btn btn-primary btn-sm" data-a="newTask" data-project="${esc(p.id)}">${ic('plus', 13)}New task</button>`;
   const noTasks = !tasksOf(p.id).length;
   const emptyAll = empty(

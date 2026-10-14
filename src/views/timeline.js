@@ -4,7 +4,7 @@ import { ic } from '../core/icons.js';
 import { ST } from '../core/constants.js';
 import { S, allTasks, canSee, pColor, proj, task, taskProg, visibleProjects } from '../core/store.js';
 import { av, empty, stIcon } from '../ui/helpers.js';
-import { applyView, groupTasks, viewOf, viewToolbar } from '../shell/view-engine.js';
+import { applyView, groupTasks, peekView, viewToolbar } from '../shell/view-engine.js';
 import { startOfWeek } from './calendar.js';
 
 export function tlControls() {
@@ -181,7 +181,7 @@ export function tlAfter() {
 }
 export function pageWsTimeline() {
   const key = 'tl';
-  const v = viewOf(key);
+  const v = peekView(key);
   if (!S.ui._tlWsInit) {
     S.ui._tlWsInit = 1;
     S.ui.tlGroup = 'project';
