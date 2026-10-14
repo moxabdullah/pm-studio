@@ -47,8 +47,10 @@ const bool = v => v === true;
    neither is a date that does not exist (2025-02-31): parse() would roll it over into March. */
 const real = s => {
   const [y, m, d] = s.split('-').map(Number);
-  const t = new Date(y, m - 1, d); // built as parse() builds it
-  return t.getMonth() === m - 1 && t.getDate() === d;
+  // in UTC, not local time as parse() builds it: in a zone that skipped a day (Samoa, 2011-12-30) a real date would be dropped
+  const t = new Date(0);
+  t.setUTCFullYear(y, m - 1, d);
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 };
 const day = v => ((typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && real(v)) || v === null || v === '' ? v : null);
 const arr = v => (Array.isArray(v) ? v : []);

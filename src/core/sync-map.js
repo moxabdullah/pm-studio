@@ -349,17 +349,23 @@ export function wsFromWorkspace(w) {
    of the wrong type stays here: only applyUserPrefs() knows the defaults to compare with. The next save then puts the right one back.) */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const texts = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
-// A view's state as the table, board and filter menus read it: they call .every, .includes and .toLowerCase on these and read .sort.f.
+// The filter fields and groupings the view engine knows: the keys of FIELDS and the cases of groupTasks() in shell/view-engine.js.
+// Any other name makes the filter chips or the grouping throw. Keep these in step with that file.
+const VIEW_FIELDS = ['status', 'assignee', 'priority', 'due', 'project', 'labels', 'created', 'updated'];
+const VIEW_GROUPS = ['status', 'priority', 'assignee', 'project', 'due', 'none'];
+// A view's state as the table, board and filter menus read it: they call .every, .includes, .map, .join and .toLowerCase on these, turn
+// column widths into numbers, and read .sort.f (an unknown sort falls back to manual order).
 const wellFormedView = v =>
   isObj(v) &&
   Array.isArray(v.filters) &&
-  v.filters.every(f => isObj(f) && typeof f.f === 'string' && (f.v === undefined || Array.isArray(f.v))) &&
+  v.filters.every(f => isObj(f) && VIEW_FIELDS.includes(f.f) && Array.isArray(f.v) && f.v.every(x => typeof x === 'string')) &&
   isObj(v.sort) &&
   typeof v.sort.f === 'string' &&
-  typeof v.group === 'string' &&
+  VIEW_GROUPS.includes(v.group) &&
   typeof v.q === 'string' &&
   Array.isArray(v.hidden) &&
-  isObj(v.colW);
+  isObj(v.colW) &&
+  Object.values(v.colW).every(x => typeof x === 'number');
 function cleanPrefs(obj) {
   const out = { ...obj };
   const fix = (k, ok, make = x => x) => {
@@ -405,7 +411,9 @@ export function applyUserPrefs(S, obj) {
     // may be anything simple. Own properties only: S.prefs.__proto__ is there too, and must not be assigned.
     for (const [k, v] of Object.entries(obj.prefs)) {
       const known = Object.prototype.hasOwnProperty.call(S.prefs, k);
-      if (known ? typeof v === typeof S.prefs[k] : ['string', 'number', 'boolean'].includes(typeof v)) S.prefs[k] = v;
+      // the week start also indexes the weekday names, so only a whole day from 0 to 6 will do
+      const ok = k !== 'weekStart' || (Number.isInteger(v) && v >= 0 && v <= 6);
+      if (known ? typeof v === typeof S.prefs[k] && ok : ['string', 'number', 'boolean'].includes(typeof v)) S.prefs[k] = v;
     }
   }
   if (obj.views) S.views = clone(obj.views);
