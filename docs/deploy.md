@@ -145,6 +145,8 @@ curl -s http://127.0.0.1:8090/api/health
 
 Stop it with Ctrl+C. The first start created every collection from `server/pb_migrations`, so the database is ready.
 
+Never run `npm run seed:dev` on this server. It fills an empty database with demo accounts that all share a published password. It refuses a database that already has users or projects, but a brand-new production database is empty.
+
 ## 4. Run as a service
 
 ### 4.1 Linux (systemd)
@@ -360,7 +362,7 @@ server {
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**IIS** (Application Request Routing and URL Rewrite) is common on Windows servers but was not tested. If you use it: turn response buffering off for the proxied site (ARR's _Response buffer threshold_ to 0) and raise the ARR proxy time-out above 5 minutes. Otherwise Caddy runs on Windows too, with the same Caddyfile (write file paths with forward slashes, for example `tls C:/certs/studio.crt C:/certs/studio.key`); run it as a second WinSW service with executable `caddy.exe` and arguments `run --config C:\caddy\Caddyfile` (_untested_).
+**IIS** (Application Request Routing and URL Rewrite) is common on Windows servers but was not tested. If you use it: turn response buffering off for the proxied site (ARR's _Response buffer threshold_ to 0) and raise the ARR proxy time-out above 5 minutes. IIS also refuses request bodies over about 30 MB by default (**Request Filtering > maxAllowedContentLength**); set it to at least 115343360 bytes (110 MB) for the app's 100 MB file limit. Otherwise Caddy runs on Windows too, with the same Caddyfile (write file paths with forward slashes, for example `tls C:/certs/studio.crt C:/certs/studio.key`); run it as a second WinSW service with executable `caddy.exe` and arguments `run --config C:\caddy\Caddyfile` (_untested_).
 
 **Check it from a staff PC** (add `-k` only while testing with a self-signed certificate):
 
@@ -406,6 +408,31 @@ Behind a proxy, every request arrives from `127.0.0.1`, so PocketBase's logs and
 
 Both configs above send exactly that header (nginx overwrites it with `$remote_addr`; Caddy replaces any client-supplied value). Checked: with the setting on, a request carrying a fake `X-Forwarded-For: 6.6.6.6` was still seen as the real client. This is only safe because PocketBase listens on `127.0.0.1`; if it were reachable directly, anyone could forge the header.
 
+### 5.4 Limit sign-in attempts
+
+PocketBase ships with rate limiting switched **off**, so nothing slows down someone guessing passwords (checked: 120 wrong passwords in 8 seconds were all answered). Turn it on for sign-in only, and do it after 5.3: without trusted proxy headers every request seems to come from the proxy, and everybody would share one limit.
+
+Dashboard > **Settings > Application > Rate limiting**: switch it on, delete every rule except `*:auth`, set that one to **10** requests per **60** seconds, and save. Do not keep the other default rules. `*:create` allows 20 new records per 5 seconds per address, and the app saves in bursts (duplicating a project creates all its tasks at once), so it would refuse ordinary work.
+
+The same from the server, as the superuser (get a token with `curl -s -X POST http://127.0.0.1:8090/api/collections/_superusers/auth-with-password -H 'Content-Type: application/json' -d '{"identity":"it-admin@example.com","password":"…"}'`):
+
+```bash
+curl -s -X PATCH http://127.0.0.1:8090/api/settings -H "Authorization: $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"rateLimits":{"enabled":true,"rules":[{"label":"*:auth","maxRequests":10,"duration":60}]}}'
+```
+
+Checked: with that rule the eleventh wrong password within a minute is answered `429 Too Many Requests`, while 40 records created in a burst all succeed.
+
+### 5.5 Keep the dashboard for IT
+
+The dashboard at `/_/`, and the superuser API behind it, is reachable wherever the app is. The superuser password protects it; to also limit it to IT's own machines, give PocketBase an allow-list of addresses or subnets (after 5.3, so it sees real addresses):
+
+```bash
+sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser ips 10.0.5.0/24 --dir=/opt/gr8r-studio/server/pb_data --dev=false
+```
+
+Every superuser request from anywhere else is then refused with `403`. Running the command with no addresses clears the list (section 11).
+
 ## 6. First admin
 
 You need two things: a PocketBase superuser for yourself, then the first app user with `role = admin`.
@@ -414,10 +441,10 @@ You need two things: a PocketBase superuser for yourself, then the first app use
 
 ```bash
 sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser upsert it-admin@example.com 'a-long-password' \
-  --dir=/opt/gr8r-studio/server/pb_data
+  --dir=/opt/gr8r-studio/server/pb_data --dev=false
 ```
 
-On Windows (_untested_) run `.\server\pocketbase.exe superuser upsert it-admin@example.com "a-long-password" --dir=C:\gr8r-studio\server\pb_data` from `C:\gr8r-studio`.
+On Windows (_untested_) run `.\server\pocketbase.exe superuser upsert it-admin@example.com "a-long-password" --dir=C:\gr8r-studio\server\pb_data --dev=false` from `C:\gr8r-studio`.
 
 Use `sudo -u gr8r` so the files PocketBase touches stay owned by the service account. The command creates the superuser, or changes the password if that email already exists, so it is also the cure for a forgotten superuser password. The password lands in your shell history; clear it or change the password in the dashboard afterwards.
 
@@ -432,7 +459,9 @@ Find it with `sudo journalctl -u gr8r-studio | grep pbinstall`. Replace `http://
 
 **Step 2: create the first app user.** Open `https://studio.example.com/_/` and sign in as the superuser. Open the `users` collection, press **New record**, and fill in the form as in section 7 with `role` set to `admin`. Only a superuser can do this the first time, because the rule for creating users is "admins only" and nobody is an admin yet. Then open `https://studio.example.com/` and sign in with that account.
 
-Users with `role = admin` see private projects and can create workspaces. Other users see a private project only if they are a member of it.
+**Step 3: create the first workspace.** Signed in to the app as that admin, open the workspace menu at the top of the sidebar, choose **Create workspace** and name it (for example "Sam Engineering"). Every project belongs to a workspace; until one exists, **New project** asks an admin to create one first.
+
+Users with `role = admin` see private projects and can create workspaces. Other users see a private project only if they are a member of it. To make a project private, open it, choose **Share**, and set **General access** to **Only people invited**: from then on only the people listed there (and admins) can see the project or anything in it, and the server enforces it. In this phase anyone who can see a project can change that setting and add or remove people; finer permissions arrive with Phase 2.
 
 **Is it working?**
 
@@ -454,7 +483,7 @@ Dashboard (`https://studio.example.com/_/`) > **Collections** > `users` > **New 
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `email`                       | their work email. Upper and lower case don't matter: sign-in and the duplicate check ignore case. If you will turn on Microsoft sign-in (section 12), use the same address as their Microsoft 365 email.                                                                          |
 | Public (next to the email)    | switched **On** automatically when the account is created (a hook does it, whatever the form says), so colleagues see the address on the Members page. This is the `emailVisibility` flag. To hide someone's address from everyone but admins, switch it off afterwards and save. |
-| `password`, `passwordConfirm` | an initial password of at least 8 characters. Give it to them through a channel you trust.                                                                                                                                                                                        |
+| `password`, `passwordConfirm` | an initial password of at least 8 characters. Give it to them through a channel you trust, and ask them to change it at first sign-in: **Settings > Password** in the app (at least 10 characters, with a number or symbol). Changing it there signs out their other devices.     |
 | `name`, `title`               | display name and job title                                                                                                                                                                                                                                                        |
 | `role`                        | `admin`, `manager` or `member`; left empty, it becomes `member`. The role is stored now and enforced from Phase 2. Only `admin` has an effect today: see private projects, create workspaces.                                                                                     |
 | `verified`                    | switch it **On** (the dashboard asks you to confirm). It does not affect password sign-in. It matters later: the first Microsoft sign-in of an unverified account throws away its password (section 12).                                                                          |
@@ -657,7 +686,7 @@ On Windows: `netstat -ano | findstr :8090` (_untested_). Alternatively move Pock
 
 **Locked out of the dashboard.**
 
-- _Forgot the superuser password:_ `sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser upsert it-admin@example.com 'new-password' --dir=/opt/gr8r-studio/server/pb_data` (works while the service runs).
+- _Forgot the superuser password:_ `sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser upsert it-admin@example.com 'new-password' --dir=/opt/gr8r-studio/server/pb_data --dev=false` (works while the service runs).
 - _Restricted the Superuser IPs setting and your address is not on the list:_ every superuser request is refused with `403`. Clear the list from the server: `sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser ips --dir=/opt/gr8r-studio/server/pb_data` (checked: it works while the service runs).
 - _No app admin is left:_ sign in to the dashboard as superuser and set `role` to `admin` on a `users` record.
 
