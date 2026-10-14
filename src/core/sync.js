@@ -631,15 +631,13 @@ async function resync() {
     if (gen === st.gen) st.reloading = false;
   }
 }
+/* Read as a list of at most one, filtered by id, for the reason adoptServerTruth() gives: a record that is gone answers getOne() with a
+   404 the browser logs (the activity entry of an edit given up on while the server was down is in the baseline until this reload). */
 async function confirmGone(key, coll, id, gen) {
-  try {
-    const rec = await pb.collection(coll).getOne(id);
-    if (gen === st.gen) applyRecord(key, rec);
-    return false;
-  } catch (err) {
-    if (err?.status === 404) return true;
-    throw err;
-  }
+  const { items } = await pb.collection(coll).getList(1, 1, { filter: pb.filter('id = {:id}', { id }), skipTotal: true });
+  if (!items[0]) return true;
+  if (gen === st.gen) applyRecord(key, items[0]);
+  return false;
 }
 
 /* ---------- live updates ---------- */
