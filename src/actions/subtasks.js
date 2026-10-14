@@ -77,5 +77,6 @@ A.promoteSub = el => {
       render();
       toast(`Converted to ${n.key}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
     },
+    () => t.subtasks.includes(s), // not converted already
   );
 };

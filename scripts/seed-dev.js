@@ -111,7 +111,7 @@ async function whyNotEmpty(origin, probe) {
   const used = counts.filter(([, total]) => total);
   if (!used.length) return '';
   const found = used.map(([coll, total]) => `${total} ${coll}`).join(', ');
-  return `the database already has ${found}. Seed a fresh one: stop the server, delete ${shownDir}, start it again.`;
+  return `the database already has ${found}. If it is a throwaway dev database, seed a fresh one: stop the server, delete ${shownDir}, start it again. Never do that to real data.`;
 }
 
 /* ---------- seed data ---------- */

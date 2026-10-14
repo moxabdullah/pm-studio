@@ -28,14 +28,15 @@ export function toast(msg, opt = {}) {
 }
 /* guarded mutation: refuses edits while the server cannot be reached. "Try again" reconnects, and applies the edit if that works.
    `done` is what the caller does once the edit is in (close the form, say what happened). It runs here, after the edit, so that
-   "Try again" completes the whole operation: replaying only the edit would leave a submitted form open to be submitted again. */
-export function mutate(fn, done) {
+   "Try again" completes the whole operation: replaying only the edit would leave a submitted form open to be submitted again.
+   `still`, when given, is checked after reconnecting: a toast can outlive its form, and the edit is re-applied only while it holds. */
+export function mutate(fn, done, still) {
   if (S.ui.offline) {
     toast("Your changes couldn't be saved. You're offline.", {
       kind: 'err',
       action: 'Try again',
       onAction: async () => {
-        if (await retryNow()) mutate(fn, done);
+        if ((await retryNow()) && (!still || still())) mutate(fn, done, still);
       },
     });
     return false;

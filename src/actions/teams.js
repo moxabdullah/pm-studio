@@ -7,7 +7,7 @@ import { D, S, allTeams, isAdmin, mem, team, teamsList } from '../core/store.js'
 import { mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
-import { A, IN, confirmDlg, needWorkspace, restore, snapshot } from './actions.js';
+import { A, IN, confirmDlg, isTop, needWorkspace, restore, snapshot } from './actions.js';
 
 A.newTeam = () => {
   if (needWorkspace(A.newTeam)) return;
@@ -92,8 +92,8 @@ A.submitTeam = () => {
         });
     },
     () => {
-      // in mutate's `done`, so "Try again" after an offline refusal also closes the form (and only that form, if it is still open)
-      if (S.ui.modals[S.ui.modals.length - 1] === m) S.ui.modals.pop();
+      // in mutate's `done`, so "Try again" after an offline refusal also closes the form (which the `still` below keeps from being saved twice)
+      S.ui.modals.pop();
       if (m.edit) {
         render();
         toast(`Saved ${t.name}`);
@@ -102,6 +102,7 @@ A.submitTeam = () => {
         toast(`Created ${t.name}`);
       }
     },
+    () => isTop(m),
   );
 };
 /* Deleting a team also clears it from each member's own account (their `team` field), which only an admin can write, so only an admin

@@ -148,8 +148,9 @@ export function confirmDlg(o) {
   S.ui.confirmText = '';
   openModal({ type: 'confirm', ...o });
 }
-/* Whether `m` is the modal on top. A form saved by "Try again" (see mutate) may have been closed in the meantime, and it must not close another. */
-const isTop = m => S.ui.modals[S.ui.modals.length - 1] === m;
+/* Whether `m` is the modal on top. The `still` of a form saved by mutate(): once the form has been closed (or saved again), a lingering
+   "Try again" must not save it a second time. */
+export const isTop = m => S.ui.modals[S.ui.modals.length - 1] === m;
 /* Undo. A snapshot is an opaque token: restoring puts the data back as it was and keeps whatever other people changed since, so Undo
    never reverts their work (see snapshotState/restoreState in core/sync.js). */
 export function snapshot() {
@@ -321,32 +322,36 @@ A.popPick = el => {
   }
   if (p.type === 'pstatus') {
     const pr = proj(p.id);
-    mutate(() => {
-      pr.status = v;
-      D().activity.unshift({
-        id: uid('a'),
-        by: D().me,
-        verb: 'changed status of project',
-        task: null,
-        project: pr.id,
-        at: Date.now(),
-        extra: 'to ' + PSTAT[v].name,
-      });
-    });
+    mutate(
+      () => {
+        pr.status = v;
+        D().activity.unshift({
+          id: uid('a'),
+          by: D().me,
+          verb: 'changed status of project',
+          task: null,
+          project: pr.id,
+          at: Date.now(),
+          extra: 'to ' + PSTAT[v].name,
+        });
+      },
+      () => toast(`${pr.name} marked ${PSTAT[v].name}`),
+    );
     S.ui.pop = null;
     render();
-    toast(`${pr.name} marked ${PSTAT[v].name}`);
     return;
   }
   if (p.type === 'role') {
     if (!isAdmin()) return;
     const m = mem(p.id);
-    mutate(() => {
-      m.role = v;
-    });
+    mutate(
+      () => {
+        m.role = v;
+      },
+      () => toast(`${m.name} is now ${v === 'Admin' ? 'an' : 'a'} ${v}`),
+    );
     S.ui.pop = null;
     render();
-    toast(`${m.name} is now ${v === 'Admin' ? 'an' : 'a'} ${v}`);
     return;
   }
   const field = { status: 'status', priority: 'priority', assignee: 'assignee', project: 'project', recur: 'recur', estimate: 'estimate', date: p.field }[
@@ -461,21 +466,25 @@ A.toggleDone = el => {
 };
 A.toggleFavTask = el => {
   const t = task(el.dataset.id);
-  mutate(() => {
-    t.fav = !t.fav;
-  });
+  mutate(
+    () => {
+      t.fav = !t.fav;
+    },
+    () => toast(t.fav ? 'Added to favorites' : 'Removed from favorites', { ms: 1800 }),
+  );
   S.ui.pop = null;
-  toast(t.fav ? 'Added to favorites' : 'Removed from favorites', { ms: 1800 });
   render();
 };
 A.toggleFavProj = el => {
   const p = proj(el.dataset.id);
-  mutate(() => {
-    p.fav = !p.fav;
-  });
+  mutate(
+    () => {
+      p.fav = !p.fav;
+    },
+    () => toast(p.fav ? `Added ${p.name} to favorites` : 'Removed from favorites', { ms: 1800 }),
+  );
   S.ui.pop = null;
   render();
-  toast(p.fav ? `Added ${p.name} to favorites` : 'Removed from favorites', { ms: 1800 });
 };
 A.copyText = el => copy(el.dataset.text, 'Copied to clipboard');
 A.copyEmail = el => {
@@ -487,23 +496,29 @@ A.dupTask = el => {
   const t = task(el.dataset.id);
   S.ui.pop = null;
   let n;
-  mutate(() => {
-    n = createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, title: t.title + ' (copy)', created: Date.now(), fav: false });
-    n.key = nextKey(proj(n.project));
-  });
-  toast('Task duplicated', { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+  mutate(
+    () => {
+      n = createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, title: t.title + ' (copy)', created: Date.now(), fav: false });
+      n.key = nextKey(proj(n.project));
+    },
+    () => toast('Task duplicated', { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) }),
+    () => !!task(t.id), // not for a task that has gone since
+  );
 };
 A.archiveTask = el => {
   const t = task(el.dataset.id);
-  const snap = snapshot();
+  let snap;
   S.ui.pop = null;
-  if (S.ui.drawer === t.id) S.ui.drawer = null;
-  mutate(() => {
-    t.archived = true;
-    t.archivedAt = Date.now();
-    logAct('archived', t);
-  });
-  toast(`Archived “${t.title}”`, { action: 'Undo', onAction: () => restore(snap) });
+  mutate(
+    () => {
+      snap = snapshot(); // taken here, not at the click: after "Try again" the one from the click is too old to undo to
+      if (S.ui.drawer === t.id) S.ui.drawer = null;
+      t.archived = true;
+      t.archivedAt = Date.now();
+      logAct('archived', t);
+    },
+    () => toast(`Archived “${t.title}”`, { action: 'Undo', onAction: () => restore(snap) }),
+  );
 };
 export function deleteTasks(ids) {
   const set = new Set(ids);
@@ -647,6 +662,7 @@ A.submitTask = () => {
     subtasks: f.subtasks,
   };
   // What follows the save goes in mutate's `done`, so "Try again" after an offline refusal closes the form too, instead of leaving it to be submitted twice.
+  // `still`: that retry is skipped once the form is gone (closed, or submitted again meanwhile).
   if (m.edit) {
     const t = task(m.edit);
     mutate(
@@ -662,11 +678,12 @@ A.submitTask = () => {
           t.desc = f.desc ? `<p>${esc(f.desc)}</p>` : '';
       },
       () => {
-        if (isTop(m)) S.ui.modals.pop();
+        S.ui.modals.pop();
         render();
         toast('Changes saved');
         handleFiles(picked, { project: t.project, task: t.id });
       },
+      () => isTop(m),
     );
     return;
   }
@@ -676,8 +693,7 @@ A.submitTask = () => {
       t = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '' });
     },
     () => {
-      const open = isTop(m);
-      if (open && f.more) {
+      if (f.more) {
         Object.assign(f, { title: '', desc: '', subtasks: [], files: [] });
         render();
         setTimeout(() => $('#f-title')?.focus(), 0);
@@ -685,12 +701,13 @@ A.submitTask = () => {
         handleFiles(picked, { project: t.project, task: t.id });
         return;
       }
-      if (open) S.ui.modals.pop();
+      S.ui.modals.pop();
       fxSet({ added: t.id });
       render();
       toast(`Created ${t.key} in ${proj(t.project).name}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
       handleFiles(picked, { project: t.project, task: t.id });
     },
+    () => isTop(m),
   );
 };
 
@@ -781,8 +798,8 @@ KEY.blur = el => el.blur();
 A.toggleSub = el => {
   const t = task(el.dataset.id);
   const s = t.subtasks.find(x => x.id === el.dataset.sid);
-  if (!s.done) fxSet({ done: s.id });
   mutate(() => {
+    if (!s.done) fxSet({ done: s.id });
     s.done = !s.done;
     logAct(s.done ? 'completed subtask on' : 'reopened subtask on', t, `“${s.title}”`);
   });
@@ -798,8 +815,8 @@ KEY.addSub = el => {
   const v = el.value.trim();
   if (!v) return;
   const nid = uid('s');
-  fxSet({ added: nid });
   mutate(() => {
+    fxSet({ added: nid });
     t.subtasks.push({ id: nid, title: v, done: false });
     logAct('added subtask to', t, `“${v}”`);
   });
@@ -1078,11 +1095,14 @@ A.postComment = el => {
 };
 A.delComment = el => {
   const c = D().comments.find(x => x.id === el.dataset.id);
-  const snap = snapshot();
-  mutate(() => {
-    D().comments = D().comments.filter(x => x !== c);
-  });
-  toast('Comment deleted', { action: 'Undo', onAction: () => restore(snap) });
+  let snap;
+  mutate(
+    () => {
+      snap = snapshot(); // taken here, not at the click: after "Try again" the one from the click is too old to undo to
+      D().comments = D().comments.filter(x => x !== c);
+    },
+    () => toast('Comment deleted', { action: 'Undo', onAction: () => restore(snap) }),
+  );
 };
 A.react = el => {
   const c = D().comments.find(x => x.id === el.dataset.id);
@@ -1512,10 +1532,11 @@ A.submitProject = () => {
           members: [...new Set([...p.members, f.lead])],
         }),
       () => {
-        if (isTop(m)) S.ui.modals.pop();
+        S.ui.modals.pop();
         render();
         toast('Project updated');
       },
+      () => isTop(m),
     );
     return;
   }
@@ -1526,10 +1547,11 @@ A.submitProject = () => {
       p = createProject(f, f.tmpl);
     },
     () => {
-      if (isTop(m)) S.ui.modals.pop();
+      S.ui.modals.pop();
       go('project', { id: p.id, tab: f.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
       toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
     },
+    () => isTop(m),
   );
 };
 A.dupProject = el => {
@@ -1537,11 +1559,14 @@ A.dupProject = el => {
   S.ui.pop = null;
   if (needWorkspace()) return;
   let n;
-  mutate(() => {
-    n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
-    tasksOf(p.id).forEach(t => createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, project: n.id, status: 'todo' }));
-  });
-  toast(`Duplicated ${p.name}`, { action: 'Open', onAction: () => go('project', { id: n.id }) });
+  mutate(
+    () => {
+      n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
+      tasksOf(p.id).forEach(t => createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, project: n.id, status: 'todo' }));
+    },
+    () => toast(`Duplicated ${p.name}`, { action: 'Open', onAction: () => go('project', { id: n.id }) }),
+    () => !!proj(p.id), // not for a project that has gone since
+  );
 };
 A.archiveProject = el => {
   const p = proj(el.dataset.id);
@@ -1567,11 +1592,13 @@ A.archiveProject = el => {
 };
 A.restoreProject = el => {
   const p = proj(el.dataset.id);
-  mutate(() => {
-    p.archived = false;
-    p.archivedAt = null;
-  });
-  toast(`Restored ${p.name}`);
+  mutate(
+    () => {
+      p.archived = false;
+      p.archivedAt = null;
+    },
+    () => toast(`Restored ${p.name}`),
+  );
 };
 A.delProject = el => {
   const p = proj(el.dataset.id);
@@ -1621,12 +1648,15 @@ IN.shareQ = el => {
 A.shareAdd = el => {
   const p = proj(el.dataset.id);
   const m = mem(el.dataset.mid);
-  mutate(() => {
-    p.members.push(m.id);
-  });
+  mutate(
+    () => {
+      p.members.push(m.id);
+    },
+    () => toast(`${m.name} can now edit ${p.name}`),
+    () => !p.members.includes(m.id), // a replay would list them twice
+  );
   S.ui.shareQ = '';
   render();
-  toast(`${m.name} can now edit ${p.name}`);
 };
 A.shareInvite = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
@@ -1638,13 +1668,18 @@ A.shareInvite = () => {
   }
   const ex = D().members.find(x => x.email.toLowerCase() === v.toLowerCase() || x.name.toLowerCase() === v.toLowerCase());
   if (ex) {
-    if (!p.members.includes(ex.id))
-      mutate(() => {
-        p.members.push(ex.id);
-      });
+    const shared = () => toast(`Shared with ${ex.name}`);
+    if (p.members.includes(ex.id)) shared();
+    else
+      mutate(
+        () => {
+          p.members.push(ex.id);
+        },
+        shared,
+        () => !p.members.includes(ex.id), // a replay would list them twice
+      );
     S.ui.shareQ = '';
     render();
-    toast(`Shared with ${ex.name}`);
     return;
   }
   if (!/^\S+@\S+\.\S+$/.test(v)) {
@@ -1658,11 +1693,14 @@ IN.sharePerm = el => {
   const p = proj(el.dataset.id);
   const mid = el.dataset.mid;
   if (!p || el.value !== '__remove') return;
-  const snap = snapshot();
-  mutate(() => {
-    p.members = p.members.filter(x => x !== mid);
-  });
-  toast(`Removed ${mem(mid)?.name || FORMER}`, { action: 'Undo', onAction: () => restore(snap) });
+  let snap;
+  mutate(
+    () => {
+      snap = snapshot(); // taken here, not at the click: after "Try again" the one from the click is too old to undo to
+      p.members = p.members.filter(x => x !== mid);
+    },
+    () => toast(`Removed ${mem(mid)?.name || FORMER}`, { action: 'Undo', onAction: () => restore(snap) }),
+  );
 };
 /* "Only people invited" sets `private`, the column the server's access rules read, so the server stops handing the project (and its
    tasks, comments, files and events) to anybody who is not on `members` (admins excepted). The person who flips it and the project's
@@ -1873,6 +1911,8 @@ export function createWorkspace(then, why = '') {
           A.switchWs({ dataset: { v: w.id } });
           then?.();
         },
+        // The prompt closes before this runs, so there is no modal to test: skip the retry if a workspace of that name has appeared since.
+        () => !D().workspaces.some(x => x.name.toLowerCase() === v.toLowerCase()),
       );
     },
   });

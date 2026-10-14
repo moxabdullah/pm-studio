@@ -157,12 +157,16 @@ document.addEventListener('drop', e => {
       order = prev ? (prev.order + nx.order) / 2 : nx.order - 1;
     } else order = colTs.length ? colTs[colTs.length - 1].order + 1 : t.order;
     const moved = t.status !== d.col;
-    fxSet({ moved: t.id });
-    mutate(() => {
-      t.order = order;
-      if (moved) applyPatch(t, { status: d.col });
-    });
-    if (moved) toast(`Moved “${t.title}” to ${ST[d.col].name}`, { ms: 2200 });
+    mutate(
+      () => {
+        fxSet({ moved: t.id });
+        t.order = order;
+        if (moved) applyPatch(t, { status: d.col });
+      },
+      () => {
+        if (moved) toast(`Moved “${t.title}” to ${ST[d.col].name}`, { ms: 2200 });
+      },
+    );
   } else if (d.type === 'row' && d.target) {
     const t = task(d.id),
       tg = task(d.target);
@@ -183,22 +187,26 @@ document.addEventListener('drop', e => {
       if (g === 'project' && proj(d.group)) patch.project = d.group;
     }
     let switched = false;
-    mutate(() => {
-      t.order = order;
-      applyPatch(t, patch);
-      if (v && v.sort.f !== 'manual') {
-        v.sort = { f: 'manual', dir: 1 };
-        switched = true;
-      }
-    });
-    if (switched) toast('Sorted manually to keep your order', { kind: 'info', ms: 2200 });
+    mutate(
+      () => {
+        t.order = order;
+        applyPatch(t, patch);
+        if (v && v.sort.f !== 'manual') {
+          v.sort = { f: 'manual', dir: 1 };
+          switched = true;
+        }
+      },
+      () => {
+        if (switched) toast('Sorted manually to keep your order', { kind: 'info', ms: 2200 });
+      },
+    );
   } else if (d.type === 'cal' && d.day) {
     const t = task(d.id);
     if (t.due === d.day) return;
     const len = t.start && t.due ? diffD(parse(t.due), parse(t.start)) : null;
     fxSet({ moved: t.id });
     updateTask(t.id, { due: d.day, ...(len != null ? { start: iso(addD(parse(d.day), -len)) } : {}) });
-    toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 });
+    if (!S.ui.offline) toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 });
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);
     o.splice(o.indexOf(d.before), 0, d.id);
