@@ -239,8 +239,7 @@ document.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();
     const c = rz.dataset.rsz,
-      key = rz.dataset.key,
-      v = viewOf(key);
+      key = rz.dataset.key;
     const col = $(`col[data-col="${c}"]`);
     const tbl = rz.closest('table');
     const w0 = col.getBoundingClientRect().width || parseFloat(col.style.width);
@@ -252,10 +251,16 @@ document.addEventListener('pointerdown', e => {
       col.style.width = w + 'px';
       tbl.style.width = tw0 + w - w0 + 'px';
     };
-    const up = ev => {
+    const end = () => {
       removeEventListener('pointermove', mv);
       removeEventListener('pointerup', up);
-      v.colW[c] = Math.max(64, Math.round(w0 + ev.clientX - x0));
+      removeEventListener('pointercancel', cancel);
+    };
+    // The view is looked up when the drag ends, not when it starts: a press the browser takes over (a touch pan) stores nothing, and
+    // a settings record that arrives during the drag (it replaces S.views) does not take the new width with the object it replaced.
+    const up = ev => {
+      end();
+      viewOf(key).colW[c] = Math.max(64, Math.round(w0 + ev.clientX - x0));
       save();
       S.ui.justResized = true;
       setTimeout(() => {
@@ -263,8 +268,13 @@ document.addEventListener('pointerdown', e => {
       }, 60);
       render();
     };
+    const cancel = () => {
+      end();
+      render(); // puts the column back as it was
+    };
     addEventListener('pointermove', mv);
     addEventListener('pointerup', up);
+    addEventListener('pointercancel', cancel);
     return;
   }
   const b = e.target.closest?.('[data-bar]');
