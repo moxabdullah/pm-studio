@@ -17,7 +17,7 @@
                     any unsaved change (when online). Sign-out calls this; it does not touch the auth store or S.data.
      flush()        Sends what differs between S.data and the server's copy. store.js save() calls it 150 ms after the last change.
                     Runs one at a time; a call during a run makes it go round once more. Resolves true when nothing was left behind.
-     retryNow()     Tries to leave the offline state right now (flush, reload, resubscribe). Resolves true when back online. Wired to
+     retryNow()     Tries to leave the offline state right now (new stream, reload, flush). Resolves true when back online. Wired to
                     the "Try again" button and the offline toast.
      resubscribe() / quietResync()
                     For when the account's token was replaced (the password was changed, actions.js savePassword): PocketBase then
@@ -58,9 +58,10 @@
                (3-way against base): fields with an unsent local edit keep the local value, the rest take the remote one. The
                object is patched in place.
      offline   Entered when a request cannot reach the server (or a proxy answers 502-504), or the live stream stays down and the
-               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery: reload by merging (not
-               replacing, so nothing typed meanwhile is lost), then send what is unsent (built on the fresh copy, so it does not
-               overwrite other people's changes to the same record), then start a new stream.
+               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery, in this order: a new stream,
+               registered on the server before anything is read (so no change can fall between the reload and the stream); then
+               reload by merging (not replacing, so nothing typed meanwhile is lost); then send what is unsent (built on the fresh
+               copy, so it does not overwrite other people's changes to the same record). See recover().
      journal   The last minute of remote changes that were applied to S.data, for restoreState(). */
 import { authStore, pb } from './pb.js';
 import {
@@ -515,9 +516,16 @@ async function confirmGone(key, coll, id) {
 }
 
 /* ---------- live updates ---------- */
+/* Replaces whatever stream there is with a new one, and resolves once the server has registered its subscriptions: from then on every
+   change committed on the server is sent down it. (What was committed before is for the caller to fetch afterwards: see recover().) */
 async function subscribeAll() {
   pb.realtime.onDisconnect = onDisconnect;
-  await pb.realtime.unsubscribe(); // drop what an earlier attempt left behind
+  await pb.realtime.unsubscribe(); // drop what an earlier attempt left behind (this also closes an open stream)
+  // While the SDK is retrying a lost connection by itself (it keeps trying for as long as the server is down, every 0.2 to 2 s),
+  // subscribe() does not connect: it records the subscriptions and returns at once, and the SDK's next retry sends them. A caller
+  // that has just seen the server answer must not mistake that for a live stream, so the retrying is ended here and the subscribes
+  // below connect right away.
+  pb.realtime.disconnect();
   const colls = [...COLLECTIONS.map(c => c.coll), USER_PREFS];
   await Promise.all(colls.map(coll => pb.collection(coll).subscribe('*', e => onEvent(coll, e))));
   await pb.realtime.subscribe('PB_CONNECT', onConnect); // fires on every (re)connect
@@ -860,17 +868,28 @@ function reloadFailure(err) {
   }
   return kind === 'network' || kind === 'abort' ? 'offline' : 'other';
 }
-/* Leaves the offline state: the server answers, unsent changes are sent, everything is reloaded and merged, live updates are back. */
+/* Leaves the offline state: the server answers, live updates are back, everything is reloaded and merged, unsent changes are sent.
+   The order matters twice.
+   - Stream first, reload second. A change reaches this browser by one of two doors: the stream (if the server had the stream's
+     subscriptions registered when the change was committed) or the reload (if the change was committed before the reload read the
+     records). Opening the stream last left a gap between them: a change committed after the reload read and before the new stream was
+     registered came through neither, and the page stayed stale until the next reload. Registering first leaves no gap: whatever was
+     committed before it is in the reload, which reads afterwards, and whatever is committed after it is on the stream. A change that
+     comes through both is applied once (applyRecord drops an event that is older than the baseline or identical to it). The safety
+     net and the password change already work in this order. The stream is replaced rather than trusted, because after an outage the
+     old one may be dead without the browser knowing.
+     (A second reload once the stream is up would close the gap too, but it makes every recovery do the work of a full reload twice,
+     in every browser at once when the server comes back. Reordering costs nothing.)
+   - Merge before send. The reload keeps unsent edits (it merges, it does not replace), so what goes out is worked out against the
+     server's current copy: only what we really changed, and nothing the server already holds. */
 function recover() {
   return exclusive(async () => {
     const gen = st.gen;
     try {
       await ping();
-      // Merge first, then send. The reload keeps unsent edits (it merges, it does not replace), so what goes out is worked out
-      // against the server's current copy: only what we really changed, and nothing the server already holds.
+      await resubscribe();
       await resync();
       if (!(await flush({ recovering: true }))) return false;
-      await resubscribe(); // after an outage the old stream may be dead without the browser knowing
     } catch (err) {
       if (reloadFailure(err) !== 'other') return false;
       // The server answers but refuses the reload. Staying offline would never end, so carry on with what is loaded.
