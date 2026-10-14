@@ -1130,8 +1130,8 @@ async function adoptServerTruth(op, gen) {
    - a delete is not put back: a project put back goes last, and projectOrders() would send an `order` for every project after it.
    - a create is not removed: what was made with it and is not sent yet would be left without it (the palette and the search read
      `proj(t.project).name` unguarded).
-   - the settings are not put back: a settings record with fewer keys than the page builds (the dev seed's `prefs: {}`) never matches
-     the page's copy, so putting it back would not empty the diff. */
+   - the settings are not put back: the server's copy can hold what the page cannot rebuild (the favourite of a project or task it has
+     not loaded, a workspace id it does not load: applyUserPrefs() ignores one), so putting it back would not empty the diff. */
 function putBack(op) {
   const { type, key, id } = op;
   const known = base.get(key);

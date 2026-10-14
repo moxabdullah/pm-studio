@@ -2,20 +2,8 @@
 import { TODAY, diffD, iso, parse, uid } from './utils.js';
 import { PCOLORS } from './constants.js';
 import { flush } from './sync.js';
+import { DEFAULT_PREFS } from './sync-map.js';
 
-export const DEFAULT_PREFS = {
-  theme: 'system',
-  accent: 'indigo',
-  side: 'comfortable',
-  density: 'comfortable',
-  weekStart: 1,
-  dateFmt: 'MMM d',
-  lang: 'English (US)',
-  tz: '(GMT-07:00) Pacific Time',
-  motion: 'system',
-  home: 'home',
-  openTasks: 'drawer',
-};
 /* What a user's notification settings start as (the same defaults seed() uses). */
 export const DEFAULT_NOTIF_PREFS = {
   email_mention: true,
