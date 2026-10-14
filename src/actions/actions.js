@@ -1412,8 +1412,10 @@ A.saveView = el => {
   openModal({ type: 'saveView', pid: el.dataset.id, nf: viewOf(k).filters.length });
 };
 /* A change that calls save() itself, not mutate(), is kept while offline and sent once the connection is back (merged with the
-   server's copy first). Its toast then says that, not "saved". `offline` says what was done, without a full stop. */
-const savedToast = (online, offline, opt) => (S.ui.offline ? toast(`${offline}. The change will be saved when your connection is back.`) : toast(online, opt));
+   server's copy first). Its toast then says that, not "saved". `offline` says what was done, without a full stop. The offline toast
+   stays on screen for the default time even when `opt.ms` asks for less: `ms` was chosen for the short "saved", not for this sentence. */
+const savedToast = (online, offline, opt) =>
+  S.ui.offline ? toast(`${offline}. The change will be saved when your connection is back.`, { ...opt, ms: undefined }) : toast(online, opt);
 A.saveViewSubmit = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const name = $('#sv-name').value.trim() || 'Untitled view';
