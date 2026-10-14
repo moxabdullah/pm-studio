@@ -458,6 +458,8 @@ function refreshWs() {
   const arrived = want && d.workspaces.find(x => x.id === want);
   if (arrived) st.wsWanted = null;
   const w = arrived || d.workspaces.find(x => x.id === d.ws.id) || d.workspaces[0];
+  // (the current one was deleted: the fallback is not the user's choice, so the wanted one stays wanted from there)
+  if (want && !arrived && w && w.id !== d.ws.id) st.wsWanted.had = w.id;
   const next = w && wsFromWorkspace(w);
   if (next && !same(d.ws, next)) d.ws = next;
 }
