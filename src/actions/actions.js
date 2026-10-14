@@ -1411,6 +1411,9 @@ A.saveView = el => {
   const k = 'p:' + el.dataset.id;
   openModal({ type: 'saveView', pid: el.dataset.id, nf: viewOf(k).filters.length });
 };
+/* A change that calls save() itself, not mutate(), is kept while offline and sent once the connection is back (merged with the
+   server's copy first). Its toast then says that, not "saved". `offline` says what was done, without a full stop. */
+const savedToast = (online, offline, opt) => (S.ui.offline ? toast(`${offline}. The change will be saved when your connection is back.`) : toast(online, opt));
 A.saveViewSubmit = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const name = $('#sv-name').value.trim() || 'Untitled view';
@@ -1420,7 +1423,7 @@ A.saveViewSubmit = () => {
   save();
   S.ui.modals.pop();
   go('project', { id: m.pid, tab: 'v:' + sv.id }, { tab: true });
-  toast(`Saved view “${name}”`);
+  savedToast(`Saved view “${name}”`, `Added view “${name}”`);
 };
 A.renameView = el => {
   const v = D().savedViews.find(x => x.id === el.dataset.id);
@@ -1445,7 +1448,7 @@ A.delView = el => {
   save();
   if (S.ui.params.tab === 'v:' + v.id) go('project', { id: v.project, tab: 'list' }, { tab: true });
   else render();
-  toast(`Deleted view “${v.name}”`);
+  savedToast(`Deleted view “${v.name}”`, `Deleted view “${v.name}”`);
 };
 
 /* board column menu */
@@ -2235,14 +2238,14 @@ IN.prefToggle = el => {
 IN.npToggle = el => {
   D().notifPrefs[el.dataset.k] = el.checked;
   save();
-  toast('Notification preferences saved', { ms: 1500 });
+  savedToast('Notification preferences saved', 'Notification preferences updated', { ms: 1500 });
 };
 IN.prefSel = el => {
   const k = el.dataset.k;
   S.prefs[k] = k === 'weekStart' ? +el.value : el.value;
   save();
   render();
-  toast('Preference saved', { ms: 1500 });
+  savedToast('Preference saved', 'Preference updated', { ms: 1500 });
 };
 A.wsColor = el => {
   if (!isAdmin()) return;

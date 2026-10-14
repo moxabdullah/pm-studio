@@ -71,6 +71,7 @@ Each collection gets a few real columns that PocketBase needs for filtering and 
 - **Workspaces:** projects get a workspace field. Switching workspace changes which projects the sidebar and pages show. Creating a workspace is admin-only.
 - **Files:** upload real files to the `files` collection and download them through PocketBase file URLs. Keep the existing list and grid UI.
 - **Offline:** if PocketBase is unreachable or a save fails, set `S.ui.offline` and show the existing "couldn't be saved" toast with retry. When the connection returns, reload the data.
+  - Form edits (through `mutate()`) are refused while offline with that toast. Inline editing (a description, a subtask's note), view state, preferences, saved views, the project order, read state and Undo keep working: the change stays in the page and is sent once the connection is back, merged with the server's copy first. Closing the tab with unsent changes asks first. Their toasts never say "saved" while offline.
 - **Dev seed:** `npm run seed:dev -- --dev-database` creates demo users and pushes the current `seed()` data so we can test with realistic content. It must never run against production.
 
 ## Server layout
