@@ -86,7 +86,7 @@ import { toast } from './ui/toast.js';
   }
   const h = (location.hash || '').slice(1);
   const route = () => {
-    S.ui.route = h && ROUTE_NAMES[h] ? h : S.prefs.home || 'home';
+    S.ui.route = h && ROUTE_NAMES[h] ? h : ROUTE_NAMES[S.prefs.home] ? S.prefs.home : 'home';
   };
   S.ui.loading = true;
   route();

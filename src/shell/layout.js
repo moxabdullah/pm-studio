@@ -2,6 +2,7 @@
 import { MOD, TODAY, diffD, esc, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
+import { lookup } from '../core/safe.js';
 import { D, S, allTasks, inWs, me, mem, pColor, proj, team, teamsList, visibleProjects, wsArchivedTasks } from '../core/store.js';
 import { av, safely } from '../ui/helpers.js';
 import { ROUTE_NAMES } from './render.js';
@@ -41,7 +42,8 @@ export function renderShell() {
 export function renderPage() {
   const r = S.ui.route;
   try {
-    const P = {
+    // only the table's own names resolve, so a route named "constructor" is not-found rather than an inherited function
+    const P = lookup({
       home: pageHome,
       inbox: pageInbox,
       mytasks: pageMyTasks,
@@ -63,7 +65,7 @@ export function renderPage() {
       system: pageSystem,
       states: pageStates,
       archive: pageArchive,
-    };
+    });
     return (P[r] || page404)();
   } catch (e) {
     console.error(e);

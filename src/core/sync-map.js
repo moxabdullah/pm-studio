@@ -372,14 +372,28 @@ export const DEFAULT_PREFS = {
   permPublic: false,
   confirmDel: true,
 };
+// The settings that pick a page, a project tab or a clock: the options of the selects "Open on launch", "Default project view" and
+// "Time format" in pages/settings.js. A select cannot show a value it does not offer, nor let the user pick the default again, and most
+// other strings are a page the router does not know or a tab the project page does not have, which render not-found. Keep these in step
+// with those selects: a value the select writes that is not listed here is turned back into the default on every echo. Each setting's
+// default is in its list.
+const PREF_OPTIONS = {
+  home: ['home', 'mytasks', 'inbox'],
+  defaultTab: ['board', 'list', 'table', 'overview', 'timeline'],
+  timeFmt: ['12', '24'],
+};
 /* Is `v` a value the setting `k` may hold? A setting keeps the type of its default (a week start that is not a number would break the
-   calendar); a key without a default may be anything simple, except "__proto__": S.prefs cannot hold it as a key, so a record that
-   kept it would never match the page's copy. */
+   calendar), and the three above one of their options; a key without a default may be anything simple, except a name Object.prototype
+   has ("__proto__", "constructor", "toString"): S.prefs is a plain object, so keeping it would shadow a method of S.prefs, or for
+   "__proto__" never match the page's copy, which cannot hold it as a key. Other unknown keys are kept, so that a page that does not know
+   a newer setting still sends it back when it sends the whole object. */
 function prefOk(k, v) {
-  if (k === '__proto__') return false;
+  if (k in Object.prototype) return false;
   if (!Object.prototype.hasOwnProperty.call(DEFAULT_PREFS, k)) return ['string', 'number', 'boolean'].includes(typeof v);
+  if (typeof v !== typeof DEFAULT_PREFS[k]) return false;
   // the week start also indexes the weekday names, so only a whole day from 0 to 6 will do
-  return typeof v === typeof DEFAULT_PREFS[k] && (k !== 'weekStart' || (Number.isInteger(v) && v >= 0 && v <= 6));
+  if (k === 'weekStart') return Number.isInteger(v) && v >= 0 && v <= 6;
+  return !PREF_OPTIONS[k] || PREF_OPTIONS[k].includes(v);
 }
 
 /* A user_prefs object as read from the server, with every part of the wrong type dropped, so applyUserPrefs() leaves what the store
@@ -409,6 +423,9 @@ const wellFormedView = v =>
   Object.values(v.colW).every(x => Number.isFinite(x) && x >= 0);
 function cleanPrefs(obj) {
   const out = { ...obj };
+  // A top-level key Object.prototype has ("toString", "constructor") is never one the page writes, and the diff would read the
+  // inherited method where the page has none, so the record would look changed on every save and its op never clear.
+  for (const k of Object.keys(out)) if (k in Object.prototype) delete out[k];
   const fix = (k, ok, make = x => x) => {
     if (out[k] === undefined) return;
     if (ok(out[k])) out[k] = make(out[k]);
@@ -449,7 +466,8 @@ export function buildUserPrefs(S, recordId) {
 export function applyUserPrefs(S, obj) {
   const d = S.data;
   if (isObj(obj.prefs)) {
-    // only what prefOk() accepts, which never includes "__proto__", so nothing is assigned through S.prefs.__proto__
+    // only what prefOk() accepts, which never includes a name Object.prototype has, so nothing is assigned through S.prefs.__proto__
+    // and no method of S.prefs ("toString") is shadowed
     for (const [k, v] of Object.entries(obj.prefs)) if (prefOk(k, v)) S.prefs[k] = v;
   }
   if (obj.views) S.views = clone(obj.views);
