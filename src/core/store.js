@@ -144,8 +144,9 @@ export const allTasks = () =>
     return !t.archived && inWs(p) && canSee(p);
   });
 /* Events and files hang off projects, so they follow the project's workspace. So does activity that names a project. Activity that
-   names none (the server allows it, the app never writes it) shows in the workspace it names itself; one that names neither (a record
-   from before activity had a workspace) cannot be placed and is left out everywhere. */
+   names a task but no project (the server allows it, the app never writes it) shows in the workspace it names itself, which the server
+   requires to be the one of the task's project. One that names neither, or that names no workspace (a row from before activity had
+   one, which the migration could not fill in), cannot be placed and is left out everywhere. */
 export const wsEvents = () => D().events.filter(e => inWs(proj(e.project)));
 export const wsFiles = () => D().files.filter(f => inWs(proj(f.project)));
 export const wsActivity = () => D().activity.filter(a => (a.project ? inWs(proj(a.project)) : !!a.workspace && inWs(a)));
@@ -165,9 +166,11 @@ export function taskProg(t) {
 }
 
 /* ---------- activity + notification helpers ---------- */
-/* One new entry at the top of the feed, in the workspace of its project (else the current one). Every entry the app writes goes through here. */
+/* One new entry at the top of the feed. Every entry the app writes goes through here. Its workspace is the one of its project, else of
+   its task's project, else none (null, the way a record with an empty relation loads): the server refuses an entry whose workspace is
+   not the one it hangs off, and one that hangs off nothing may not name a workspace (pb_migrations/1791849604_activity_workspace.js). */
 export function pushAct(verb, taskId, projectId, extra = '') {
-  const workspace = proj(projectId)?.workspace || D().ws?.id || null;
+  const workspace = (projectId ? proj(projectId) : proj(task(taskId)?.project))?.workspace || null;
   D().activity.unshift({ id: uid('a'), by: D().me, verb, task: taskId || null, project: projectId || null, workspace, at: Date.now(), extra });
 }
 export function logAct(verb, t, extra = '') {

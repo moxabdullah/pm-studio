@@ -413,7 +413,7 @@ export function seed() {
     verb,
     task,
     project,
-    workspace: projects.find(p => p.id === project)?.workspace || 'w1',
+    workspace: projects.find(p => p.id === project)?.workspace || null,
     at: minsAgo(m),
     extra,
   });
