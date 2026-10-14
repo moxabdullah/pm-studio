@@ -217,12 +217,14 @@
   text-align: left;
 }
 /* The ring goes on the card: on the button it would be painted under the preview, which has its own background. */
-.fcard-open:focus-visible {
-  outline: none;
-}
-.fcard:has(.fcard-open:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px; /* .fcard clips what is drawn outside it */
+@supports selector(:has(*)) {
+  .fcard-open:focus-visible {
+    outline: none;
+  }
+  .fcard:has(.fcard-open:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
 }
 .fprev {
   aspect-ratio: 16/10;
