@@ -407,7 +407,16 @@ export function seed() {
     { id: 'c8', task: 't34', by: 'm2', at: minsAgo(1500), text: 'Finance needs the channel split before approving.', re: {} },
     { id: 'c9', task: 't35', by: 'm7', at: minsAgo(200), text: 'Support training moved to Monday. @Tanjim Islam please confirm the status page copy.', re: {} },
   ];
-  const A = (by, verb, task, project, m, extra = '') => ({ id: uid('a'), by, verb, task, project, at: minsAgo(m), extra });
+  const A = (by, verb, task, project, m, extra = '') => ({
+    id: uid('a'),
+    by,
+    verb,
+    task,
+    project,
+    workspace: projects.find(p => p.id === project)?.workspace || 'w1',
+    at: minsAgo(m),
+    extra,
+  });
   const activity = [
     A('m2', 'moved', 't3', 'p1', 38, 'to Review'),
     A('m3', 'completed', 't18', 'p1', 90),

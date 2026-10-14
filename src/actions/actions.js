@@ -15,6 +15,7 @@ import {
   me,
   mem,
   proj,
+  pushAct,
   resetStore,
   save,
   task,
@@ -349,15 +350,7 @@ A.popPick = el => {
       () => {
         pr = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
         pr.status = v;
-        D().activity.unshift({
-          id: uid('a'),
-          by: D().me,
-          verb: 'changed status of project',
-          task: null,
-          project: pr.id,
-          at: Date.now(),
-          extra: 'to ' + PSTAT[v].name,
-        });
+        pushAct('changed status of project', null, pr.id, 'to ' + PSTAT[v].name);
       },
       () => toast(`${pr.name} marked ${PSTAT[v].name}`),
       () => fresh() && !!proj(id),
@@ -1637,7 +1630,7 @@ export function createProject(f, tmplId) {
   };
   D().projects.push(p);
   D().projOrder.unshift(p.id);
-  D().activity.unshift({ id: uid('a'), by: D().me, verb: 'created project', task: null, project: p.id, at: Date.now(), extra: '' });
+  pushAct('created project', null, p.id);
   const tm = TEMPLATES.find(t => t.id === tmplId);
   (tm?.tasks || []).forEach((title, i) =>
     createTask({
