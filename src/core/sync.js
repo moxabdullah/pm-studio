@@ -538,9 +538,10 @@ async function loadAll() {
       .then(r => r.items);
   const jobs = COLLECTIONS.map(({ key, coll }) => [key, CAPS[key] ? newest(coll, CAPS[key]) : full(coll)]);
   jobs.push([USER_PREFS, full(USER_PREFS)]);
+  let open = true; // a read that lands after the failure was thrown counts for nobody: the next try would take it as its own
   const reads = jobs.map(j =>
     j[1].then(r => {
-      answered++;
+      if (open) answered++;
       return r;
     }),
   );
@@ -549,6 +550,7 @@ async function loadAll() {
     return Object.fromEntries(jobs.map((j, i) => [j[0], done[i]]));
   } catch (err) {
     await within(Promise.allSettled(reads), SETTLE_MS);
+    open = false;
     throw err;
   }
 }
