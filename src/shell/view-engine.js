@@ -4,6 +4,7 @@ import { ic } from '../core/icons.js';
 import { LABELS, PR, PRIOS, STATUSES } from '../core/constants.js';
 import { D, S, canSee, isOver, mem, pColor, proj, visibleProjects } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
+import { defaultView } from '../core/sync-map.js';
 
 // Its keys, and the groupings groupTasks() handles, are listed again in core/sync-map.js (VIEW_FIELDS, VIEW_GROUPS), which drops a synced
 // view that names any other. Add a field or grouping in both places.
@@ -63,17 +64,10 @@ export function cleanFilters(list) {
     .filter(f => f && typeof f.f === 'string' && Object.prototype.hasOwnProperty.call(FIELDS, f.f))
     .map(f => ({ f: f.f, op: f.op === 'not' ? 'not' : 'is', v: Array.isArray(f.v) ? f.v.map(String) : [] }));
 }
+/* The state of one view (a page, or a project's tab). Made on the first read and changed in place by its callers, which save() when they
+   mean it to stay: a view still equal to defaultView() is not stored (see cleanPrefs() in core/sync-map.js), so only reading it is no change. */
 export function viewOf(key) {
-  if (!S.views[key])
-    S.views[key] = {
-      filters: [],
-      sort: { f: 'manual', dir: 1 },
-      group: key === 'tasks' || key === 'mytasks' ? 'status' : 'status',
-      q: '',
-      hidden: ['start', 'created', 'deps'],
-      colW: {},
-      showDone: true,
-    };
+  if (!S.views[key]) S.views[key] = defaultView();
   return S.views[key];
 }
 export function matchF(t, f) {

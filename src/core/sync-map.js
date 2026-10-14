@@ -63,7 +63,9 @@
    DEFAULT_PREFS                what each setting is until the user changes it (the page's S.prefs starts as a copy, store.js)
    buildUserPrefs(S, id)        -> that object from the live store: S.prefs, S.views, S.ui.collapsed, S.data.notifPrefs,
                                    S.data.recentSearches, S.data.ws.id and the favourites (fav flags, ids sorted). `id` is the record
-                                   id (omit it before the record exists).
+                                   id (omit it before the record exists). A view equal to defaultView() is left out (it is not a change).
+   defaultView()                a fresh view state as the view engine starts one (viewOf() in shell/view-engine.js); what a view with
+                                   no entry in S.views reads as, so cleanPrefs() and buildUserPrefs() both leave a view equal to it out.
    applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs, a value only when prefOk() accepts
                                    it; a workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
                                    task. Parts missing from `obj` are left alone.
@@ -385,14 +387,29 @@ function prefOk(k, v) {
    already holds for it (the defaults, at sign-in). Lists and maps keep their well-formed entries. The settings are the exception: they
    come out whole, DEFAULT_PREFS with the record's well-formed entries over it, so a key the record lacks (an older record, the dev seed's
    `prefs: {}`) reads as its default. The baseline of a loaded record is then the settings the page builds for itself, and a thin record
-   does not look like an unsent change. What the app writes comes out unchanged (buildUserPrefs()'s shapes, the views viewOf() makes),
-   so cleaning never makes a record differ from its baseline. */
+   does not look like an unsent change. What the app writes comes out unchanged (buildUserPrefs()'s shapes), so cleaning never makes a
+   record differ from its baseline. A view equal to the default (defaultView()) is the one thing it drops that is well formed: viewOf()
+   makes one on every first read, so it is not a change, and buildUserPrefs() leaves the same views out. The two must strip identically,
+   or an old record that holds an explicit default view would look like an unsent change. */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const texts = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 // The filter fields and groupings the view engine knows: the keys of FIELDS and the cases of groupTasks() in shell/view-engine.js.
 // Any other name makes the filter chips or the grouping throw. Keep these in step with that file.
 const VIEW_FIELDS = ['status', 'assignee', 'priority', 'due', 'project', 'labels', 'created', 'updated'];
 const VIEW_GROUPS = ['status', 'priority', 'assignee', 'project', 'due', 'none'];
+// A view nobody has changed: what viewOf() (shell/view-engine.js) makes on the first read of a view, so a page that was only opened
+// leaves nothing to send. A fresh object each time, since the callers change it in place.
+export const defaultView = () => ({
+  filters: [],
+  sort: { f: 'manual', dir: 1 },
+  group: 'status',
+  q: '',
+  hidden: ['start', 'created', 'deps'],
+  colW: {},
+  showDone: true,
+});
+// Not a change, and not stored: the record and the store both leave it out (cleanPrefs(), buildUserPrefs()).
+const isDefaultView = v => samePayload(v, defaultView());
 // A view's state as the table, board and filter menus read it: they call .every, .includes, .map, .join and .toLowerCase on these, turn
 // column widths into numbers, and read .sort.f (an unknown sort falls back to manual order).
 const wellFormedView = v =>
@@ -417,7 +434,7 @@ function cleanPrefs(obj) {
   const only = (map, ok) => Object.fromEntries(Object.entries(map).filter(([, x]) => ok(x)));
   // (not fix(): the settings are there even when the record has none, and spread, like fromEntries, keeps "__proto__" a plain key)
   out.prefs = { ...DEFAULT_PREFS, ...Object.fromEntries(Object.entries(isObj(out.prefs) ? out.prefs : {}).filter(([k, x]) => prefOk(k, x))) };
-  fix('views', isObj, m => only(m, wellFormedView));
+  fix('views', isObj, m => only(m, x => wellFormedView(x) && !isDefaultView(x)));
   fix('collapsed', x => typeof x === 'boolean');
   fix('notifPrefs', isObj, m => only(m, x => typeof x === 'boolean'));
   fix('recentSearches', Array.isArray, texts);
@@ -436,7 +453,7 @@ export function buildUserPrefs(S, recordId) {
   const out = recordId ? { id: recordId } : {};
   return Object.assign(out, {
     prefs: clone(S.prefs || {}),
-    views: clone(S.views || {}),
+    views: clone(Object.fromEntries(Object.entries(S.views || {}).filter(([, v]) => !isDefaultView(v)))),
     collapsed: !!S.ui?.collapsed,
     notifPrefs: clone(d.notifPrefs || {}),
     recentSearches: clone(d.recentSearches || []),
