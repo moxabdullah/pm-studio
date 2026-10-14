@@ -53,20 +53,22 @@
                the server applies to its own copy, so nobody's change to one key undoes somebody else's change to another
                (server/pb_hooks/doc_patch.pb.js). A server that does not confirm them (no X-Doc-Patch header on the answer: the hook is not
                loaded) is remembered for the session, and `doc` goes whole from then on. A 404 on delete counts as done. The server's answer
-               to each create and update is applied like a live update. Network failure -> offline. 401 -> sign-in page. Any other
-               4xx -> one toast, and the server's version of the record replaces the local one (so a rejected change is never sent
-               again). An update that the server stores differently from what was sent (it rewrites the value) is not sent again once that
+               to each create and update is applied like a live update. Network failure -> offline. A server error (another 5xx)
+               -> offline too: the change stays unsent and goes out when the server takes it. 401 -> sign-in page. Any other 4xx -> one
+               toast, and the server's version of the record replaces the local one (so a rejected change is never sent again). An update that the server stores differently from what was sent (it rewrites the value) is not sent again once that
                is clear: one console.error names the record and fields, and the server's version is taken, without a toast
                (see stuck()).
      live      One subscription per collection. An event is dropped when it is older than base (by `updated`: a late echo of an
                earlier write) or equal to it (our own echo). Otherwise it is merged per top-level field and per top-level `doc` key
                (3-way against base): fields with an unsent local edit keep the local value, the rest take the remote one. The
                object is patched in place.
-     offline   Entered when a request cannot reach the server (or a proxy answers 502-504), or the live stream stays down and the
-               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery, in this order: a new stream,
+     offline   Entered when a request cannot reach the server (or a proxy answers 502-504) or fails with a server error of its own,
+               or the live stream stays down and the server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery, in this order: a new stream,
                registered on the server before anything is read (so no change can fall between the reload and the stream); then
                reload by merging (not replacing, so nothing typed meanwhile is lost); then send what is unsent (built on the fresh
-               copy, so it does not overwrite other people's changes to the same record). See recover().
+               copy, so it does not overwrite other people's changes to the same record). See recover(). A stream that cannot be
+               registered (a proxy that buffers it) does not hold recovery or the first load back for ever: they go on without it, say so,
+               and the safety net replaces the stream and reloads. So does the first load, once the stream has come up late.
      access    PocketBase sends a client no event when it stops being able to see a record (it was taken off a private project's members,
                the project was made private ...): the open page would show the project for ever. So every round of the safety net
                (20 s) asks which projects the server still shows this user, and lets go of the others with their tasks, comments,
@@ -151,12 +153,14 @@ const CAPS = { activity: 1000, notifs: 500 }; // collections of which only the n
 const find = (key, id) => D()[key].find(x => x.id === id);
 
 /* What a failed request means: 'network' (the server cannot be reached; a proxy answering 502-504 counts), 'auth' (the session is
-   no good), 'abort', or 'rejected' (the server understood and said no). */
+   no good), 'abort', 'server' (it failed: another 5xx; nothing was said about the change itself, so a write is tried
+   again, see flushOnce), or 'rejected' (the server understood and said no). */
 function classify(err) {
   if (err?.isAbort) return 'abort';
   const s = err?.status;
   if (s === 0 || s === 502 || s === 503 || s === 504) return 'network';
   if (s === 401) return 'auth';
+  if (s >= 500) return 'server';
   return 'rejected';
 }
 function describe(err) {
@@ -185,7 +189,9 @@ const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, ord
 /* The `order` to write for each project, as Map(id -> value). D().projOrder ranks only the projects this user can see, but the
    server's column ranks all of them (a member does not see a private project), so the position in that list cannot be the value:
    it would collide with the hidden ones. The server's own values are kept and handed out in the local order, so moving a project
-   swaps two values and rewrites nothing else, and a project the server has not seen yet gets a value between its neighbours. */
+   swaps two values and rewrites nothing else, and a project the server has not seen yet gets a value between its neighbours. That value
+   can equal a hidden project's (their values are not known here): ties are settled by id, so the visible order does not change, and
+   it is only if that project is ever shown that it lands next to the new one. */
 function projectOrders() {
   const known = base.get('projects');
   const have = new Set(D().projects.map(p => p.id));
@@ -413,8 +419,12 @@ function applyPrefsRecord(rec, force) {
   const s = stableStringify(theirs);
   if (!force && b && b.s === s) return false;
   const mine = prefsPayload(rec.id);
-  const merged = force ? theirs : b ? merge3(b.p, mine, theirs) : mine;
+  // A tab that signed in without a settings record and is handed the first one (another tab created it) measures its own edits
+  // against the settings it had at sign-in: what the user has not touched here takes theirs, instead of overwriting it.
+  const from = b ? b.p : st.prefsInit && { ...mine, doc: st.prefsInit };
+  const merged = force ? theirs : from ? merge3(from, mine, theirs) : mine;
   known.set(rec.id, entryOf(theirs, rec.updated));
+  st.prefsInit = null; // there is a baseline now
   const changed = !same(merged, mine);
   if (changed) applyUserPrefs(S, { id: rec.id, ...merged.doc });
   if (!same(merged, theirs)) save();
@@ -455,7 +465,7 @@ async function adoptChildren(pid) {
     }
     if (changed) hooks.render();
   } catch (err) {
-    if (classify(err) === 'network') goOffline();
+    if (gen === st.gen && classify(err) === 'network') goOffline();
   }
 }
 
@@ -524,7 +534,8 @@ async function resync() {
       if (all[key].length >= (CAPS[key] || Infinity)) continue; // a capped list that filled up: what is missing may just be older
       // Missing from a complete load: gone, unless paging skipped it while records were being deleted. Ask before removing.
       const missing = [...base.get(key).keys()].filter(id => !seen.has(id));
-      const gone = await Promise.all(missing.map(id => confirmGone(key, coll, id)));
+      const gone = await Promise.all(missing.map(id => confirmGone(key, coll, id, gen)));
+      if (gen !== st.gen) return false; // the session ended while asking: this answer is for somebody else's data
       for (const [i, id] of missing.entries()) {
         if (gone[i]) changed = removeRecord(key, id) || changed;
       }
@@ -533,12 +544,13 @@ async function resync() {
     if (changed) sortLists(D());
     return changed;
   } finally {
-    st.reloading = false;
+    if (gen === st.gen) st.reloading = false;
   }
 }
-async function confirmGone(key, coll, id) {
+async function confirmGone(key, coll, id, gen) {
   try {
-    applyRecord(key, await pb.collection(coll).getOne(id));
+    const rec = await pb.collection(coll).getOne(id);
+    if (gen === st.gen) applyRecord(key, rec);
     return false;
   } catch (err) {
     if (err?.status === 404) return true;
@@ -562,12 +574,15 @@ async function subscribeAll() {
   await Promise.all(colls.map(coll => pb.collection(coll).subscribe('*', e => onEvent(coll, e))));
   await pb.realtime.subscribe('PB_CONNECT', onConnect); // fires on every (re)connect
 }
-/* A new stream, for when the old one cannot be trusted. Never throws: the safety net tries again. */
+/* A new stream, for when the old one cannot be trusted. Never throws: the safety net tries again. Resolves true when the server has
+   registered the subscriptions, false when it could not be done. */
 export async function resubscribe() {
   try {
     await subscribeAll();
+    return true;
   } catch (err) {
     console.warn('sync: live updates are not connected', err);
+    return false;
   }
 }
 function onEvent(coll, e) {
@@ -600,12 +615,13 @@ function onDisconnect(subs) {
   if (!st.ready || st.offline || !subs.length) return; // an unsubscribe of ours reports an empty list
   st.rtDown = true;
   clearTimeout(st.graceT);
+  const gen = st.gen;
   st.graceT = setTimeout(async () => {
     if (!st.rtDown || !st.ready) return;
     try {
       await ping();
     } catch (err) {
-      if (['network', 'abort'].includes(classify(err))) goOffline();
+      if (gen === st.gen && ['network', 'abort'].includes(classify(err))) goOffline();
     }
   }, 2000);
 }
@@ -762,8 +778,10 @@ const patchFetch = op => async (url, init) => {
   op.patched = res.headers.get('X-Doc-Patch') === 'yes';
   return res;
 };
-/* Sends one op. Never throws: resolves { op, status, changed } with status 'ok', 'network', 'auth', 'abort' or 'rejected'. */
-async function sendOne(op, options) {
+/* Sends one op. Never throws: resolves { op, status, changed } with status 'ok', 'network', 'auth', 'abort', 'server' or 'rejected'.
+   An answer that comes after the session ended (`gen` is no longer current) is not applied, to the data or the baseline of the
+   session that may have started since: the status is 'abort'. */
+async function sendOne(op, options, gen) {
   const api = pb.collection(op.coll);
   let rec;
   if (op.type === 'delete') deleted.set(`${op.key}/${op.id}`, Date.now()); // its echo may beat the answer
@@ -772,6 +790,7 @@ async function sendOne(op, options) {
     else if (op.type === 'update') rec = await api.update(op.id, op.fields, isPatch(op) ? { ...options, fetch: patchFetch(op) } : options);
     else await api.delete(op.id, options);
   } catch (err) {
+    if (gen !== st.gen) return { op, status: 'abort' };
     if (op.type === 'delete' && err?.status === 404) return { op, status: 'ok', changed: settle(op) }; // already gone: a cascade got there first
     if (op.type === 'delete') deleted.delete(`${op.key}/${op.id}`);
     const status = classify(err);
@@ -779,6 +798,7 @@ async function sendOne(op, options) {
     const silent = status === 'rejected' && op.type === 'create' && !!(err.response?.data?.id || err.response?.data?.user);
     return { op, err, status, silent };
   }
+  if (gen !== st.gen) return { op, status: 'abort' };
   return { op, status: 'ok', changed: settle(op, rec) };
 }
 async function flushOnce(options, gen) {
@@ -792,7 +812,7 @@ async function flushOnce(options, gen) {
   let fatal = '';
   let changed = false;
   for (const phase of phases) {
-    for (const r of await Promise.all(phase.map(op => sendOne(op, options)))) {
+    for (const r of await Promise.all(phase.map(op => sendOne(op, options, gen)))) {
       changed = changed || !!r.changed;
       if (r.status === 'rejected') rejected.push(r);
       else if (r.status !== 'ok' && !fatal) fatal = r.status;
@@ -802,9 +822,10 @@ async function flushOnce(options, gen) {
   stats.lastFlushMs = performance.now() - t0;
   stats.flushes++;
   if (gen !== st.gen) return false;
-  if (fatal === 'network') goOffline();
+  // the changes stay unsent, and the offline poll tries them again
+  if (fatal === 'network' || fatal === 'server') goOffline();
   else if (fatal === 'auth') expire();
-  if (rejected.length) await refuse(rejected);
+  if (rejected.length) await refuse(rejected, gen);
   else if (changed) hooks.render();
   return !fatal;
 }
@@ -843,31 +864,37 @@ export function flush(options = {}) {
   return run;
 }
 /* The server refused some changes: say so once, and take its version of those records so the same change is never sent again. */
-async function refuse(list) {
+async function refuse(list, gen) {
   const loud = list.filter(r => !r.silent);
   if (loud.length) {
     const more = loud.length > 1 ? ` (and ${loud.length - 1} more)` : '';
     hooks.toast(`Couldn't save: ${describe(loud[0].err)}${more}`, { kind: 'err', ms: 7000 });
   }
-  await Promise.all(list.map(r => adoptServerTruth(r.op)));
-  hooks.render();
+  await Promise.all(list.map(r => adoptServerTruth(r.op, gen)));
+  if (gen === st.gen) hooks.render();
 }
-async function adoptServerTruth({ key, coll, id }) {
+async function adoptServerTruth({ key, coll, id }, gen) {
   try {
     if (key === USER_PREFS) {
       const rec = (await pb.collection(coll).getFullList())[0];
+      if (gen !== st.gen) return;
       if (rec) applyRecord(key, rec, true);
       else {
         base.get(key).clear(); // none exists: the next flush creates it
         st.prefsInit = null;
       }
-    } else applyRecord(key, await pb.collection(coll).getOne(id), true);
+    } else {
+      const rec = await pb.collection(coll).getOne(id);
+      if (gen === st.gen) applyRecord(key, rec, true);
+    }
   } catch (err) {
+    if (gen !== st.gen) return;
     const kind = classify(err);
     if (err?.status === 404 && key !== USER_PREFS) {
       removeRecord(key, id, true); // gone, or not ours to see
-    } else if (kind === 'network') goOffline();
-    else if (kind === 'rejected') {
+    } else if (kind === 'network' || kind === 'server') {
+      goOffline(); // the change stays unsent until the server answers
+    } else if (kind === 'rejected') {
       // Cannot even read it back. Stop trying to send it rather than send it forever.
       const known = base.get(key);
       const obj = key === USER_PREFS ? { id } : find(key, id);
@@ -893,7 +920,12 @@ function goOffline() {
 }
 /* One recovery or reload at a time. */
 function exclusive(fn) {
-  if (!st.busy) st.busy = fn().finally(() => (st.busy = null));
+  if (!st.busy) {
+    const run = fn().finally(() => {
+      if (st.busy === run) st.busy = null; // not the one of a newer session, if teardown() cleared this one meanwhile
+    });
+    st.busy = run;
+  }
   return st.busy;
 }
 /* A request that must not hang the recovery loop if the server accepts connections but never answers. */
@@ -924,28 +956,35 @@ function reloadFailure(err) {
 function recover() {
   return exclusive(async () => {
     const gen = st.gen;
+    let live = false;
     try {
       await ping();
-      await resubscribe();
+      if (gen !== st.gen) return false; // signed out meanwhile: no stream for nobody
+      live = await resubscribe();
+      if (gen !== st.gen) return false;
       await resync();
       if (!(await flush({ recovering: true }))) return false;
     } catch (err) {
-      if (reloadFailure(err) !== 'other') return false;
+      if (gen !== st.gen || reloadFailure(err) !== 'other') return false;
       // The server answers but refuses the reload. Staying offline would never end, so carry on with what is loaded.
       hooks.toast(`Couldn't reload your data: ${describe(err)}`, { kind: 'err' });
     }
     if (gen !== st.gen) return false;
     setOffline(false);
-    hooks.toast('Reconnected. All changes are synced.');
+    // A stream that would not register does not keep the page offline (the server answers, so changes can be saved, and a proxy that
+    // buffers the stream would otherwise never let go): the safety net replaces it and reloads, in under 20 s. But this is not "synced".
+    hooks.toast(live ? 'Reconnected. All changes are synced.' : 'Reconnected. Live updates will follow shortly.');
     flush(); // whatever was edited while this ran
     return true;
   });
 }
 /* Reloads and merges, showing nothing unless the server turns out to be unreachable. */
 async function reloadQuietly() {
+  const gen = st.gen;
   try {
     if (await resync()) hooks.render();
   } catch (err) {
+    if (gen !== st.gen) return;
     const failure = reloadFailure(err);
     if (failure === 'offline') goOffline();
     else if (failure === 'other') console.warn('sync: reload failed', err);
@@ -979,16 +1018,20 @@ export async function startSync({ boot = false } = {}) {
   const cancelled = () => Object.assign(new Error('sync stopped'), { cancelled: true });
   try {
     let all;
+    let late; // the stream's registration, when the load did not wait for it to finish
     while (!all) {
       try {
         if (boot) await pb.collection('users').authRefresh();
         // The stream first, then the load, as in recover(): started together, the load can read a record just before a colleague
         // changes it and the server only then registers the stream, and the change is in neither. What arrives during the load waits in
         // st.queue. A stream that will not connect (a proxy that buffers it) holds the load back for three seconds, not the SDK's fifteen.
-        await within(
-          subscribeAll().catch(err => console.warn('sync: live updates are not connected', err)),
-          STREAM_WAIT_MS,
+        let registered = false;
+        const stream = subscribeAll().then(
+          () => (registered = true),
+          err => console.warn('sync: live updates are not connected', err),
         );
+        await within(stream, STREAM_WAIT_MS);
+        late = registered ? null : stream; // the load below may then have missed a change made before the server took the subscriptions
         all = await loadAll();
       } catch (err) {
         if (!boot || classify(err) !== 'network') throw err;
@@ -1005,6 +1048,8 @@ export async function startSync({ boot = false } = {}) {
     for (const [coll, e] of st.queue.splice(0)) applyEvent(coll, e); // events that arrived during the load
     setOffline(false);
     st.netT = setInterval(safetyNet, NET_MS);
+    // The stream came up after the load began: read once more, now that nothing can slip by. (One that never registers is the safety net's.)
+    late?.then(ok => ok && gen === st.gen && quietResync());
     return true;
   } catch (err) {
     await teardown();
@@ -1082,7 +1127,7 @@ async function dropRevoked(gen) {
   try {
     visible = new Set((await pb.collection('projects').getFullList({ fields: 'id', batch: 500, ...patient() })).map(r => r.id));
   } catch (err) {
-    if (classify(err) === 'auth') expire();
+    if (gen === st.gen && classify(err) === 'auth') expire();
     return; // cannot tell now; the next round asks again
   }
   if (gen !== st.gen) return;
@@ -1094,7 +1139,8 @@ async function dropRevoked(gen) {
   await Promise.all(
     missing.map(async p => {
       try {
-        changed = applyRecord('projects', await pb.collection('projects').getOne(p.id, patient())) || changed; // after all it is visible
+        const rec = await pb.collection('projects').getOne(p.id, patient());
+        if (gen === st.gen) changed = applyRecord('projects', rec) || changed; // after all it is visible
       } catch (err) {
         if (err?.status === 404) gone.push(p);
       }
@@ -1143,6 +1189,7 @@ function safetyNet() {
       if (!pb.realtime.isConnected) throw Object.assign(new Error('no live stream'), { status: 404 });
       await pb.send('/api/realtime', { method: 'POST', body: { clientId: pb.realtime.clientId, subscriptions: pb.realtime.lastSentSubscriptions } });
     } catch (err) {
+      if (gen !== st.gen) return;
       const kind = classify(err);
       if (kind === 'network' || kind === 'abort') return goOffline();
       if (kind === 'auth') return expire();

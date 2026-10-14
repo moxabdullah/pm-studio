@@ -40,7 +40,7 @@
      Normalized: the object ends up in normalizeRecord() (normalize.js), because any signed-in user can store any JSON in `doc`: a
      value of the wrong type (labels: null, subtasks: 'x', due: {x: 1}) is coerced and a missing one is added, so no record can
      break a page for everyone. Every other path to S.data (load, live update, reload, adopt, undo) goes through fromRecord, so
-     that is the one place. user_prefs has no app key and is returned as it is. The object that comes out is the app's own form
+     that is the one place. user_prefs has no app key and goes through cleanPrefs() instead (below). The object that comes out is the app's own form
      again under toRecord(): toRecord(fromRecord(toRecord(x))) is toRecord(x) for everything the app writes, and the sync baseline
      (toRecord(fromRecord(rec))) is what the app's copy of an unchanged record produces, so a malformed record is never written back.
    toRecords(coll, data)        -> payloads for every object of data[key], with ctx (me, order) filled from `data`.
@@ -63,8 +63,11 @@
    buildUserPrefs(S, id)        -> that object from the live store: S.prefs, S.views, S.ui.collapsed, S.data.notifPrefs,
                                    S.data.recentSearches, S.data.ws.id and the favourites (fav flags, ids sorted). `id` is the record
                                    id (omit it before the record exists).
-   applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs; a workspace id that is not loaded is ignored)
-                                   and stamps `fav` on every loaded project and task. Parts missing from `obj` are left alone.
+   applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs, a value only when it has the type of the one it
+                                   replaces; a workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
+                                   task. Parts missing from `obj` are left alone.
+   Settings are as untrusted as any doc: fromRecord() runs the user_prefs record through cleanPrefs(), which drops a part of the wrong
+   type (and the wrong-typed entries of a list or map), so the store never holds, say, recentSearches that is not a list.
    applyFavs(data, favs)        only the fav flags: sets fav = true/false on every project and task of `data` (call after a remote
                                    change to a project/task, since fromRecord does not restore it).
    wsFromWorkspace(w)           -> the D().ws object { id, name, url, c, brand } for a workspaces entry. */
@@ -285,7 +288,7 @@ export function fromRecord(coll, rec) {
   for (const [appKey, column] of s.readOnly || []) out[appKey] = str(rec[column]);
   s.afterRead?.(out);
   out.id = rec.id;
-  return s.key ? normalizeRecord(s.key, out) : out; // user_prefs is not an app record
+  return s.key ? normalizeRecord(s.key, out) : cleanPrefs(out); // user_prefs is not an app record
 }
 
 export function toRecords(coll, data) {
@@ -340,6 +343,42 @@ export function wsFromWorkspace(w) {
   };
 }
 
+/* A user_prefs object as read from the server, with every part of the wrong type dropped, so applyUserPrefs() leaves what the store
+   already holds for it (the defaults, at sign-in). Lists and maps keep their well-formed entries. What the app writes comes out
+   unchanged (buildUserPrefs()'s shapes, the views viewOf() makes), so cleaning never makes a record differ from its baseline. (A setting
+   of the wrong type stays here: only applyUserPrefs() knows the defaults to compare with. The next save then puts the right one back.) */
+const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const texts = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
+// A view's state as the table, board and filter menus read it: they call .every, .includes and .toLowerCase on these and read .sort.f.
+const wellFormedView = v =>
+  isObj(v) &&
+  Array.isArray(v.filters) &&
+  v.filters.every(f => isObj(f) && typeof f.f === 'string' && (f.v === undefined || Array.isArray(f.v))) &&
+  isObj(v.sort) &&
+  typeof v.sort.f === 'string' &&
+  typeof v.group === 'string' &&
+  typeof v.q === 'string' &&
+  Array.isArray(v.hidden) &&
+  isObj(v.colW);
+function cleanPrefs(obj) {
+  const out = { ...obj };
+  const fix = (k, ok, make = x => x) => {
+    if (out[k] === undefined) return;
+    if (ok(out[k])) out[k] = make(out[k]);
+    else delete out[k];
+  };
+  // fromEntries: an own "__proto__" key stays a plain key
+  const only = (map, ok) => Object.fromEntries(Object.entries(map).filter(([, x]) => ok(x)));
+  fix('prefs', isObj);
+  fix('views', isObj, m => only(m, wellFormedView));
+  fix('collapsed', x => typeof x === 'boolean');
+  fix('notifPrefs', isObj, m => only(m, x => typeof x === 'boolean'));
+  fix('recentSearches', Array.isArray, texts);
+  fix('ws', x => typeof x === 'string');
+  fix('favs', isObj, f => ({ projects: texts(f.projects), tasks: texts(f.tasks) }));
+  return out;
+}
+
 export function buildUserPrefs(S, recordId) {
   const d = S.data;
   const favIds = list =>
@@ -361,7 +400,14 @@ export function buildUserPrefs(S, recordId) {
 
 export function applyUserPrefs(S, obj) {
   const d = S.data;
-  if (obj.prefs) Object.assign(S.prefs, clone(obj.prefs));
+  if (isObj(obj.prefs)) {
+    // A setting keeps the type of its default (a week start that is not a number would break the calendar); a key without a default
+    // may be anything simple. Own properties only: S.prefs.__proto__ is there too, and must not be assigned.
+    for (const [k, v] of Object.entries(obj.prefs)) {
+      const known = Object.prototype.hasOwnProperty.call(S.prefs, k);
+      if (known ? typeof v === typeof S.prefs[k] : ['string', 'number', 'boolean'].includes(typeof v)) S.prefs[k] = v;
+    }
+  }
   if (obj.views) S.views = clone(obj.views);
   if (obj.collapsed !== undefined) S.ui.collapsed = !!obj.collapsed;
   if (obj.notifPrefs) d.notifPrefs = clone(obj.notifPrefs);
