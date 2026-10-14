@@ -30,12 +30,12 @@ export function toast(msg, opt = {}) {
   host.appendChild(el);
   if (!opt.sticky) setTimeout(kill, opt.ms || 4200); // `sticky`: it stays until it is dismissed, another toast takes its place or the session ends
 }
-/* Dismisses the toasts that stay until dismissed: they tell of the session that is ending, and must not be shown on the sign-in page
-   or to the next person who signs in. */
+/* Removes the toasts that stay until dismissed: they tell of the session that is ending, and must not be shown on the sign-in page
+   or to the next person who signs in. At once, not faded out: the fade would leave a record's name on the sign-in page for a moment. */
 export function clearStickyToasts() {
   $('#toasts')
     ?.querySelectorAll('.toast[data-sticky]')
-    .forEach(t => t.querySelector('.ibtn').onclick());
+    .forEach(t => t.remove());
 }
 /* guarded mutation: refuses edits while the server cannot be reached. "Try again" reconnects, and applies the edit if that works.
    `done` is what the caller does once the edit is in (close the form, say what happened). It runs here, after the edit, so that
