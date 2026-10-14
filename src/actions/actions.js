@@ -28,7 +28,7 @@ import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessa
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
-import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
+import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { viewOf } from '../shell/view-engine.js';
 import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
@@ -2447,7 +2447,7 @@ export function enterApp(msg) {
   S.ui.errors = {};
   S.ui.af = null;
   S.ui.showPw = false;
-  go(S.prefs.home || 'home');
+  go(ROUTE_NAMES[S.prefs.home] ? S.prefs.home : 'home');
   A.openLink?.(); // a link that was followed while signed out (src/actions/links.js)
   toast(msg);
 }
