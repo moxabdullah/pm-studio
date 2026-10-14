@@ -372,9 +372,10 @@ export const DEFAULT_PREFS = {
   confirmDel: true,
 };
 // The settings that pick a page, a project tab or a clock: the options of the selects "Open on launch", "Default project view" and
-// "Time format" in pages/settings.js. Any other string is a page the router does not know or a tab the project page does not have (both
-// render not-found), and its select could not show it or let the user pick the default again. Keep these in step with those selects.
-// Each setting's default is in its list.
+// "Time format" in pages/settings.js. A select cannot show a value it does not offer, nor let the user pick the default again, and most
+// other strings are a page the router does not know or a tab the project page does not have, which render not-found. Keep these in step
+// with those selects: a value the select writes that is not listed here is turned back into the default on every echo. Each setting's
+// default is in its list.
 const PREF_OPTIONS = {
   home: ['home', 'mytasks', 'inbox'],
   defaultTab: ['board', 'list', 'table', 'overview', 'timeline'],
