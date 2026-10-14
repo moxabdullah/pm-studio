@@ -348,7 +348,9 @@ export function wsFromWorkspace(w) {
 
 /* What each setting is until the user changes it, and what a record reads as for a setting it lacks or holds with a value prefOk()
    refuses. The page starts from these too (store.js), so a record without a key reads as the page's own copy and the key is not an
-   unsent change. */
+   unsent change. Every setting the page writes needs one, equal to what its readers take an unset value for (`|| 'board'`,
+   `!== false`, `!!`): without it, a value of any simple type gets in (a number tab breaks the project page), and a refused change to
+   the setting cannot be put back, since the record's copy lacks it. */
 export const DEFAULT_PREFS = {
   theme: 'system',
   accent: 'indigo',
@@ -356,11 +358,18 @@ export const DEFAULT_PREFS = {
   density: 'comfortable',
   weekStart: 1,
   dateFmt: 'MMM d',
+  timeFmt: '12',
   lang: 'English (US)',
   tz: '(GMT-07:00) Pacific Time',
   motion: 'system',
+  spell: true,
   home: 'home',
   openTasks: 'drawer',
+  defaultTab: 'board',
+  showDoneBoard: true,
+  permCreate: true,
+  permPublic: false,
+  confirmDel: true,
 };
 /* Is `v` a value the setting `k` may hold? A setting keeps the type of its default (a week start that is not a number would break the
    calendar); a key without a default may be anything simple, except "__proto__": S.prefs cannot hold it as a key, so a record that
