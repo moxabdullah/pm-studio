@@ -60,14 +60,17 @@
 
    user_prefs: one record per user holding what is personal. The app-side object is { id, prefs, views, collapsed, notifPrefs,
    recentSearches, ws, favs } where favs = { projects: [ids], tasks: [ids] }; toRecord/fromRecord treat everything but `id` as doc.
+   DEFAULT_PREFS                what each setting is until the user changes it (the page's S.prefs starts as a copy, store.js)
    buildUserPrefs(S, id)        -> that object from the live store: S.prefs, S.views, S.ui.collapsed, S.data.notifPrefs,
                                    S.data.recentSearches, S.data.ws.id and the favourites (fav flags, ids sorted). `id` is the record
                                    id (omit it before the record exists).
-   applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs, a value only when it has the type of the one it
-                                   replaces; a workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
+   applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs, a value only when prefOk() accepts
+                                   it; a workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
                                    task. Parts missing from `obj` are left alone.
    Settings are as untrusted as any doc: fromRecord() runs the user_prefs record through cleanPrefs(), which drops a part of the wrong
-   type (and the wrong-typed entries of a list or map), so the store never holds, say, recentSearches that is not a list.
+   type (and the wrong-typed entries of a list or map), so the store never holds, say, recentSearches that is not a list. The one
+   exception is `prefs`: a key the record lacks, or holds with a value prefOk() refuses, reads as its default (DEFAULT_PREFS), so a
+   record from before a setting existed, or a thin one like the dev seed's, reads as the page's own settings.
    applyFavs(data, favs)        only the fav flags: sets fav = true/false on every project and task of `data` (call after a remote
                                    change to a project/task, since fromRecord does not restore it).
    wsFromWorkspace(w)           -> the D().ws object { id, name, url, c, brand } for a workspaces entry. */
@@ -343,10 +346,38 @@ export function wsFromWorkspace(w) {
   };
 }
 
+/* What each setting is until the user changes it, and what a record reads as for a setting it lacks or holds with a value prefOk()
+   refuses. The page starts from these too (store.js), so a record without a key reads as the page's own copy and the key is not an
+   unsent change. */
+export const DEFAULT_PREFS = {
+  theme: 'system',
+  accent: 'indigo',
+  side: 'comfortable',
+  density: 'comfortable',
+  weekStart: 1,
+  dateFmt: 'MMM d',
+  lang: 'English (US)',
+  tz: '(GMT-07:00) Pacific Time',
+  motion: 'system',
+  home: 'home',
+  openTasks: 'drawer',
+};
+/* Is `v` a value the setting `k` may hold? A setting keeps the type of its default (a week start that is not a number would break the
+   calendar); a key without a default may be anything simple, except "__proto__": S.prefs cannot hold it as a key, so a record that
+   kept it would never match the page's copy. */
+function prefOk(k, v) {
+  if (k === '__proto__') return false;
+  if (!Object.prototype.hasOwnProperty.call(DEFAULT_PREFS, k)) return ['string', 'number', 'boolean'].includes(typeof v);
+  // the week start also indexes the weekday names, so only a whole day from 0 to 6 will do
+  return typeof v === typeof DEFAULT_PREFS[k] && (k !== 'weekStart' || (Number.isInteger(v) && v >= 0 && v <= 6));
+}
+
 /* A user_prefs object as read from the server, with every part of the wrong type dropped, so applyUserPrefs() leaves what the store
-   already holds for it (the defaults, at sign-in). Lists and maps keep their well-formed entries. What the app writes comes out
-   unchanged (buildUserPrefs()'s shapes, the views viewOf() makes), so cleaning never makes a record differ from its baseline. (A setting
-   of the wrong type stays here: only applyUserPrefs() knows the defaults to compare with. The next save then puts the right one back.) */
+   already holds for it (the defaults, at sign-in). Lists and maps keep their well-formed entries. The settings are the exception: they
+   come out whole, DEFAULT_PREFS with the record's well-formed entries over it, so a key the record lacks (an older record, the dev seed's
+   `prefs: {}`) reads as its default. The baseline of a loaded record is then the settings the page builds for itself, and a thin record
+   does not look like an unsent change. What the app writes comes out unchanged (buildUserPrefs()'s shapes, the views viewOf() makes),
+   so cleaning never makes a record differ from its baseline. */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const texts = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 // The filter fields and groupings the view engine knows: the keys of FIELDS and the cases of groupTasks() in shell/view-engine.js.
@@ -375,7 +406,8 @@ function cleanPrefs(obj) {
   };
   // fromEntries: an own "__proto__" key stays a plain key
   const only = (map, ok) => Object.fromEntries(Object.entries(map).filter(([, x]) => ok(x)));
-  fix('prefs', isObj);
+  // (not fix(): the settings are there even when the record has none, and spread, like fromEntries, keeps "__proto__" a plain key)
+  out.prefs = { ...DEFAULT_PREFS, ...Object.fromEntries(Object.entries(isObj(out.prefs) ? out.prefs : {}).filter(([k, x]) => prefOk(k, x))) };
   fix('views', isObj, m => only(m, wellFormedView));
   fix('collapsed', x => typeof x === 'boolean');
   fix('notifPrefs', isObj, m => only(m, x => typeof x === 'boolean'));
@@ -407,14 +439,8 @@ export function buildUserPrefs(S, recordId) {
 export function applyUserPrefs(S, obj) {
   const d = S.data;
   if (isObj(obj.prefs)) {
-    // A setting keeps the type of its default (a week start that is not a number would break the calendar); a key without a default
-    // may be anything simple. Own properties only: S.prefs.__proto__ is there too, and must not be assigned.
-    for (const [k, v] of Object.entries(obj.prefs)) {
-      const known = Object.prototype.hasOwnProperty.call(S.prefs, k);
-      // the week start also indexes the weekday names, so only a whole day from 0 to 6 will do
-      const ok = k !== 'weekStart' || (Number.isInteger(v) && v >= 0 && v <= 6);
-      if (known ? typeof v === typeof S.prefs[k] && ok : ['string', 'number', 'boolean'].includes(typeof v)) S.prefs[k] = v;
-    }
+    // only what prefOk() accepts, which never includes "__proto__", so nothing is assigned through S.prefs.__proto__
+    for (const [k, v] of Object.entries(obj.prefs)) if (prefOk(k, v)) S.prefs[k] = v;
   }
   if (obj.views) S.views = clone(obj.views);
   if (obj.collapsed !== undefined) S.ui.collapsed = !!obj.collapsed;
