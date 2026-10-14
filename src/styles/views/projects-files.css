@@ -104,6 +104,12 @@
   margin: 0;
   letter-spacing: -0.018em;
 }
+/* A page inside a project tab (Overview, Files, Activity) sits in a flex column. Its automatic side margins, which centre it, would
+   there make it as wide as its content (a Files page of one card was ~380px wide) instead of as wide as the tab. Its max-width still
+   caps it. */
+.pbody > .page {
+  width: 100%;
+}
 /* tabs bleed to the edges; the first label still starts on the gutter (tab has 10px side padding) */
 .proj-h .tabs {
   margin: 0 calc(-1 * var(--gutter));
@@ -293,15 +299,25 @@
 .fprev .fimg ~ .ext {
   z-index: 1;
 }
-/* The file name in the list view: looks like text, opens the preview. */
+/* The file name in the list view: looks like text, opens the preview. It shortens with an ellipsis like the name on a card does. */
 .fname {
   font-weight: 500;
   text-align: left;
   color: inherit;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* A table cell is as wide as its longest unbroken content, so a name of a few hundred characters would stretch the whole table. This
+   column instead takes whatever width the other columns leave (width: 100%) and counts for none of it (max-width: 0). */
+.perm-t td.fcell {
+  width: 100%;
+  max-width: 0;
+}
+.fcell > .row {
+  min-width: 0;
 }
 .fname:hover {
   text-decoration: underline;

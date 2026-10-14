@@ -25,7 +25,7 @@ import {
 import { fileUrl, pb, setRemember } from '../core/pb.js';
 import { flush, quietResync, restoreState, resubscribe, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
-import { fileType, fsize } from '../ui/helpers.js';
+import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
@@ -475,22 +475,6 @@ A.toggleFavProj = el => {
   render();
   toast(p.fav ? `Added ${p.name} to favorites` : 'Removed from favorites', { ms: 1800 });
 };
-A.copyLink = el => {
-  S.ui.pop = null;
-  render();
-  const d = el.dataset;
-  const path =
-    d.id && task(d.id)
-      ? `task/${task(d.id).key}`
-      : d.pid
-        ? `project/${proj(d.pid).key.toLowerCase()}`
-        : d.fid
-          ? `file/${d.fid}`
-          : d.id && proj(d.id)
-            ? `project/${proj(d.id).key.toLowerCase()}`
-            : '';
-  copy(`https://gr8rstudio.com/${D().ws.url}/${path}`);
-};
 A.copyText = el => copy(el.dataset.text, 'Copied to clipboard');
 A.copyEmail = el => {
   S.ui.pop = null;
@@ -859,7 +843,8 @@ export async function openFilePreview(f, tid) {
     if (isRaster(f)) {
       try {
         src = await fileUrl(f);
-      } catch {
+      } catch (err) {
+        if (err?.status === 401) return sessionEnded(); // the server no longer accepts this session
         /* offline, say: the icon preview shows */
       }
     }
@@ -886,8 +871,9 @@ document.addEventListener(
       const m = S.ui.modals.find(x => x.type === 'filePreview' && x.file.id === f.id);
       if (m) m.src = src; // later renders start from the fresh URL
       img.src = src;
-    } catch {
+    } catch (err) {
       img.hidden = true;
+      if (err?.status === 401) sessionEnded();
     }
   },
   true,
@@ -902,6 +888,7 @@ A.downloadFile = async el => {
   try {
     await downloadFile(f);
   } catch (err) {
+    if (err.status === 401) return sessionEnded(); // the same as for an upload: the session is over, so back to the sign-in page
     toast(`Couldn't download ${f.name}: ${err.status === 0 ? "can't reach the server" : err.response?.message || err.message}`, { kind: 'err' });
   }
 };
@@ -1410,6 +1397,7 @@ A.clearProjFilters = () => {
   render();
 };
 A.newProject = () => {
+  if (needWorkspace(A.newProject)) return;
   const teams = teamsList();
   const team = (teams.find(t => t.id === me().team) || teams[0])?.id || '';
   S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', team, lead: D().me, due: dOff(30), tmpl: 'blank' };
@@ -1525,6 +1513,7 @@ A.submitProject = () => {
     }
     return;
   }
+  if (needWorkspace()) return; // the workspace went away while the form was open
   let p;
   if (
     !mutate(() => {
@@ -1539,6 +1528,7 @@ A.submitProject = () => {
 A.dupProject = el => {
   const p = proj(el.dataset.id);
   S.ui.pop = null;
+  if (needWorkspace()) return;
   let n;
   mutate(() => {
     n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
@@ -1635,7 +1625,6 @@ A.shareInvite = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const p = proj(m.id);
   const v = ($('#share-in')?.value || '').trim();
-  const perm = $('#share-perm')?.value;
   if (!v) {
     $('#share-in')?.focus();
     return;
@@ -1645,8 +1634,6 @@ A.shareInvite = () => {
     if (!p.members.includes(ex.id))
       mutate(() => {
         p.members.push(ex.id);
-        p.perms = p.perms || {};
-        p.perms[ex.id] = perm;
       });
     S.ui.shareQ = '';
     render();
@@ -1659,28 +1646,37 @@ A.shareInvite = () => {
   }
   toast(`No account for ${v}. Ask an admin to create one.`, { kind: 'err' });
 };
+/* The only per-person choice that does anything is taking the person off the project. (There is no access level to pick: see shareModal.) */
 IN.sharePerm = el => {
   const p = proj(el.dataset.id);
   const mid = el.dataset.mid;
-  if (el.value === '__remove') {
-    const snap = snapshot();
-    mutate(() => {
-      p.members = p.members.filter(x => x !== mid);
-    });
-    toast(`Removed ${mem(mid).name}`, { action: 'Undo', onAction: () => restore(snap) });
-  } else {
-    mutate(() => {
-      p.perms = p.perms || {};
-      p.perms[mid] = el.value;
-    });
-    toast(`${mem(mid).name}: ${el.value}`, { ms: 1800 });
-  }
+  if (!p || el.value !== '__remove') return;
+  const snap = snapshot();
+  mutate(() => {
+    p.members = p.members.filter(x => x !== mid);
+  });
+  toast(`Removed ${mem(mid)?.name || FORMER}`, { action: 'Undo', onAction: () => restore(snap) });
 };
+/* "Only people invited" sets `private`, the column the server's access rules read, so the server stops handing the project (and its
+   tasks, comments, files and events) to anybody who is not on `members` (admins excepted). The person who flips it and the project's
+   lead are put on `members` first: the rule is checked against the project as it is after this save, and without that the person
+   would lose the project the moment it saves. `access` is the old, display-only copy of the same choice; it follows `private`. */
 IN.shareAccess = el => {
   const p = proj(el.dataset.id);
-  mutate(() => {
-    p.access = el.value;
-  });
+  if (!p) return;
+  const priv = el.value === 'private';
+  if (priv === !!p.private) return;
+  const mine = D().me;
+  if (
+    mutate(() => {
+      p.private = priv;
+      p.access = priv ? 'private' : 'workspace';
+      if (priv) p.members = [...new Set([...p.members, mine, p.lead].filter(Boolean))];
+    })
+  )
+    toast(priv ? `${p.name} is private now. Only the people invited, and admins, can open it.` : `Everyone at ${D().ws.name} can open ${p.name} now.`, {
+      ms: 4800,
+    });
 };
 A.viewProfile = el => go('member', { id: el.dataset.id });
 A.assignToMember = el => {
@@ -1835,20 +1831,27 @@ A.setSearch = el => {
 };
 
 /* workspace, account, and the design-system demo triggers */
+/* Makes `w` (an entry of D().workspaces) the current workspace and remembers the choice in the person's settings. */
+export function setWorkspace(w) {
+  D().ws = { id: w.id, name: w.name, url: w.url || w.name.toLowerCase().replace(/[^a-z0-9]+/g, ''), c: w.c, brand: !!w.brand };
+  save();
+}
 A.switchWs = el => {
   const w = D().workspaces.find(x => x.id === el.dataset.v);
   S.ui.pop = null;
-  D().ws = { id: w.id, name: w.name, url: w.url || w.name.toLowerCase().replace(/[^a-z0-9]+/g, ''), c: w.c, brand: !!w.brand };
-  save();
+  setWorkspace(w);
   go('home');
   toast(`Switched to ${w.name}`);
 };
-A.newWorkspace = () => {
+/* The admin's "Create workspace" dialog. `then`, when given, runs once the workspace exists and is the current one (the flow that
+   needed a workspace carries on from there); `why` is the line under the title. */
+export function createWorkspace(then, why = '') {
   S.ui.pop = null;
   if (!isAdmin()) return;
   openModal({
     type: 'prompt',
     title: 'Create workspace',
+    sub: why,
     label: 'Workspace name',
     ok: 'Create workspace',
     run: v => {
@@ -1857,10 +1860,27 @@ A.newWorkspace = () => {
         return;
       }
       const w = { id: uid('w'), name: v, c: ['#2F2E2A', '#5A67D8', '#23918A', '#C54B78'][D().workspaces.length % 4] };
-      if (mutate(() => D().workspaces.push(w))) A.switchWs({ dataset: { v: w.id } });
+      if (!mutate(() => D().workspaces.push(w))) return;
+      A.switchWs({ dataset: { v: w.id } });
+      then?.();
     },
   });
-};
+}
+A.newWorkspace = () => createWorkspace();
+/* Projects and teams belong to a workspace (their `workspace` column). On a server that has none yet, D().ws.id is '' and whatever got
+   created would be stamped with '' and never show once a workspace exists. So creating one waits for a workspace: an admin is taken to
+   "Create workspace" first and carries on from there with `then`; anybody else is told whom to ask. Returns true when it stopped the
+   caller. */
+export function needWorkspace(then) {
+  if (D().ws.id) return false;
+  S.ui.pop = null;
+  if (isAdmin()) createWorkspace(then, 'Projects and teams live in a workspace, so create one first.');
+  else {
+    render();
+    toast('Ask an admin to create a workspace first.', { kind: 'info' });
+  }
+  return true;
+}
 /* The sign-in page with nothing of the last session left in memory: data, settings, views, route, history and open panels are reset.
    `message` shows above the form (why the session ended). */
 export function showLogin(message = '') {
@@ -2157,6 +2177,7 @@ export function enterApp(msg) {
   S.ui.af = null;
   S.ui.showPw = false;
   go(S.prefs.home || 'home');
+  A.openLink?.(); // a link that was followed while signed out (src/actions/links.js)
   toast(msg);
 }
 /* Why a sign-in failed, in words for the person at the keyboard. */

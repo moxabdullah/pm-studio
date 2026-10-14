@@ -50,6 +50,11 @@
   font-weight: 600;
   margin: 0;
 }
+/* A title or a sentence that names a file or a task can hold one very long word: it wraps instead of running out of the dialog. */
+.modal-h h2,
+.modal p {
+  overflow-wrap: anywhere;
+}
 .modal-h .ibtn {
   margin-left: auto;
 }
@@ -784,6 +789,10 @@
 }
 .toast.out {
   animation: toastOut 0.16s ease both;
+}
+/* A message that names a file or a task can hold a long word with no spaces: it wraps instead of running out of the toast. */
+.toast > .grow {
+  overflow-wrap: anywhere;
 }
 .toast .i.ok {
   color: var(--green);

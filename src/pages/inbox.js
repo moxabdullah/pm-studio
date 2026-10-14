@@ -1,8 +1,8 @@
 /* ---------- INBOX ---------- */
 import { MOD, ago, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, commentsOf, mem, pColor, proj, task } from '../core/store.js';
-import { av, empty, fmtComment } from '../ui/helpers.js';
+import { D, S, commentsOf, pColor, proj, task } from '../core/store.js';
+import { av, empty, fmtComment, nameOf } from '../ui/helpers.js';
 import { cellAssignee, cellDue, cellPrio, cellStatus } from '../components/task-list.js';
 import { commentHtml } from '../overlays/drawer.js';
 
@@ -41,7 +41,7 @@ export function pageInbox() {
 export function notifText(n) {
   const t = n.task ? task(n.task) : null;
   const p = n.project ? proj(n.project) : t ? proj(t.project) : null;
-  const who = n.by ? `<b style="font-weight:600">${esc(mem(n.by)?.name)}</b>` : '';
+  const who = n.by ? `<b style="font-weight:600">${esc(nameOf(n.by))}</b>` : '';
   if (!n.by && p && !t) return `<b style="font-weight:600">${esc(n.text)}</b>`;
   if (!n.by && t) return `<b style="font-weight:600">${esc(t.title)}</b> <span class="muted">${esc(n.text)}</span>`;
   return `${who} <span class="muted">${esc(n.text)}</span> ${t ? `<b style="font-weight:500">${esc(t.title)}</b>` : ''}`;

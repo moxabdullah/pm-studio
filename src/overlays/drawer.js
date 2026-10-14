@@ -5,7 +5,7 @@ import { MOD, TODAY, ago, diffD, esc, fmtDate, parse, relDate } from '../core/ut
 import { ic } from '../core/icons.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
 import { fileOf } from '../core/files.js';
-import { FT, av, filePrev, fileType, fmtComment, lbl, progBar, safely, sanitizeHtml } from '../ui/helpers.js';
+import { FT, av, filePrev, fileType, fmtComment, lbl, nameOf, progBar, safely, sanitizeHtml } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { cellAssignee, cellDue, cellPrio, cellProject, cellStatus } from '../components/task-list.js';
 import { modalHtml } from './modals.js';
@@ -127,7 +127,7 @@ export function drawerHtml(t) {
             ${ment.length ? `<div class="pop" style="position:absolute;top:auto;bottom:calc(100% + 4px);left:0">${ment.map(m => `<button class="mi" data-a="pickMention" data-id="${esc(t.id)}" data-name="${esc(m.name)}">${av(m.id, 'sm', false)}${esc(m.name)}<span class="r">${esc(m.title)}</span></button>`).join('')}</div>` : ''}
           </div></div>`
             : `
-          <div style="padding-top:4px">${acts.map(a => `<div class="act-line"><span class="ico">${av(a.by, 'sm', false)}</span><span class="grow"><b>${esc(mem(a.by)?.id === D().me ? 'You' : mem(a.by)?.name)}</b> ${esc(String(a.verb).replace(/ of$/, ''))}${a.extra ? ' ' + esc(a.extra) : ''}</span><time class="faint" style="font-size:11.5px">${ago(a.at)}</time></div>`).join('')}
+          <div style="padding-top:4px">${acts.map(a => `<div class="act-line"><span class="ico">${av(a.by, 'sm', false)}</span><span class="grow"><b>${esc(mem(a.by)?.id === D().me ? 'You' : nameOf(a.by))}</b> ${esc(String(a.verb).replace(/ of$/, ''))}${a.extra ? ' ' + esc(a.extra) : ''}</span><time class="faint" style="font-size:11.5px">${ago(a.at)}</time></div>`).join('')}
           <div class="act-line"><span class="ico">${ic('plus', 13)}</span><span class="grow">Task created</span><time class="faint" style="font-size:11.5px">${ago(t.created)}</time></div></div>`
         }
       </div>`
@@ -146,14 +146,13 @@ function attachmentHtml(t, a) {
   return `<div class="attc" data-a="filePreview" data-tid="${esc(t.id)}" data-aid="${esc(a.id)}" role="button" tabindex="0">${filePrev(v)}<div class="fi"><div class="trunc" style="font-weight:500">${esc(v.name)}</div><div class="faint">${FT[v.type].n} · ${esc(v.size)}</div></div>${dl}<button class="ibtn ibtn-xs x" data-a="rmAttach" data-id="${esc(t.id)}" data-aid="${esc(a.id)}" aria-label="Remove attachment">${ic('x', 12)}</button></div>`;
 }
 export function commentHtml(c) {
-  const m = mem(c.by);
   const mine = c.by === D().me;
-  return `<div class="cmt">${av(c.by, 'md', false)}<div class="body"><div class="who"><b>${esc(m?.name)}</b><time>${ago(c.at)}</time>${mine ? `<span class="sp"></span><button class="ibtn ibtn-xs" data-a="delComment" data-id="${esc(c.id)}" aria-label="Delete comment" data-tip="Delete">${ic('trash-2', 12)}</button>` : ''}</div><div class="txt">${fmtComment(c.text)}</div>
+  return `<div class="cmt">${av(c.by, 'md', false)}<div class="body"><div class="who"><b>${esc(nameOf(c.by))}</b><time>${ago(c.at)}</time>${mine ? `<span class="sp"></span><button class="ibtn ibtn-xs" data-a="delComment" data-id="${esc(c.id)}" aria-label="Delete comment" data-tip="Delete">${ic('trash-2', 12)}</button>` : ''}</div><div class="txt">${fmtComment(c.text)}</div>
     <div class="reacts">${Object.entries(c.re || {})
       .filter(([, v]) => Array.isArray(v) && v.length)
       .map(
         ([e, v]) =>
-          `<button class="react ${v.includes(D().me) ? 'mine' : ''}" data-a="react" data-id="${esc(c.id)}" data-e="${esc(e)}" aria-label="${esc(e)} ${v.length}" title="${esc(v.map(i => mem(i)?.name).join(', '))}">${esc(e)}<span class="num">${v.length}</span></button>`,
+          `<button class="react ${v.includes(D().me) ? 'mine' : ''}" data-a="react" data-id="${esc(c.id)}" data-e="${esc(e)}" aria-label="${esc(e)} ${v.length}" title="${esc(v.map(i => nameOf(i)).join(', '))}">${esc(e)}<span class="num">${v.length}</span></button>`,
       )
       .join(
         '',

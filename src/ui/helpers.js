@@ -18,9 +18,15 @@ export function safely(fn, fallback = '') {
   }
 }
 
+/* The name to print for the person who wrote a comment, did something or uploaded a file. When an admin has deleted the account the
+   record stays but nobody is left to name; the avatar is already the empty one (see av). Returns plain text: esc() it. */
+export const FORMER = 'Former member';
+export const nameOf = id => mem(id)?.name || FORMER;
+
+/* `tip` shows the name on hover. A string is what the empty avatar says instead of "Unassigned" (pass FORMER where a person wrote something). */
 export function av(id, cls = '', tip = true) {
   const m = mem(id);
-  if (!m) return `<span class="av empty ${cls}" ${tip ? 'data-tip="Unassigned"' : ''}>${ic('user', 11)}</span>`;
+  if (!m) return `<span class="av empty ${cls}" ${tip ? `data-tip="${esc(typeof tip === 'string' ? tip : 'Unassigned')}"` : ''}>${ic('user', 11)}</span>`;
   const name = String(m.name ?? '');
   const ini = name
     .split(' ')

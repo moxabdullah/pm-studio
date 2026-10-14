@@ -57,6 +57,7 @@ import { S, D } from './core/store.js';
 import { pb } from './core/pb.js';
 import * as sync from './core/sync.js';
 import { A, showLogin } from './actions/actions.js';
+import { openLink } from './actions/links.js';
 import { ROUTE_NAMES, render, go } from './shell/render.js';
 import { remoteRender } from './shell/remote-render.js';
 import { toast } from './ui/toast.js';
@@ -100,7 +101,7 @@ import { toast } from './ui/toast.js';
   }
   S.ui.loading = false;
   route(); // the saved home page is known now
-  render();
+  if (!openLink()) render(); // a link such as #/task/<id> goes straight to what it names (it draws the page itself)
 })();
 
 // Dev-only handle for debugging and screenshot tooling; stripped from production builds.

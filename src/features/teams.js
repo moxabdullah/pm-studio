@@ -4,7 +4,7 @@
 import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
-import { D, S, TM } from '../core/store.js';
+import { D, S, TM, isAdmin, mem } from '../core/store.js';
 import { av } from '../ui/helpers.js';
 
 export function teamModal(m, H) {
@@ -29,9 +29,15 @@ export function teamModal(m, H) {
         )
         .join('')}</div></div>
     </div>
-    <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">Members <span class="faint" style="font-weight:400">· ${f.members.length} selected</span></legend>
+    ${
+      isAdmin()
+        ? `<fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">Members <span class="faint" style="font-weight:400">· ${f.members.length} selected</span></legend>
       <div class="panel" style="max-height:220px;overflow-y:auto;padding:4px">${people.map(x => `<label class="mi" style="cursor:pointer;min-height:36px"><input type="checkbox" class="check" data-a="tformMember" data-id="${esc(x.id)}" ${f.members.includes(x.id) ? 'checked' : ''}>${av(x.id, 'sm', false)}<span class="grow trunc">${esc(x.name)}</span><span class="r">${x.team && x.team !== m.edit ? esc(TM[x.team].name) : ''}</span></label>`).join('')}</div>
-      <span class="hint">Everyone belongs to one primary team. Adding someone here moves them from their current team.</span></fieldset>
+      <span class="hint">Everyone belongs to one primary team. Adding someone here moves them from their current team.</span></fieldset>`
+        : `<div class="field"><span class="label">Members <span class="faint" style="font-weight:400">· ${f.members.length}</span></span>
+      ${f.members.length ? `<div class="row" style="flex-wrap:wrap;gap:6px 14px">${f.members.map(id => `<span class="row" style="gap:6px;font-size:13px">${av(id, 'sm', false)}${esc(mem(id)?.name)}</span>`).join('')}</div>` : '<span class="faint" style="font-size:13px">No members yet.</span>'}
+      <span class="hint">Only admins can change who is on a team.</span></div>`
+    }
   </form>
   <div class="modal-f">${m.edit ? `<button class="btn btn-danger-ghost" data-a="delTeam" data-id="${esc(m.edit)}">${ic('trash-2', 14)}Delete team</button>` : ''}<span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTeam">${m.edit ? 'Save changes' : 'Create team'}</button></div>`;
 }
