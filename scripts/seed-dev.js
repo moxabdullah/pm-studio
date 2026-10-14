@@ -31,8 +31,8 @@ const OPT_IN = '--dev-database';
 // every collection the seed writes to, parents first
 const WRITTEN = [...COLLECTIONS.map(c => c.coll), USER_PREFS];
 
-const SUPERUSER = { email: 'dev@gr8rstudio.local', password: 'gr8r-dev-superuser' };
-const USER_PASSWORD = 'gr8r-dev-1234';
+const SUPERUSER = { email: 'dev@pmspace.local', password: 'pmspace-dev-superuser' };
+const USER_PASSWORD = 'pmspace-dev-1234';
 const PLACEHOLDER_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR42mOISr/xnxLMMGrAqAGjBgwXAwDi/ZgfvjB42gAAAABJRU5ErkJggg==',
   'base64',
@@ -83,7 +83,7 @@ async function requireServer(origin) {
 
 /* A throwaway superuser looks at the database before the dev superuser (with a known password) is allowed into it. */
 // The password starts with a letter: base64url can start with "-", which the PocketBase CLI would read as a flag.
-const newProbe = () => ({ email: `seed-probe-${randomBytes(4).toString('hex')}@gr8rstudio.local`, password: 'p' + randomBytes(18).toString('base64url') });
+const newProbe = () => ({ email: `seed-probe-${randomBytes(4).toString('hex')}@pmspace.local`, password: 'p' + randomBytes(18).toString('base64url') });
 
 function dropProbe(probe) {
   try {

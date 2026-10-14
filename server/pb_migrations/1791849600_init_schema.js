@@ -188,7 +188,7 @@ migrate(
     );
 
     const settings = app.settings();
-    settings.meta.appName = 'Gr8r Studio';
+    settings.meta.appName = 'PM Space';
     app.save(settings);
   },
   app => {

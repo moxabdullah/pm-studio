@@ -21,7 +21,7 @@ export const DEFAULT_NOTIF_PREFS = {
    name so the shell can draw itself; src/core/sync.js fills in everything else from the server. */
 export function emptyData() {
   return {
-    ws: { id: '', name: 'Gr8r Studio', url: 'gr8rstudio', c: '#1D1C1A', brand: true },
+    ws: { id: '', name: 'PM Space', url: 'pmspace', c: '#1D1C1A', brand: true },
     workspaces: [],
     me: '',
     members: [],

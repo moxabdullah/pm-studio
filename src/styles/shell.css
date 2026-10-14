@@ -66,9 +66,12 @@
 .auth-card .logo {
   color: var(--text);
 }
-svg.logo {
+.logo {
   display: block;
   flex-shrink: 0;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 .ws-name {
   font-weight: 600;

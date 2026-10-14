@@ -12,7 +12,7 @@
                        Uploads are protected, so the URL carries a short-lived file token. Fetch it right before using it. */
 import PocketBase, { BaseAuthStore, getTokenPayload } from 'pocketbase';
 
-const AUTH_KEY = 'gr8r.auth';
+const AUTH_KEY = 'pmspace.auth';
 
 /* Storage may be missing or throw (private windows, blocked site data), so every access is guarded. */
 const area = name => {

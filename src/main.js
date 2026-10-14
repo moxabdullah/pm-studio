@@ -73,11 +73,6 @@ import { toast } from './ui/toast.js';
     l.setAttribute('aria-live', 'polite');
     document.body.appendChild(l);
   }
-  try {
-    localStorage.removeItem('gr8r.v2'); // the browser-only demo data of earlier versions
-  } catch {
-    /* storage blocked: nothing was kept there */
-  }
   sync.bindSync({ render: remoteRender, toast, loggedOut: showLogin });
   if (!pb.authStore.isValid) {
     S.ui.auth = 'login';
@@ -112,4 +107,4 @@ import { toast } from './ui/toast.js';
 })();
 
 // Dev-only handle for debugging and screenshot tooling; stripped from production builds.
-if (import.meta.env.DEV) window.__gr8r = { S, D, A, go, render, sync, pb };
+if (import.meta.env.DEV) window.__pmspace = { S, D, A, go, render, sync, pb };
