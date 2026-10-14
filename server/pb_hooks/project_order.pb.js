@@ -8,6 +8,9 @@
 // project, whatever `order` the request carries is replaced by one less than the lowest `order` of ALL projects, private ones included.
 // The app still sends a value, a placeholder it shows until the answer comes back; the answer carries the real one.
 //
+// The server decides only on create. An update may still set `order` to any value within the limit below, including one equal to
+// another project's, a private one's too; the app settles ties by id, so that is cosmetic (see the end of the list below).
+//
 // Superusers keep what they send: the dev seed and the imports create projects in an order of their own.
 // Nothing here widens access. PocketBase has already checked the create rule when this hook runs, and the hook only sets `order`.
 //
@@ -23,7 +26,15 @@
 //     value, and two projects may then share one. Ties are settled by id in the app (projOrderFrom in src/core/sync-map.js), so the
 //     list stays stable; it is only cosmetic.
 //   - A rolled-back create leaves no trace: the value was never saved, and the next create takes it.
-//   - Reordering is the app's business: an update of `order` is not touched.
+//   - Reordering is the app's business. The update hook at the end of this file only keeps `order` in a range where stepping down by
+//     one still gives a smaller number; inside it a user may set any value, one equal to another project's (a hidden one's too)
+//     included. The visible order does not suffer (ties are settled by id), and it is only if that project is ever shown that it
+//     lands next to the other one.
+//   - A value outside the range that a superuser, a migration or the database itself put there is left alone: the update hook only
+//     looks at a request that changes `order`, so members can still edit such a project. The create hook skips these values when it
+//     looks for the lowest (see below), so new projects step down from the lowest value inside its window and do not tie; such a
+//     project may still sort before every new one. The exception is a value less than one inside the window's edge (only a superuser
+//     can set one): a step down from it leaves the window, and creates tie there.
 onRecordCreateRequest(e => {
   if (e.hasSuperuserAuth()) return e.next();
 
@@ -32,8 +43,14 @@ onRecordCreateRequest(e => {
     app.runInTransaction(txApp => {
       // MIN is NULL without projects; then the first one gets 0 (COALESCE(.., 1) - 1). The fraction in the template makes the field a
       // float: with a whole number it is an integer, and scanning a fractional order (the app writes those) into it fails.
+      // Only values within +-2^50 (about 1.1e15) count. Next to -1.7976931348623157e308, one less is the same number, so every new
+      // project would take it and tie; a superuser can set such a value (an update by anybody else is refused below), and the database
+      // can hold infinity. The window is far wider than the +-1e12 a user may set, so a value that passed the update hook, and the
+      // steps of one below it that creates take, stay inside it (at this size a double still tells x from x - 1); that keeps each create
+      // below the last. 2^50 and not 1e15 so that a round number somebody types to push a project to the top does not sit on the edge:
+      // a value less than one inside the edge would step outside it, and then every create would tie.
       const row = new DynamicModel({ lowest: 0.5 });
-      txApp.db().newQuery('SELECT COALESCE(MIN(`order`), 1) AS lowest FROM projects').one(row);
+      txApp.db().newQuery('SELECT COALESCE(MIN(`order`), 1) AS lowest FROM projects WHERE `order` BETWEEN -1125899906842624 AND 1125899906842624').one(row);
       e.record.set('order', row.lowest - 1);
 
       // Everything PocketBase does from here on (the save, the hooks around it, the realtime events) must use the transaction.
@@ -43,4 +60,38 @@ onRecordCreateRequest(e => {
   } finally {
     e.app = app;
   }
+}, 'projects');
+
+// Keeps `order` where the allocation above can work with it.
+//
+// The update rule puts no bound on `order`, so one member could save -1.7976931348623157e308: one less than that is the same
+// number, and every project created afterwards would take it and tie. Only a superuser could undo it. So an update by anybody
+// but a superuser may only set `order` to a finite number of at most 1e12 in size. The app never goes near that: creates step down
+// by one from 0 and a reorder hands out the values that are already there or one between two neighbours (projectOrders in
+// src/core/sync.js).
+//
+// What counts is the value PocketBase is about to save (`e.record`, loaded from the request before this runs), not the body key:
+// `order+` and `order-` add to or subtract from the stored number, and the result is what is checked. A request that does not change
+// `order` is not checked, so a project whose value a superuser left outside the range can still be renamed.
+// PocketBase has already turned what the request sent into a number by then: "NaN" and "Infinity" arrive as such and are refused
+// like any other value outside the range, but text that is not a number, null, a list or a boolean arrive as 0 or 1 and are saved
+// as that (a harmless value; the hook cannot tell them from a 0 that was meant).
+//
+// What it does not cover:
+//   - Superusers: they keep what they send, as on create (the dev seed, the imports). The create hook above copes with the values
+//     they may leave behind.
+//   - Anything that is not an update through the API (a migration, server code, the database).
+onRecordUpdateRequest(e => {
+  if (e.hasSuperuserAuth()) return e.next();
+
+  // Handlers run in isolated runtimes, so everything they use is defined inside them. The same 1e12 is quoted in the comment above.
+  const LIMIT = 1e12;
+
+  const order = e.record.get('order');
+  if (order !== e.record.original().get('order') && (!Number.isFinite(order) || Math.abs(order) > LIMIT)) {
+    throw new BadRequestError('Invalid order.', {
+      order: new ValidationError('validation_invalid_order', 'Must be a number between -1e12 and 1e12.'),
+    });
+  }
+  return e.next();
 }, 'projects');
