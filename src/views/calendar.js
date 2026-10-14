@@ -4,7 +4,7 @@ import { ic } from '../core/icons.js';
 import { D, S, allTasks, pColor, proj, wsEvents } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
-import { applyView, viewOf, viewToolbar } from '../shell/view-engine.js';
+import { applyView, peekView, viewToolbar } from '../shell/view-engine.js';
 
 export function startOfWeek(d) {
   const x = sod(d);
@@ -101,7 +101,7 @@ export function calendarHtml(ts, opt = {}) {
 }
 export function pageWsCalendar() {
   const key = 'cal';
-  const v = viewOf(key);
+  const v = peekView(key);
   return `<div class="page flush"><div class="ph"><div><h1>Calendar</h1><p>Deadlines and events across every project.</p></div><div class="acts"><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}New task</button></div></div>
   ${viewToolbar(key, { group: false })}${calendarHtml(applyView(allTasks(), v), { key, events: true })}</div>`;
 }

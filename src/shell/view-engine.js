@@ -64,11 +64,36 @@ export function cleanFilters(list) {
     .filter(f => f && typeof f.f === 'string' && Object.prototype.hasOwnProperty.call(FIELDS, f.f))
     .map(f => ({ f: f.f, op: f.op === 'not' ? 'not' : 'is', v: Array.isArray(f.v) ? f.v.map(String) : [] }));
 }
-/* The state of one view (a page, or a project's tab). Made on the first read and changed in place by its callers, which save() when they
-   mean it to stay: a view still equal to defaultView() is not stored (see cleanPrefs() in core/sync-map.js), so only reading it is no change. */
+/* The state of one view (a page, or a project's tab). Renders READ it (peekView(): nothing is stored, so opening a page is no change);
+   actions that change it take it with viewOf(), change it in place and save(). A view still equal to defaultView() is not stored in the
+   record either (see cleanPrefs() in core/sync-map.js).
+   A project's views ('p:<project>', 'sv:<saved view>') start with the Project column hidden (it is the same in every row there; the user
+   can show it again, which `_projHidden` remembers), and a saved view's tab starts from the filters it was saved with. */
+const isProjView = key => key.startsWith('p:') || key.startsWith('sv:');
+function seedView(key) {
+  const v = defaultView();
+  if (isProjView(key)) {
+    v.hidden.push('project');
+    v._projHidden = true;
+  }
+  if (key.startsWith('sv:')) v.filters = cleanFilters(D().savedViews.find(s => s.id === key.slice(3))?.filters);
+  return v;
+}
+// For renders: the stored state of the view, or a fresh seed that is NOT stored (a render must not change what is pending).
+export const peekView = key => S.views[key] || seedView(key);
+// For actions that change the view (and then save()), and for nothing else: stores the seed on the first call.
 export function viewOf(key) {
-  if (!S.views[key]) S.views[key] = defaultView();
+  if (!S.views[key]) S.views[key] = seedView(key);
   return S.views[key];
+}
+/* The columns hidden in a table. A project's view that an older version stored without `_projHidden` (it hid the Project column the
+   first time the table was drawn, and wrote that down then) reads as having it hidden, as it did then; hideProjCol() makes that the
+   stored state before an action changes the columns, so what the user saw is what is kept. */
+export const hiddenCols = (key, v) => (isProjView(key) && !v._projHidden && !v.hidden.includes('project') ? [...v.hidden, 'project'] : v.hidden);
+export function hideProjCol(key, v) {
+  if (!isProjView(key) || v._projHidden) return;
+  v._projHidden = true;
+  if (!v.hidden.includes('project')) v.hidden.push('project');
 }
 export function matchF(t, f) {
   if (!f.v || !f.v.length) return true;
@@ -152,7 +177,7 @@ export function groupTasks(ts, g) {
   return g === 'status' || g === 'priority' ? groups : groups.filter(G => G.tasks.length);
 }
 export function filterChips(key) {
-  const v = viewOf(key);
+  const v = peekView(key);
   if (!v.filters.length) return '';
   const chips = v.filters
     .map((f, i) => {
@@ -166,7 +191,7 @@ export function filterChips(key) {
   return `<div class="chipsbar">${ic('list-filter', 13)}${chips}<button class="btn btn-sm btn-ghost" data-a="pop" data-pop="filter" data-key="${esc(key)}">${ic('plus', 12)}Add</button><span class="sp"></span><button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${esc(key)}">Clear all</button></div>`;
 }
 export function viewToolbar(key, opt = {}) {
-  const v = viewOf(key);
+  const v = peekView(key);
   const sortName = {
     manual: 'Manual',
     title: 'Title',

@@ -4,7 +4,7 @@ import { PR, ST } from '../core/constants.js';
 import { D, S, proj, save, task } from '../core/store.js';
 import { latestFields, mutate, toast } from '../ui/toast.js';
 import { fxSet, render } from '../shell/render.js';
-import { viewOf } from '../shell/view-engine.js';
+import { peekView, viewOf } from '../shell/view-engine.js';
 import { applyPatch, handleFiles, updateTask } from './actions.js';
 
 export let DRAG = null;
@@ -175,7 +175,7 @@ document.addEventListener('drop', e => {
   } else if (d.type === 'row' && d.target) {
     let t = task(d.id);
     const key = d.lkey;
-    let v = key ? viewOf(key) : null;
+    let v = key ? peekView(key) : null; // read only: a drop that leaves the sort alone must not store the view
     const patch = {};
     if (v && d.group) {
       const g = v.group;
@@ -189,7 +189,7 @@ document.addEventListener('drop', e => {
     mutate(
       () => {
         t = task(d.id); // by id: sync or Undo can replace the task (and the view) while a refused move waits for "Try again"
-        v = key ? viewOf(key) : null;
+        v = key ? peekView(key) : null;
         const tg = task(d.target);
         const all = D()
           .tasks.filter(x => !x.archived && x.id !== t.id)
@@ -199,7 +199,7 @@ document.addEventListener('drop', e => {
         t.order = nb ? (tg.order + nb.order) / 2 : tg.order + (d.pos === 'before' ? -1 : 1);
         applyPatch(t, patch);
         if (v && v.sort.f !== 'manual') {
-          v.sort = { f: 'manual', dir: 1 };
+          v.sort = { f: 'manual', dir: 1 }; // only a stored view gets here: the seed's sort is already manual
           switched = true;
         }
       },

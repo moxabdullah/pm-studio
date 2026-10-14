@@ -3,7 +3,7 @@ import { esc, fmtDate, iso } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { S, isOver, mem, pColor, proj, task } from '../core/store.js';
 import { av, dueHtml, empty, lbl, prPill, stIcon, stPill } from '../ui/helpers.js';
-import { groupTasks, viewOf } from '../shell/view-engine.js';
+import { groupTasks, hiddenCols, peekView } from '../shell/view-engine.js';
 
 export const TCOLS = [
   ['title', 'Task', 314],
@@ -50,12 +50,9 @@ export function tcell(t, c) {
   }
 }
 export function tableHtml(ts, key, p) {
-  const v = viewOf(key);
-  if (p && !v._projHidden) {
-    v._projHidden = true;
-    if (!v.hidden.includes('project')) v.hidden.push('project');
-  }
-  const cols = TCOLS.filter(c => c[0] === 'title' || !v.hidden.includes(c[0]));
+  const v = peekView(key);
+  const hidden = hiddenCols(key, v); // inside a project the Project column starts hidden (a render reads that, it does not write it down)
+  const cols = TCOLS.filter(c => c[0] === 'title' || !hidden.includes(c[0]));
   const w = c => +v.colW[c[0]] || c[2]; // pixels: a stored width must never become CSS text
   const groups = groupTasks(ts, v.group);
   const totalW = cols.reduce((a, c) => a + w(c), 0);

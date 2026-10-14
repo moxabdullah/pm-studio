@@ -30,7 +30,7 @@ import { effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
-import { viewOf } from '../shell/view-engine.js';
+import { hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
@@ -1340,6 +1340,7 @@ A.setViewMode = el => {
 };
 A.toggleCol2 = el => {
   const v = viewOf(el.dataset.key);
+  hideProjCol(el.dataset.key, v); // a project's view from an older version: the Project column the table showed as hidden is stored hidden first
   const c = el.dataset.v;
   v.hidden = v.hidden.includes(c) ? v.hidden.filter(x => x !== c) : [...v.hidden, c];
   save();
@@ -1409,7 +1410,7 @@ IN.fOp = el => {
 };
 A.saveView = el => {
   const k = 'p:' + el.dataset.id;
-  openModal({ type: 'saveView', pid: el.dataset.id, nf: viewOf(k).filters.length });
+  openModal({ type: 'saveView', pid: el.dataset.id, nf: peekView(k).filters.length });
 };
 /* A change that calls save() itself, not mutate(), is kept while offline and sent once the connection is back (merged with the
    server's copy first). Its toast then says that, not "saved". `offline` says what was done, without a full stop. The offline toast
@@ -1420,7 +1421,7 @@ A.saveViewSubmit = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const name = $('#sv-name').value.trim() || 'Untitled view';
   const type = $('#sv-type').value;
-  const sv = { id: uid('v'), project: m.pid, name, type, filters: JSON.parse(JSON.stringify(viewOf('p:' + m.pid).filters)) };
+  const sv = { id: uid('v'), project: m.pid, name, type, filters: JSON.parse(JSON.stringify(peekView('p:' + m.pid).filters)) };
   D().savedViews.push(sv);
   save();
   S.ui.modals.pop();
