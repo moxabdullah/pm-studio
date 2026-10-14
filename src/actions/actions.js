@@ -265,12 +265,14 @@ A.goTasks = el => {
         : f === 'overdue'
           ? [{ f: 'due', op: 'is', v: ['overdue'] }]
           : [];
+  save();
   go('tasks');
 };
 A.goFilteredList = el => {
   const v = viewOf('p:' + el.dataset.id);
   v.filters = [{ f: 'status', op: 'is', v: [el.dataset.st] }];
   v.group = 'status';
+  save();
   go('project', { id: el.dataset.id, tab: 'list' }, { tab: true });
 };
 
@@ -1354,6 +1356,7 @@ A.resetCols = el => {
 };
 IN.viewQ = el => {
   viewOf(el.dataset.key).q = el.value;
+  save();
   render();
 };
 A.addFilter = el => {
