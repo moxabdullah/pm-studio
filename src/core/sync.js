@@ -67,6 +67,7 @@
                registered on the server before anything is read (so no change can fall between the reload and the stream); then
                reload by merging (not replacing, so nothing typed meanwhile is lost); then send what is unsent (built on the fresh
                copy, so it does not overwrite other people's changes to the same record). See recover().
+     prefs     A user without a settings record (user_prefs) gets one with the first save after a setting has changed, not at sign-in.
      journal   The last minute of remote changes that were applied to S.data, for restoreState(). */
 import { authStore, pb } from './pb.js';
 import {
@@ -106,6 +107,7 @@ const st = {
   reloading: false, // a full reload is merging in: skip per-record follow-up fetches
   queue: [], // live events that arrived while the first load was in flight
   prefsId: '', // id for the user_prefs record this user does not have yet
+  prefsInit: null, // the settings (doc) this user had at sign-in when no settings record existed: until they differ there is nothing to create
   pollT: 0,
   netT: 0,
   graceT: 0,
@@ -490,6 +492,7 @@ function install(all) {
   if (rec) applyUserPrefs(S, fromRecord(USER_PREFS, rec));
   refreshWs();
   if (rec) base.get(USER_PREFS).set(rec.id, entryOf(prefsPayload(rec.id), rec.updated));
+  else st.prefsInit = prefsPayload('').doc;
 }
 /* Reloads everything and merges it in like a burst of live events: unsent local edits survive, new records appear, records the
    server no longer has go away. Returns true when S.data changed. */
@@ -571,6 +574,7 @@ function applyEvent(coll, { action, record }) {
     if (action !== 'delete') return applyRecord(key, record);
     if (key !== USER_PREFS) return removeRecord(key, record.id);
     base.get(USER_PREFS).delete(record.id); // the next flush creates a fresh one
+    st.prefsInit = null;
     return false;
   } catch (err) {
     console.error('sync: could not apply a live update', coll, action, err);
@@ -629,8 +633,11 @@ function computeDiff() {
   const id = cur ? cur.p.id : st.prefsId || (st.prefsId = uid());
   const p = prefsPayload(id);
   let prefs = null;
-  if (!cur) prefs = { type: 'create', key: USER_PREFS, coll: USER_PREFS, id, payload: p };
-  else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p), was: cur.p };
+  if (!cur) {
+    // A user the dashboard created has no settings record, and signing in does not give them one: it is created by the first save
+    // after a setting (a view, a favourite, the theme, the workspace ...) has come to differ from what it was at sign-in.
+    if (!st.prefsInit || !same(p.doc, st.prefsInit)) prefs = { type: 'create', key: USER_PREFS, coll: USER_PREFS, id, payload: p };
+  } else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p), was: cur.p };
   return { creates, updates, deletes: deletes.reverse(), prefs };
 }
 export function pendingChanges() {
@@ -837,7 +844,10 @@ async function adoptServerTruth({ key, coll, id }) {
     if (key === USER_PREFS) {
       const rec = (await pb.collection(coll).getFullList())[0];
       if (rec) applyRecord(key, rec, true);
-      else base.get(key).clear(); // none exists: the next flush creates it
+      else {
+        base.get(key).clear(); // none exists: the next flush creates it
+        st.prefsInit = null;
+      }
     } else applyRecord(key, await pb.collection(coll).getOne(id), true);
   } catch (err) {
     const kind = classify(err);
@@ -1016,6 +1026,7 @@ async function teardown() {
     reloading: false,
     queue: [],
     prefsId: '',
+    prefsInit: null,
     rtDown: false,
   });
   S.ui.offline = false;
