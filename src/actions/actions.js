@@ -27,7 +27,7 @@ import { flush, hasUnsaved, pendingChanges, quietResync, restoreState, resubscri
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
-import { latest, latestFields, mutate, toast } from '../ui/toast.js';
+import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { viewOf } from '../shell/view-engine.js';
@@ -2120,8 +2120,9 @@ export function needWorkspace(then) {
   return true;
 }
 /* The sign-in page with nothing of the last session left in memory: data, settings, views, route, history and open panels are reset.
-   `message` shows above the form (why the session ended). */
+   `message` shows above the form (why the session ended). A toast that stays until dismissed goes with the session. */
 export function showLogin(message = '') {
+  clearStickyToasts();
   resetStore();
   S.ui.auth = 'login';
   if (message) S.ui.errors.login = message;
