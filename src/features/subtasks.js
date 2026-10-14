@@ -19,7 +19,7 @@ export function subtaskHtml(t, s) {
       <dt>${ic('folder', 14)}Parent</dt><dd><button class="pillbtn" data-a="closeSub"><span class="mono faint" style="font-size:11px">${esc(t.key)}</span>${esc(t.title)}</button></dd>
     </dl>
     <div class="dsec"><div class="dsec-h"><h3 id="s-note-l">Notes</h3></div>
-      <textarea class="textarea" id="s-note" data-in="subNote" data-id="${esc(t.id)}" data-sid="${esc(s.id)}" rows="4" placeholder="Add details, links, or acceptance criteria…" aria-labelledby="s-note-l">${esc(s.note || '')}</textarea></div>
+      <textarea class="textarea" id="s-note" data-in="subNote" data-live data-id="${esc(t.id)}" data-sid="${esc(s.id)}" rows="4" placeholder="Add details, links, or acceptance criteria…" aria-labelledby="s-note-l">${esc(s.note || '')}</textarea></div>
     <div class="dsec row" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-secondary btn-sm" data-a="promoteSub" data-id="${esc(t.id)}" data-sid="${esc(s.id)}">${ic('arrow-up-right', 13)}Convert to task</button>
       <span class="sp"></span>
