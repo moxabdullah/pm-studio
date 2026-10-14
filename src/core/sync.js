@@ -1012,6 +1012,7 @@ export function flush(options = {}) {
   return run;
 }
 let refusals = 0; // how many changes were refused and told so (a count that only grows): setOffline() notes it, recover() compares it
+let toldRefusals = 0; // the same, counted when the toast shows, not after the read-back: retryNow() compares it
 const NAME_MAX = 40;
 /* How the user knows a record, for the toast that says a change to it was discarded: its name or title (a member has both: the name),
    cut to NAME_MAX characters. It is the name the screen shows after the change is taken back, so the baseline's copy comes first; only
@@ -1055,6 +1056,7 @@ async function refuse(list, gen) {
         : { kind: 'err', ms: 7000 },
     );
   }
+  toldRefusals += loud.length;
   const left = await Promise.all(list.map(r => adoptServerTruth(r.op, gen)));
   refusals += loud.length; // after the above: a refusal that puts the page offline is lost when it is back (see setOffline())
   if (gen === st.gen) hooks.render();
@@ -1347,10 +1349,10 @@ export async function retryNow() {
   }
   if (!st.offline) return flush();
   const gen = st.gen;
-  const told = refusals;
+  const told = toldRefusals;
   const ok = await recover();
   // A try that refused or gave up on a change has said so already (refuse()): a second red toast about the same try would bury it.
-  if (gen === st.gen && !ok && st.offline && refusals === told) {
+  if (gen === st.gen && !ok && st.offline && toldRefusals === told) {
     const why = st.cause === 'server' ? 'The server is having trouble right now' : "Still can't reach the server";
     hooks.toast(`${why}. We'll keep trying.`, { kind: 'err' });
   }
@@ -1398,6 +1400,7 @@ export async function startSync({ boot = false } = {}) {
           if (worn(failed)) throw err; // it has failed for a minute in a row: the app says so, instead of showing the skeleton for ever
           console.warn('sync: the server failed while loading; trying again', err);
         }
+        st.cause = kind === 'server' ? 'server' : 'network';
         setOffline(true); // the server is down or failing: show the offline bar and try again (less often while it is failing)
         await new Promise(resolve => {
           st.wake = resolve;
