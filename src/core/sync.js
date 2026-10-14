@@ -1123,7 +1123,8 @@ async function adoptServerTruth(op, gen) {
       if (gen !== st.gen) return '';
       if (items[0]) {
         applyRecord(key, items[0], true, true); // journaled: an Undo of something done since must not bring the refused value back
-        if (key === 'projects' && type === 'update' && 'order' in op.fields) takeServerOrder(); // reorderProjects() kept the refused order
+        // reorderProjects() kept the refused order, or put a project whose delete was refused last (every one after it would be sent a new order)
+        if (key === 'projects' && (type === 'delete' || (type === 'update' && 'order' in op.fields))) takeServerOrder();
       } else removeRecord(key, id, true); // gone, or not ours to see
     }
     return '';
