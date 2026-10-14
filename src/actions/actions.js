@@ -23,7 +23,7 @@ import {
   visibleProjects,
 } from '../core/store.js';
 import { fileUrl, pb, setRemember } from '../core/pb.js';
-import { flush, quietResync, restoreState, resubscribe, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
+import { flush, hasUnsaved, pendingChanges, quietResync, restoreState, resubscribe, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
@@ -148,6 +148,8 @@ export function confirmDlg(o) {
   S.ui.confirmText = '';
   openModal({ type: 'confirm', ...o });
 }
+/* Whether `m` is the modal on top. A form saved by "Try again" (see mutate) may have been closed in the meantime, and it must not close another. */
+const isTop = m => S.ui.modals[S.ui.modals.length - 1] === m;
 /* Undo. A snapshot is an opaque token: restoring puts the data back as it was and keeps whatever other people changed since, so Undo
    never reverts their work (see snapshotState/restoreState in core/sync.js). */
 export function snapshot() {
@@ -644,10 +646,11 @@ A.submitTask = () => {
     recur: f.recur,
     subtasks: f.subtasks,
   };
+  // What follows the save goes in mutate's `done`, so "Try again" after an offline refusal closes the form too, instead of leaving it to be submitted twice.
   if (m.edit) {
     const t = task(m.edit);
-    if (
-      !mutate(() => {
+    mutate(
+      () => {
         applyPatch(t, base);
         if (
           f.desc !==
@@ -657,35 +660,38 @@ A.submitTask = () => {
             .trim()
         )
           t.desc = f.desc ? `<p>${esc(f.desc)}</p>` : '';
-      })
-    )
-      return;
-    S.ui.modals.pop();
-    render();
-    toast('Changes saved');
-    handleFiles(picked, { project: t.project, task: t.id });
+      },
+      () => {
+        if (isTop(m)) S.ui.modals.pop();
+        render();
+        toast('Changes saved');
+        handleFiles(picked, { project: t.project, task: t.id });
+      },
+    );
     return;
   }
   let t;
-  if (
-    !mutate(() => {
+  mutate(
+    () => {
       t = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '' });
-    })
-  )
-    return;
-  if (f.more) {
-    Object.assign(f, { title: '', desc: '', subtasks: [], files: [] });
-    render();
-    setTimeout(() => $('#f-title')?.focus(), 0);
-    toast(`Created ${t.key}`, { ms: 2000 });
-    handleFiles(picked, { project: t.project, task: t.id });
-    return;
-  }
-  S.ui.modals.pop();
-  fxSet({ added: t.id });
-  render();
-  toast(`Created ${t.key} in ${proj(t.project).name}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
-  handleFiles(picked, { project: t.project, task: t.id });
+    },
+    () => {
+      const open = isTop(m);
+      if (open && f.more) {
+        Object.assign(f, { title: '', desc: '', subtasks: [], files: [] });
+        render();
+        setTimeout(() => $('#f-title')?.focus(), 0);
+        toast(`Created ${t.key}`, { ms: 2000 });
+        handleFiles(picked, { project: t.project, task: t.id });
+        return;
+      }
+      if (open) S.ui.modals.pop();
+      fxSet({ added: t.id });
+      render();
+      toast(`Created ${t.key} in ${proj(t.project).name}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
+      handleFiles(picked, { project: t.project, task: t.id });
+    },
+  );
 };
 
 /* inline composer */
@@ -1493,8 +1499,8 @@ A.submitProject = () => {
   }
   if (m.edit) {
     const p = proj(m.edit);
-    if (
-      mutate(() =>
+    mutate(
+      () =>
         Object.assign(p, {
           name: f.name,
           desc: f.desc,
@@ -1505,25 +1511,26 @@ A.submitProject = () => {
           due: f.due,
           members: [...new Set([...p.members, f.lead])],
         }),
-      )
-    ) {
-      S.ui.modals.pop();
-      render();
-      toast('Project updated');
-    }
+      () => {
+        if (isTop(m)) S.ui.modals.pop();
+        render();
+        toast('Project updated');
+      },
+    );
     return;
   }
   if (needWorkspace()) return; // the workspace went away while the form was open
   let p;
-  if (
-    !mutate(() => {
+  mutate(
+    () => {
       p = createProject(f, f.tmpl);
-    })
-  )
-    return;
-  S.ui.modals.pop();
-  go('project', { id: p.id, tab: f.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
-  toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
+    },
+    () => {
+      if (isTop(m)) S.ui.modals.pop();
+      go('project', { id: p.id, tab: f.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
+      toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
+    },
+  );
 };
 A.dupProject = el => {
   const p = proj(el.dataset.id);
@@ -1860,9 +1867,13 @@ export function createWorkspace(then, why = '') {
         return;
       }
       const w = { id: uid('w'), name: v, c: ['#2F2E2A', '#5A67D8', '#23918A', '#C54B78'][D().workspaces.length % 4] };
-      if (!mutate(() => D().workspaces.push(w))) return;
-      A.switchWs({ dataset: { v: w.id } });
-      then?.();
+      mutate(
+        () => D().workspaces.push(w),
+        () => {
+          A.switchWs({ dataset: { v: w.id } });
+          then?.();
+        },
+      );
     },
   });
 }
@@ -1898,9 +1909,25 @@ async function sessionEnded() {
 }
 A.signOut = async () => {
   S.ui.pop = null;
-  await stopSync({ flush: true }); // sends anything unsaved first, when online
-  pb.authStore.clear();
-  showLogin();
+  const leave = async () => {
+    await stopSync({ flush: true }); // sends anything unsaved first, when online
+    pb.authStore.clear();
+    showLogin();
+  };
+  // Nothing is kept in the browser, so changes the server has not confirmed are gone with the session. Send them first; if they cannot go, ask.
+  const n = hasUnsaved() && !(await flush()) ? pendingChanges() : 0;
+  if (n) {
+    confirmDlg({
+      title: 'Sign out with unsent changes?',
+      body: `${n} change${n > 1 ? 's have' : ' has'} not reached the server, which can't be reached right now. Signing out will discard ${n > 1 ? 'them' : 'it'}.`,
+      ok: 'Sign out and discard',
+      icon: 'log-out',
+      danger: true,
+      run: leave,
+    });
+    return;
+  }
+  await leave();
 };
 A.shortcuts = () => {
   S.ui.pop = null;
@@ -2097,7 +2124,14 @@ A.savePassword = async () => {
   S.ui.pwNew = nw;
   if (Object.keys(e).length) return redraw(e.pwCur ? 'pw-cur' : e.pwNew ? 'pw-new' : 'pw-conf');
   if (S.ui.offline) {
-    toast("Your password couldn't be changed. You're offline.", { kind: 'err', action: 'Try again', onAction: () => retryNow() });
+    // Reconnecting alone would leave the password as it was: submit the form again once the server answers (if the form is still on screen).
+    toast("Your password couldn't be changed. You're offline.", {
+      kind: 'err',
+      action: 'Try again',
+      onAction: async () => {
+        if ((await retryNow()) && $('#pw-cur')) A.savePassword();
+      },
+    });
     return;
   }
   const busy = on => {

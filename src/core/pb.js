@@ -97,10 +97,17 @@ authStore.onChange(() => {
   cachedToken = { value: '', expires: 0 };
 });
 async function fileToken() {
-  if (cachedToken.value && Date.now() < cachedToken.expires - 10000) return cachedToken.value;
-  const value = await pb.files.getToken();
-  cachedToken = { value, expires: (getTokenPayload(value).exp || 0) * 1000 };
-  return value;
+  for (;;) {
+    if (cachedToken.value && Date.now() < cachedToken.expires - 10000) return cachedToken.value;
+    const owner = authStore.token;
+    const value = await pb.files.getToken();
+    // The sign-in changed while the request was on its way (sign-out, another account, a new password): that token belongs to the old
+    // one, so it is neither kept nor used. Ask again. Calls that overlap each get their own request; whichever finishes under the
+    // current sign-in fills the cache, and the others find it there.
+    if (authStore.token !== owner) continue;
+    cachedToken = { value, expires: (getTokenPayload(value).exp || 0) * 1000 };
+    return value;
+  }
 }
 
 export async function fileUrl(file, { download = false } = {}) {

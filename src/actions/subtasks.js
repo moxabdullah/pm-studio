@@ -57,8 +57,8 @@ A.promoteSub = el => {
   const s = subOf(t, el.dataset.sid);
   if (!s) return;
   let n;
-  if (
-    !mutate(() => {
+  mutate(
+    () => {
       n = createTask({
         title: s.title,
         project: t.project,
@@ -71,10 +71,11 @@ A.promoteSub = el => {
       });
       t.subtasks = t.subtasks.filter(x => x !== s);
       logAct('converted a subtask of', t, `into ${n.key}`);
-    })
-  )
-    return;
-  S.ui.subOpen = null;
-  render();
-  toast(`Converted to ${n.key}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+    },
+    () => {
+      S.ui.subOpen = null;
+      render();
+      toast(`Converted to ${n.key}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+    },
+  );
 };

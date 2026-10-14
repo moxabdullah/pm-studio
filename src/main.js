@@ -90,18 +90,25 @@ import { toast } from './ui/toast.js';
   };
   S.ui.loading = true;
   route();
+  const landed = { route: S.ui.route, params: S.ui.params };
   render();
   try {
     await sync.startSync({ boot: true });
   } catch (err) {
     if (err.cancelled) return;
-    pb.authStore.clear();
-    showLogin([401, 403].includes(err.status) ? 'Your session expired. Sign in again.' : `Couldn't load your data: ${err.response?.message || err.message}`);
+    // Only a refused session is over. Any other failure (the server erred, say) leaves the stored session alone: reloading tries again.
+    if ([401, 403].includes(err.status)) {
+      pb.authStore.clear();
+      showLogin('Your session expired. Sign in again.');
+    } else showLogin(`Couldn't load your data: ${(err.response?.message || err.message || 'unknown error').replace(/\.$/, '')}. Reload the page to try again.`);
     return;
   }
   S.ui.loading = false;
-  route(); // the saved home page is known now
-  if (!openLink()) render(); // a link such as #/task/<id> goes straight to what it names (it draws the page itself)
+  // The shell is clickable while the skeleton shows: a page chosen meanwhile (go() has replaced the route) stays, and so does not
+  // give way to a link in the address either. Otherwise the saved home page is known now.
+  const navigated = S.ui.route !== landed.route || S.ui.params !== landed.params;
+  if (!navigated) route();
+  if (navigated || !openLink()) render(); // a link such as #/task/<id> goes straight to what it names (it draws the page itself)
 })();
 
 // Dev-only handle for debugging and screenshot tooling; stripped from production builds.
