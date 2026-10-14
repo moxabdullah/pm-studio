@@ -2,14 +2,12 @@
 import { ago, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
-import { D, S, canSee, inWs, proj } from '../core/store.js';
+import { D, S, inWs, proj, wsArchivedTasks } from '../core/store.js';
 import { empty, pIcon, stIcon } from '../ui/helpers.js';
 
 export function pageArchive() {
   const tab = S.ui.archTab || 'tasks';
-  const ts = D()
-    .tasks.filter(t => t.archived && inWs(proj(t.project)) && canSee(proj(t.project)) && !proj(t.project)?.archived)
-    .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+  const ts = wsArchivedTasks().sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
   const ps = D().projects.filter(p => p.archived && inWs(p));
   const row = (lead, title, sub, when, restoreAct, delAct, id) =>
     `<div class="mini" style="min-height:52px;cursor:default;gap:12px">${lead}<div class="grow" style="min-width:0"><div class="trunc" style="font-weight:500">${title}</div><div class="faint trunc" style="font-size:12px">${sub}</div></div><span class="faint hide-m" style="font-size:12px;white-space:nowrap">${when}</span><button class="btn btn-secondary btn-sm" data-a="${restoreAct}" data-id="${esc(id)}">${ic('rotate-ccw', 13)}Restore</button><button class="ibtn ibtn-sm" data-a="${delAct}" data-id="${esc(id)}" data-tip="Delete permanently" aria-label="Delete permanently" style="color:var(--red)">${ic('trash-2', 15)}</button></div>`;

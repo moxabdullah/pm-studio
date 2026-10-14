@@ -121,23 +121,41 @@ const query = key => {
   }
 };
 
-/* Characters from the start of `root`'s text to a point inside it, and back. */
+/* A caret offset in rich text counts three things: characters, <br>s, and the start of every block (paragraph, line, list item ...).
+   Counting characters alone gives the start of a line the same offset as the end of the line before it, so a caret on an empty or
+   later line would come back one line up. */
+const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|PRE)$/;
+function* steps(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.nodeType === Node.TEXT_NODE) yield { node, len: node.nodeValue.length, text: true };
+    else if (node.nodeName === 'BR' || BLOCK.test(node.nodeName)) yield { node, len: 1, text: false };
+  }
+}
+/* The offset of a point inside `root`: what comes before it is cloned out as a fragment and counted. */
 function textOffset(root, node, offset) {
   const range = document.createRange();
   range.selectNodeContents(root);
   range.setEnd(node, offset);
-  return range.toString().length;
+  let n = 0;
+  for (const step of steps(range.cloneContents())) n += step.len;
+  return n;
 }
+/* The point in `root` that textOffset() counted `offset` for. */
 function locate(root, offset) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let left = offset;
-  let last = null;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    last = node;
-    if (left <= node.nodeValue.length) return [node, left];
-    left -= node.nodeValue.length;
+  let at = [root, 0];
+  for (const { node, len, text } of steps(root)) {
+    if (text) {
+      if (left <= len) return [node, left];
+      at = [node, len];
+    } else {
+      if (!left) return at; // the point is just before this line break or block
+      at = node.nodeName === 'BR' ? [node.parentNode, [...node.parentNode.childNodes].indexOf(node) + 1] : [node, 0];
+    }
+    left -= len;
   }
-  return last ? [last, last.nodeValue.length] : [root, root.childNodes.length];
+  return at;
 }
 
 function capture() {

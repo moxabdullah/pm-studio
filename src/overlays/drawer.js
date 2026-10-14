@@ -136,14 +136,15 @@ export function drawerHtml(t) {
   </aside>`;
 }
 /* One attachment tile. An attachment points to a files record (by id); the record's own name, type and size are what is shown, so a
-   rename in the Files tab shows here too. An attachment whose file cannot be found shows what it carries itself, with no download. */
+   rename in the Files tab shows here too. An attachment whose file cannot be found shows what it carries itself, with no download.
+   The preview is its own button and Download and Remove sit beside it, so no button is nested in another. */
 function attachmentHtml(t, a) {
   const f = fileOf(t, a);
   const v = f || a;
   const dl = f?.file
     ? `<button class="ibtn ibtn-xs dl" data-a="downloadFile" data-id="${esc(f.id)}" data-tip="Download" aria-label="Download ${esc(v.name)}">${ic('download', 12)}</button>`
     : '';
-  return `<div class="attc" data-a="filePreview" data-tid="${esc(t.id)}" data-aid="${esc(a.id)}" role="button" tabindex="0">${filePrev(v)}<div class="fi"><div class="trunc" style="font-weight:500">${esc(v.name)}</div><div class="faint">${FT[v.type].n} · ${esc(v.size)}</div></div>${dl}<button class="ibtn ibtn-xs x" data-a="rmAttach" data-id="${esc(t.id)}" data-aid="${esc(a.id)}" aria-label="Remove attachment">${ic('x', 12)}</button></div>`;
+  return `<div class="attc"><button class="attc-open" data-a="filePreview" data-tid="${esc(t.id)}" data-aid="${esc(a.id)}" aria-label="Preview ${esc(v.name)}">${filePrev(v)}<div class="fi"><div class="trunc" style="font-weight:500">${esc(v.name)}</div><div class="faint">${FT[v.type].n} · ${esc(v.size)}</div></div></button>${dl}<button class="ibtn ibtn-xs x" data-a="rmAttach" data-id="${esc(t.id)}" data-aid="${esc(a.id)}" aria-label="Remove attachment">${ic('x', 12)}</button></div>`;
 }
 export function commentHtml(c) {
   const mine = c.by === D().me;

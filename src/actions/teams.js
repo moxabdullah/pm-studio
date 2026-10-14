@@ -72,35 +72,45 @@ A.submitTeam = () => {
   if (!m.edit && needWorkspace()) return; // the workspace went away while the form was open
   const admin = isAdmin();
   let t;
-  const ok = mutate(() => {
-    if (m.edit) {
-      t = team(m.edit);
-      Object.assign(t, { name: f.name, desc: f.desc, icon: f.icon, c: PCOLORS[f.color] });
+  mutate(
+    () => {
+      if (m.edit) {
+        t = team(m.edit);
+        Object.assign(t, { name: f.name, desc: f.desc, icon: f.icon, c: PCOLORS[f.color] });
+        if (admin)
+          D().members.forEach(x => {
+            if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
+          });
+      } else {
+        t = { id: uid('tm'), workspace: D().ws.id, name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
+        allTeams().push(t);
+      }
       if (admin)
-        D().members.forEach(x => {
-          if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
+        f.members.forEach(id => {
+          const x = mem(id);
+          if (x) x.team = t.id;
         });
-    } else {
-      t = { id: uid('tm'), workspace: D().ws.id, name: f.name, desc: f.desc || 'No description yet.', icon: f.icon, c: PCOLORS[f.color] };
-      allTeams().push(t);
-    }
-    if (admin)
-      f.members.forEach(id => {
-        const x = mem(id);
-        if (x) x.team = t.id;
-      });
-  });
-  if (!ok) return;
-  S.ui.modals.pop();
-  if (m.edit) {
-    render();
-    toast(`Saved ${t.name}`);
-  } else {
-    go('team', { id: t.id });
-    toast(`Created ${t.name}`);
-  }
+    },
+    () => {
+      // in mutate's `done`, so "Try again" after an offline refusal also closes the form (and only that form, if it is still open)
+      if (S.ui.modals[S.ui.modals.length - 1] === m) S.ui.modals.pop();
+      if (m.edit) {
+        render();
+        toast(`Saved ${t.name}`);
+      } else {
+        go('team', { id: t.id });
+        toast(`Created ${t.name}`);
+      }
+    },
+  );
 };
+/* Deleting a team also clears it from each member's own account (their `team` field), which only an admin can write, so only an admin
+   can delete one; anyone else would leave those accounts pointing at a team that is gone. */
 A.delTeam = el => {
+  if (!isAdmin()) {
+    toast('Only admins can delete a team.', { kind: 'err' });
+    return;
+  }
   const t = team(el.dataset.id);
   const n = D().members.filter(x => x.team === t.id).length;
   const np = D().projects.filter(p => p.team === t.id).length;
@@ -116,10 +126,9 @@ A.delTeam = el => {
       if (
         mutate(() => {
           D().teams = allTeams().filter(x => x !== t);
-          if (isAdmin())
-            D().members.forEach(x => {
-              if (x.team === t.id) x.team = '';
-            });
+          D().members.forEach(x => {
+            if (x.team === t.id) x.team = '';
+          });
           D().projects.forEach(p => {
             if (p.team === t.id) p.team = '';
           });

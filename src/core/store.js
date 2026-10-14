@@ -155,10 +155,13 @@ export const allTasks = () =>
     const p = proj(t.project);
     return !t.archived && inWs(p) && canSee(p);
   });
-/* Events, files and activity hang off projects, so they follow the project's workspace. */
+/* Events, files and activity hang off projects, so they follow the project's workspace. An activity record has no workspace of its own,
+   so one that names no project (the server allows that, the app never writes it) cannot be placed and is left out everywhere. */
 export const wsEvents = () => D().events.filter(e => inWs(proj(e.project)));
 export const wsFiles = () => D().files.filter(f => inWs(proj(f.project)));
-export const wsActivity = () => D().activity.filter(a => !a.project || inWs(proj(a.project)));
+export const wsActivity = () => D().activity.filter(a => inWs(proj(a.project)));
+/* What the Archive page lists: archived tasks, except those of an archived project, which come back with the project. */
+export const wsArchivedTasks = () => D().tasks.filter(t => t.archived && inWs(proj(t.project)) && canSee(proj(t.project)) && !proj(t.project)?.archived);
 export const isOver = t => t.due && t.status !== 'done' && diffD(parse(t.due), TODAY) < 0;
 export const commentsOf = tid => D().comments.filter(c => c.task === tid);
 export function progressOf(pid) {

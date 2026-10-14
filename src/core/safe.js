@@ -6,7 +6,7 @@
    ===================================================================== */
 
 /* ---------- colours ---------- */
-const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/; // CSS reads 3, 4, 6 and 8 digits, not 5 or 7
 const TOKEN_COLOR = /^var\(--[a-z][a-z0-9-]*\)$/;
 /* A stored colour is only ever used inside style="--c:…". Escaping isn't enough there (`red;background:url(…)` is
    still valid CSS), so accept a hex colour or an app token such as var(--blue) and replace anything else. */

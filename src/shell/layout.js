@@ -2,7 +2,7 @@
 import { MOD, TODAY, diffD, esc, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
-import { D, S, allTasks, inWs, me, mem, pColor, proj, team, teamsList, visibleProjects } from '../core/store.js';
+import { D, S, allTasks, inWs, me, mem, pColor, proj, team, teamsList, visibleProjects, wsArchivedTasks } from '../core/store.js';
 import { av, safely } from '../ui/helpers.js';
 import { ROUTE_NAMES } from './render.js';
 import { skeleton } from './skeletons.js';
@@ -142,7 +142,7 @@ export function renderSidebar() {
           </div>`;
           })
           .join('')}
-        ${sItem('archive', 'Archive', 'archive', { ct: D().tasks.filter(t => t.archived && inWs(proj(t.project))).length + D().projects.filter(p => p.archived && inWs(p)).length || '' })}
+        ${sItem('archive', 'Archive', 'archive', { ct: wsArchivedTasks().length + D().projects.filter(p => p.archived && inWs(p)).length || '' })}
       </div>
       <div class="sgroup">
         <div class="sgroup-h"><span>Teams</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTeam" data-tip="New team" aria-label="New team">${ic('plus', 14)}</button></div>
