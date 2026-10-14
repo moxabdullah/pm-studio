@@ -23,7 +23,19 @@ import {
   visibleProjects,
 } from '../core/store.js';
 import { fileUrl, pb, setRemember } from '../core/pb.js';
-import { flush, hasUnsaved, pendingChanges, quietResync, restoreState, resubscribe, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
+import {
+  flush,
+  hasUnsaved,
+  offlineCause,
+  pendingChanges,
+  quietResync,
+  restoreState,
+  resubscribe,
+  retryNow,
+  snapshotState,
+  startSync,
+  stopSync,
+} from '../core/sync.js';
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
@@ -2152,7 +2164,7 @@ A.signOut = async () => {
   if (n) {
     confirmDlg({
       title: 'Sign out with unsent changes?',
-      body: `${n} change${n > 1 ? 's have' : ' has'} not reached the server, which can't be reached right now. Signing out will discard ${n > 1 ? 'them' : 'it'}.`,
+      body: `${n} change${n > 1 ? 's have' : ' has'} not reached the server, which ${offlineCause() === 'server' ? 'is having trouble' : "can't be reached"} right now. Signing out will discard ${n > 1 ? 'them' : 'it'}.`,
       ok: 'Sign out and discard',
       icon: 'log-out',
       danger: true,

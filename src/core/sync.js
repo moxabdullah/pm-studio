@@ -26,6 +26,8 @@
                     the "Try again" button and the offline toast.
      sessionGen()   Changes whenever a session starts or stops, never while one recovers: a refused edit's "Try again" checks it so
                     that it never lands in a later sign-in.
+     offlineCause() Why the page is offline, while it is: 'server' (it answers, but fails) or 'network' (it cannot be reached). Sign-out
+                    words its warning about unsent changes by it.
      resubscribe() / quietResync()
                     For when the account's token was replaced (the password was changed, actions.js savePassword): PocketBase then
                     keeps the live stream open but unauthenticated, so nothing arrives on it any more. resubscribe() opens a new stream
@@ -1070,7 +1072,13 @@ function reloadSoon(gen) {
 /* Takes the server's version of a record it refused a change to. Resolves 'down' when it could not be read because the server failed or
    cannot be reached (the page is offline then, and the reload that recovery makes brings it in), 'stale' when it could not be read for
    another reason (a 4xx, a request that was cancelled) and the page is not offline, so that a reload is needed to bring it in, else ''.
-   Either way the refused change is already out of the queue, see putBack() and baseline(). */
+   Either way the refused change is already out of the queue, see putBack() and baseline().
+   The record is read back even for a refused create, which may have landed in an earlier try whose answer was lost: reading is how we
+   tell. It is read as a list of at most one, filtered by id, not with getOne(): a create that never landed (an activity entry that went
+   with an edit that was given up on, say) answers getOne() with a 404, which the browser logs as a failed request every time. The list
+   answers 200 with no items, for a record that does not exist and for one the user may not see alike (list and view have the same rule
+   on every collection: see `all()` in server/pb_migrations/1791849600_init_schema.js). No items is what the 404 meant: gone, or not
+   ours to see. A list read of a collection that exists has no 404 to answer. */
 async function adoptServerTruth(op, gen) {
   const { type, key, coll, id } = op;
   try {
@@ -1089,17 +1097,15 @@ async function adoptServerTruth(op, gen) {
         if (type !== 'create') save(); // the next flush makes it again: without this the settings would count as unsent until some other save
       }
     } else {
-      const rec = await pb.collection(coll).getOne(id);
-      if (gen === st.gen) applyRecord(key, rec, true);
+      const { items } = await pb.collection(coll).getList(1, 1, { filter: pb.filter('id = {:id}', { id }), skipTotal: true });
+      if (gen !== st.gen) return '';
+      if (items[0]) applyRecord(key, items[0], true);
+      else removeRecord(key, id, true); // gone, or not ours to see
     }
     return '';
   } catch (err) {
     if (gen !== st.gen) return '';
     const kind = classify(err);
-    if (err?.status === 404 && key !== USER_PREFS) {
-      removeRecord(key, id, true); // gone, or not ours to see
-      return '';
-    }
     // Cannot read it back. The server said no to the change: stop sending it, whatever the reason for not reading, rather than send it
     // for ever (or again and again when the server is merely failing right now).
     if (failing(kind)) {
@@ -1304,8 +1310,12 @@ function recover() {
     // poll is as lost as one refused in this send). A stream that would not register does not keep the page offline (the server answers,
     // so changes can be saved, and a proxy that buffers the stream would otherwise never let go): the safety net replaces it and
     // reloads, in under 20 s.
-    if (refused) hooks.toast(`Reconnected, but your data could not be reloaded: ${refused}`, { kind: 'err' });
-    else if (refusals !== st.refusedAtOffline) hooks.toast("Reconnected, but some changes couldn't be saved.", { kind: 'info' });
+    const lost = refusals !== st.refusedAtOffline;
+    if (refused) {
+      // Both can be true: one toast says both, so that a lost change is not hidden by the failed reload.
+      const why = lost ? `${refused}${/[.!?]$/.test(refused) ? '' : '.'} Some changes couldn't be saved.` : refused;
+      hooks.toast(`Reconnected, but your data could not be reloaded: ${why}`, { kind: 'err' });
+    } else if (lost) hooks.toast("Reconnected, but some changes couldn't be saved.", { kind: 'info' });
     else if (!live) hooks.toast('Reconnected. Live updates will follow shortly.');
     else hooks.toast('Reconnected. All changes are synced.');
     flush(); // whatever was edited while this ran
@@ -1328,6 +1338,7 @@ export function quietResync() {
   exclusive(reloadQuietly);
 }
 export const sessionGen = () => st.gen;
+export const offlineCause = () => st.cause;
 export async function retryNow() {
   if (!st.active) return false;
   if (!st.ready) {
@@ -1336,8 +1347,10 @@ export async function retryNow() {
   }
   if (!st.offline) return flush();
   const gen = st.gen;
+  const told = refusals;
   const ok = await recover();
-  if (gen === st.gen && !ok && st.offline) {
+  // A try that refused or gave up on a change has said so already (refuse()): a second red toast about the same try would bury it.
+  if (gen === st.gen && !ok && st.offline && refusals === told) {
     const why = st.cause === 'server' ? 'The server is having trouble right now' : "Still can't reach the server";
     hooks.toast(`${why}. We'll keep trying.`, { kind: 'err' });
   }
