@@ -1,20 +1,38 @@
 /* =====================================================================
    NORMALIZE: give records from the server the shape the UI expects.
-   Any signed-in user can store arbitrary JSON in a record's `doc`, so a task can arrive with `labels: null`
-   or `title: {}`. Templates and the store call .map, .includes and .toLowerCase on these fields; one wrong
-   type throws, and the page (or the sidebar) is blank for everyone who loads it.
-   Run each record through normalizeRecord() when it is loaded or patched, before it reaches S.data, or the
-   whole workspace through normalizeData(). Fields the UI always reads are coerced to their type and added when
-   missing; optional fields are coerced only when present; unknown fields are kept. Well-formed data, such as
-   seed(), comes out unchanged. This is about not crashing, not about markup: text still goes through esc() and
-   colours through safeColor() where they are rendered.
+   Any signed-in user can store arbitrary JSON in a record's `doc`, and an admin can create a task in the PocketBase dashboard with
+   only a project and a status, so a record can arrive with `labels: null`, `subtasks: 'x'`, `due: {x: 1}` or no doc at all.
+   Templates and the store call .map, .includes and .toLowerCase on these fields; one wrong type throws, and the page (or the
+   sidebar) is blank for everyone who loads it. Fields the UI always reads are coerced to their type and added when missing;
+   optional fields are coerced only when present; unknown fields are kept. This is about not crashing, not about markup: text still
+   goes through esc() and colours through safeColor() where they are rendered.
 
-   NOT WIRED IN YET. The natural place is the end of fromRecord() in sync-map.js, but two things must be settled first:
-   - project.fav is per user (it lives in user_prefs and fromRecord leaves it out). Adding fav: false here would make
-     the sync engine's in-place patch clear the user's favourite on every remote update to a project.
-   - The sync baseline is toRecord(fromRecord(rec)). Any value the app itself writes that this coerces differently
-     ('' -> null, a dropped list entry) would never match the baseline, and the record would be re-sent over and over.
-   Until then, safely() in ui/helpers.js contains a malformed record to the panel that renders it.
+   Where it runs: fromRecord() in sync-map.js ends with normalizeRecord(), so every record that reaches S.data has passed through it:
+   the first load, live updates, reloads after an outage, refetches after a rejected change, adopt() and the replay of remote changes
+   in Undo. (user_prefs has no app key and is not normalized.) normalizeData() does the same for a whole S.data object; the sync
+   engine does not use it.
+
+   Rules that keep this from fighting the sync engine, whose baseline for a record is toRecord(fromRecord(rec)):
+   - Idempotent: normalizing a normalized record changes nothing (patchObject() runs a payload that is already normal through
+     fromRecord() again).
+   - The app's own values come out unchanged. Whatever the app writes (src/actions, the overlays, drag and drop, seed()) must be a
+     fixed point, or the record would differ from its baseline for ever and be sent again and again (sync.js has a guard for that,
+     stuck(), which must never be needed for ordinary data). So each coercer keeps the forms the app uses for "nothing":
+       null    a task's due and start dates (cleared), estimate, recur, completedAt, archivedAt; a subtask's assignee and due date
+       ''      a project's due date, when its date field is emptied in the project settings (days: see day())
+       []/{}   labels, deps, subtasks, attachments, milestones, perms, a comment's reactions (also one emoji's list once everybody
+               took theirs back)
+     and passes on, untouched, what no coercer names (task.prevStatus ...). Changing a coercer means checking it against what the app
+     writes.
+   - A field is "required" (added when missing) only if the app writes it itself whenever it creates that kind of record (createTask,
+     createProject ... and seed()). Anything the app can leave out is optional, even when the UI reads it, because adding it here would
+     make the record differ from what the app wrote. Example: project.perms and project.access are optional because createProject()
+     does not write them; the share dialog adds them to the project when it is opened.
+   - Per-user state is never added. `fav` on projects and tasks lives in user_prefs: fromRecord() leaves it out and applyFavs() puts
+     it back, so it is coerced only when present. A fav: false added here would make the in-place patch of a remote update (sync.js
+     patchObject) clear the user's favourite.
+   - A member's defaults are sync-map's: MEMBER_DEFAULTS is the one table, used there for accounts created by hand and here for
+     bad values, so the two give the same answer.
    ===================================================================== */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -24,7 +42,9 @@ const text = v => (typeof v === 'string' && v ? v : null); // free text that may
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const numOrNull = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const bool = v => v === true;
-const date = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+/* A calendar day as the app stores it, 'YYYY-MM-DD'. "No date" has two spellings that the app writes and that stay as they are: null
+   (a task's due date once cleared) and '' (the project settings form with its date field emptied). Anything else is not a day. */
+const day = v => ((typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) || v === null || v === '' ? v : null);
 const arr = v => (Array.isArray(v) ? v : []);
 const strs = v => arr(v).filter(x => typeof x === 'string');
 const withDefault = (fn, d) => v => fn(v) || d;
@@ -50,38 +70,55 @@ const shape =
     return out;
   };
 
+/* What a member reads as when the account leaves it blank (accounts are created by hand in the PocketBase dashboard with little
+   more than an email and a password) or holds something that is not text. sync-map.js decodes users with the same table. */
+export const MEMBER_DEFAULTS = Object.freeze({
+  name: 'Unnamed user',
+  role: 'Member',
+  title: '',
+  team: '',
+  c: '#6B7280',
+  status: 'active',
+  tz: '\u2014',
+  last: null,
+});
+const MD = MEMBER_DEFAULTS;
+
 const KINDS = {
-  member: shape(
-    { id: str, name: str, email: str, role: withDefault(str, 'Member'), team: str, title: str, c: str, status: withDefault(str, 'active'), tz: str },
-    { last: numOrNull },
-  ),
+  member: shape({
+    id: str, name: withDefault(str, MD.name), email: str, role: withDefault(str, MD.role), team: withDefault(str, MD.team), title: withDefault(str, MD.title),
+    c: withDefault(str, MD.c), status: withDefault(str, MD.status), tz: withDefault(str, MD.tz), last: numOrNull,
+  }),
   project: shape(
     {
-      id: str, key: str, name: str, icon: str, color: str, status: withDefault(str, 'planning'), team: str, desc: str, fav: bool, members: strs,
-      milestones: list(shape({ name: str, date }), m => m.date),
+      id: str, key: str, name: str, icon: str, color: str, status: withDefault(str, 'planning'), team: str, desc: str, members: strs,
+      milestones: list(shape({ name: str, date: day }), m => m.date),
     },
-    { workspace: str, lead: ref, due: date, start: date, last: num, private: bool, archived: bool, archivedAt: numOrNull, perms: strMap(str), access: withDefault(str, 'workspace') },
+    {
+      workspace: str, lead: ref, due: day, start: day, last: num, seq: num, fav: bool, private: bool, archived: bool, archivedAt: numOrNull,
+      perms: strMap(str), access: withDefault(str, 'workspace'),
+    },
   ),
   task: shape(
     {
       id: str, key: str, project: str, title: str, status: withDefault(str, 'todo'), priority: withDefault(str, 'none'), labels: strs, deps: strs, desc: str,
       created: num, updated: num, order: num,
-      subtasks: list(shape({ id: str, title: str, done: bool }, { assignee: ref, due: date, note: str })),
+      subtasks: list(shape({ id: str, title: str, done: bool }, { assignee: ref, due: day, note: str })),
       attachments: list(shape({ id: str, name: str, type: withDefault(str, 'other'), size: str, at: num }, { by: ref })),
     },
-    { assignee: ref, due: date, start: date, estimate: text, recur: text, fav: bool, archived: bool, archivedAt: numOrNull, completedAt: numOrNull },
+    { assignee: ref, due: day, start: day, estimate: text, recur: text, fav: bool, archived: bool, archivedAt: numOrNull, completedAt: numOrNull },
   ),
   comment: shape({ id: str, task: str, text: str, at: num, re: strMap(strs) }, { by: ref }),
   activity: shape({ id: str, verb: str, at: num, extra: str }, { by: ref, task: ref, project: ref }),
   notif: shape({ id: str, type: withDefault(str, 'update'), text: str, snippet: str, at: num, read: bool }, { by: ref, task: ref, project: ref }),
   file: shape({ id: str, project: str, name: str, type: withDefault(str, 'other'), size: str, at: num }, { by: ref, task: ref }),
-  event: shape({ id: str, title: str, date: v => date(v) || '', time: str, project: str }),
+  event: shape({ id: str, title: str, date: v => day(v) || '', time: str, project: str }),
   savedView: shape({
     id: str, project: str, name: str, type: withDefault(str, 'list'),
     filters: list(shape({ f: str, op: v => (v === 'not' ? 'not' : 'is'), v: strs }), f => f.f),
   }),
   team: shape({ id: str, name: str, desc: str, icon: str, c: str }, { workspace: str }),
-  workspace: shape({ id: str, name: str, c: str }, { brand: bool }),
+  workspace: shape({ id: str, name: str, c: str }, { url: str, brand: bool }),
 }; // prettier-ignore
 
 /* The keys of S.data (and so of sync-map's COLLECTIONS) name the same kinds in the plural. */

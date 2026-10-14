@@ -43,6 +43,10 @@
                record's `updated` time. It only ever advances to a state the server confirmed (a load, a live update, or the answer
                to our own request), never to what we merely sent. So while a write is in flight it still shows what the server had,
                and the user's edit is still recognisably "mine" if someone else's change to the same record arrives meanwhile.
+               Every record read from the server reaches S.data through fromRecord(), which normalizes it (a value of the wrong type
+               is coerced, a missing one added: sync-map.js, normalize.js), and base holds the payload of that normalized object. So a
+               malformed record is never "changed" and never written back, and what the app itself writes must come out of
+               normalization unchanged, or its record would differ from base for ever (see stuck()).
      flush     Diffs S.data against base and sends creates and updates together, a create that needs a parent created in the same
                flush after it, then deletes. A create carries the whole record. An update carries only the top-level fields that
                changed, and of `doc` only the keys that changed (docPatch: key -> new value, docUnset: keys that went away), which
