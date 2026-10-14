@@ -67,6 +67,10 @@
                registered on the server before anything is read (so no change can fall between the reload and the stream); then
                reload by merging (not replacing, so nothing typed meanwhile is lost); then send what is unsent (built on the fresh
                copy, so it does not overwrite other people's changes to the same record). See recover().
+     access    PocketBase sends a client no event when it stops being able to see a record (it was taken off a private project's members,
+               the project was made private ...): the open page would show the project for ever. So every round of the safety net
+               (20 s) asks which projects the server still shows this user, and lets go of the others with their tasks, comments,
+               activity, files, events and saved views, as if somebody else had deleted them (dropRevoked()). Nothing is written.
      prefs     A user without a settings record (user_prefs) gets one with the first save after a setting has changed, not at sign-in.
      journal   The last minute of remote changes that were applied to S.data, for restoreState(). */
 import { authStore, pb } from './pb.js';
@@ -340,6 +344,14 @@ function refreshWs() {
 /* Whatever the view held about something that is gone. */
 function forgetUi(key, id) {
   const u = S.ui;
+  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task, a file's preview.
+  const open = u.modals.filter(m => {
+    if (key === 'projects') return !(m.id === id || m.pid === id || (m.type === 'project' && m.edit === id));
+    if (key === 'tasks') return !((m.type === 'task' && m.edit === id) || m.tid === id);
+    return true;
+  });
+  if (open.length !== u.modals.length) u.modals = open;
+  if (key === 'projects' && u.pop?.id === id) u.pop = null;
   if (key !== 'tasks') return;
   u.sel.delete(id);
   if (u.drawer === id) {
@@ -1051,10 +1063,73 @@ authStore.onChange(() => {
   // Another tab signed out, or signed in as somebody else: never keep writing as the wrong person.
   if (st.active && !st.stopping && (!authStore.isValid || authStore.record?.id !== st.me)) expire('Your session ended in another tab. Sign in again.');
 });
+/* ---------- access that was taken away ----------
+   PocketBase sends a client the events of the records it can see, and of those only. When somebody is taken off a private project's
+   members, or the project is made private, or an admin stops being one, the project and everything in it stop being visible to
+   them, and no event says so: their open page goes on showing them until a reload. So every round of the safety net asks which
+   projects the server shows this user (ids only) and lets go of the ones it no longer shows, with everything that hangs off them.
+   - Only projects the server has told us about are considered. One we have just created and not yet sent has no baseline entry.
+   - A project missing from the answer is asked for by id before it goes: the list may have been read just before it was created, or
+     the answer may be wrong. A 404 on its own id is what "cannot see it" looks like; anything else keeps it for this round.
+   - Nothing is written to the server. The removal is the ordinary one (removeRecord), so the baseline entries go with the records and
+     nothing looks deleted or new, and the work done on those records offline is dropped with them (it could not be saved any more).
+   - The removals are recorded in the journal like any change somebody else made. That is what keeps Undo from bringing them back:
+     Undo restores a snapshot, which still holds these records, and replays the journal over it, which removes them again. */
+const patient = () => ({ signal: AbortSignal.timeout(8000) }); // a request nobody answers ends after 8 s instead of holding the sync lock
+async function dropRevoked(gen) {
+  let visible;
+  try {
+    visible = new Set((await pb.collection('projects').getFullList({ fields: 'id', batch: 500, ...patient() })).map(r => r.id));
+  } catch (err) {
+    if (classify(err) === 'auth') expire();
+    return; // cannot tell now; the next round asks again
+  }
+  if (gen !== st.gen) return;
+  const known = base.get('projects');
+  const missing = D().projects.filter(p => known.has(p.id) && !visible.has(p.id));
+  if (!missing.length) return;
+  const gone = [];
+  let changed = false;
+  await Promise.all(
+    missing.map(async p => {
+      try {
+        changed = applyRecord('projects', await pb.collection('projects').getOne(p.id, patient())) || changed; // after all it is visible
+      } catch (err) {
+        if (err?.status === 404) gone.push(p);
+      }
+    }),
+  );
+  if (gen !== st.gen) return;
+  if (gone.length) {
+    dropProjects(new Set(gone.map(p => p.id)));
+    const name = gone.length === 1 ? `“${gone[0].name}”` : `${gone.length} projects`;
+    hooks.toast(`You no longer have access to ${name}.`, { kind: 'info', ms: 6000 });
+  }
+  if (gone.length || changed) hooks.render();
+}
+/* Removes projects and everything that hangs off them: tasks, their comments, activity, files, events and the user's saved views. */
+function dropProjects(ids) {
+  const tasks = D()
+    .tasks.filter(t => ids.has(t.project))
+    .map(t => t.id);
+  const inTasks = new Set(tasks);
+  const hanging = {
+    comments: D().comments.filter(c => inTasks.has(c.task)),
+    activity: D().activity.filter(a => ids.has(a.project) || inTasks.has(a.task)),
+    files: D().files.filter(f => ids.has(f.project)),
+    events: D().events.filter(e => ids.has(e.project)),
+    savedViews: D().savedViews.filter(v => ids.has(v.project)),
+  };
+  for (const [key, list] of Object.entries(hanging)) for (const x of list) removeRecord(key, x.id, true);
+  for (const id of tasks) removeRecord('tasks', id, true);
+  for (const id of ids) removeRecord('projects', id, true);
+}
+
 /* Safety net, every 20 s. The live stream can die without anyone noticing (a server killed behind a proxy, a network that dropped):
    the browser keeps calling it open and no event ever arrives, so the page would go stale in silence. PocketBase forgets a stream's
    client id when it restarts, and answers 404 when asked to confirm the subscriptions of one it does not know. A stream that is
-   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded.
+   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded. When the stream is
+   confirmed, the round goes on to its other job: asking which projects this user can still see (dropRevoked, above).
    The SDK has no call for "is my stream still known to the server", so this repeats the request it makes itself when it subscribes,
    with its `clientId` and `lastSentSubscriptions`. Those are SDK internals (not in its documented API) that this relies on, which is
    why package.json pins pocketbase to an exact version (0.28.1): look at them again before upgrading. */
@@ -1071,8 +1146,10 @@ function safetyNet() {
       if (kind === 'network' || kind === 'abort') return goOffline();
       if (kind === 'auth') return expire();
       await resubscribe();
-      if (gen === st.gen) await reloadQuietly();
+      if (gen === st.gen) await reloadQuietly(); // a reload also lets go of what the user can no longer see
+      return;
     }
+    await dropRevoked(gen);
   });
 }
 
