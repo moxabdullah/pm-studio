@@ -3,11 +3,12 @@
    ===================================================================== */
 import { esc } from '../core/utils.js';
 import { logAct, task } from '../core/store.js';
-import { mutate, toast } from '../ui/toast.js';
+import { latestFields, mutate, toast } from '../ui/toast.js';
 import { A, confirmDlg, deleteTasks } from './actions.js';
 
 A.restoreTask = el => {
   const { id } = el.dataset;
+  const fresh = latestFields('task', id, ['archived']);
   let t;
   mutate(
     () => {
@@ -17,7 +18,7 @@ A.restoreTask = el => {
       logAct('restored', t);
     },
     () => toast(`Restored “${t.title}”`, { action: 'Open', onAction: () => A.openTask({ dataset: { id } }) }),
-    () => !!task(id), // not for a task that has gone since
+    () => task(id)?.archived === true && fresh(), // not for a task that has gone or is out of the archive already (a second click on Restore)
   );
 };
 A.purgeTask = el => {

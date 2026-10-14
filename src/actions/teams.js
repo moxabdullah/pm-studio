@@ -140,10 +140,10 @@ A.delTeam = el => {
           });
         },
         () => {
-          if (S.ui.route === 'team') go('teams');
+          if (S.ui.route === 'team' && S.ui.params.id === id) go('teams'); // not from another team's page, opened while the toast waited
           toast(`Deleted ${t.name}`, { action: 'Undo', onAction: () => restore(snap) });
         },
-        () => !!team(id), // not deleted already
+        () => isAdmin() && !!team(id), // not deleted already, and still an admin: the reconnect can change who is one
       );
     },
   });

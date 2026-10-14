@@ -24,6 +24,8 @@
                     Runs one at a time; a call during a run makes it go round once more. Resolves true when nothing was left behind.
      retryNow()     Tries to leave the offline state right now (new stream, reload, flush). Resolves true when back online. Wired to
                     the "Try again" button and the offline toast.
+     sessionGen()   Changes whenever a session starts or stops, never while one recovers: a refused edit's "Try again" checks it so
+                    that it never lands in a later sign-in.
      resubscribe() / quietResync()
                     For when the account's token was replaced (the password was changed, actions.js savePassword): PocketBase then
                     keeps the live stream open but unauthenticated, so nothing arrives on it any more. resubscribe() opens a new stream
@@ -1178,6 +1180,7 @@ export function quietResync() {
   if (!st.ready || st.offline || st.busy) return;
   exclusive(reloadQuietly);
 }
+export const sessionGen = () => st.gen;
 export async function retryNow() {
   if (!st.active) return false;
   if (!st.ready) {

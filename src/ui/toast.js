@@ -2,7 +2,7 @@
 import { $, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { S, save } from '../core/store.js';
-import { retryNow } from '../core/sync.js';
+import { retryNow, sessionGen } from '../core/sync.js';
 import { render } from '../shell/render.js';
 
 export function toast(msg, opt = {}) {
@@ -36,6 +36,7 @@ export function toast(msg, opt = {}) {
 export function mutate(fn, done, still) {
   if (S.ui.offline) {
     let tried = false; // once per toast: a double click while it fades out would apply the edit twice
+    const gen = sessionGen(); // and never after signing out: the toast can outlive the session
     toast("Your changes couldn't be saved. You're offline.", {
       kind: 'err',
       action: 'Try again',
@@ -43,7 +44,7 @@ export function mutate(fn, done, still) {
       onAction: async () => {
         if (tried) return;
         tried = true;
-        if ((await retryNow()) && (!still || still())) mutate(fn, done, still);
+        if ((await retryNow()) && sessionGen() === gen && (!still || still())) mutate(fn, done, still);
       },
     });
     return false;
@@ -61,4 +62,10 @@ export function latest(key) {
   const n = (reg.get(key) || 0) + 1;
   reg.set(key, n);
   return () => reg.get(key) === n;
+}
+/* latest() for the fields of one record that an edit writes, e.g. latestFields('task', id, ['status']): holds while this is the newest
+   attempt for every one of them, so an older edit's "Try again" can never overwrite a newer edit of the same field. */
+export function latestFields(kind, id, fields) {
+  const fresh = fields.map(f => latest(`${kind}:${id}:${f}`));
+  return () => fresh.every(x => x());
 }

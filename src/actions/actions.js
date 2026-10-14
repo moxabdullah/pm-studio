@@ -27,7 +27,7 @@ import { flush, hasUnsaved, pendingChanges, quietResync, restoreState, resubscri
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
-import { latest, mutate, toast } from '../ui/toast.js';
+import { latest, latestFields, mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { viewOf } from '../shell/view-engine.js';
@@ -138,6 +138,9 @@ export function updateTask(id, patch, done) {
   }
   if (!task(id)) return;
   let msgs = [];
+  // Every absolute or toggle edit below does the same: a latestFields() taken before mutate() and tested in `still`, so a refused edit's
+  // "Try again" never overwrites a newer edit (refused or not) of the same field.
+  const fresh = latestFields('task', id, Object.keys(patch));
   mutate(
     () => {
       msgs = applyPatch(task(id), patch); // by id: sync or Undo can replace the task while a refused edit waits for "Try again"
@@ -146,8 +149,14 @@ export function updateTask(id, patch, done) {
       msgs.forEach(m => toast(m, { kind: 'info' }));
       done?.();
     },
-    () => !!task(id),
+    () => fresh() && !!task(id),
   );
+}
+/* latestFields() for the tasks of a bulk edit: call it before mutate(); the returned function lists the ids that still exist and whose
+   edit of `fields` is the newest. */
+function liveTasks(ids, fields) {
+  const fresh = new Map(ids.map(id => [id, latestFields('task', id, fields)]));
+  return () => ids.filter(id => task(id) && fresh.get(id)());
 }
 export function confirmDlg(o) {
   S.ui.confirmText = '';
@@ -316,6 +325,7 @@ A.popPick = el => {
     const k = p.type === 'subassignee' ? 'assignee' : 'due';
     v = v || null;
     S.ui.pop = null;
+    const fresh = latestFields('sub', sid, [k]);
     mutate(
       () => {
         const t = task(id); // by id: sync or Undo can replace the task and its subtasks while a refused edit waits for "Try again"
@@ -327,13 +337,14 @@ A.popPick = el => {
         );
       },
       undefined,
-      () => !!task(id)?.subtasks.some(x => x.id === sid) && (k !== 'assignee' || !v || !!mem(v)), // the member can be gone by the time "Try again" runs
+      () => fresh() && !!task(id)?.subtasks.some(x => x.id === sid) && (k !== 'assignee' || !v || !!mem(v)), // the member can be gone by the time "Try again" runs
     );
     return;
   }
   if (p.type === 'pstatus') {
     const id = p.id;
     let pr;
+    const fresh = latestFields('proj', id, ['status']);
     mutate(
       () => {
         pr = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
@@ -349,7 +360,7 @@ A.popPick = el => {
         });
       },
       () => toast(`${pr.name} marked ${PSTAT[v].name}`),
-      () => !!proj(id),
+      () => fresh() && !!proj(id),
     );
     S.ui.pop = null;
     render();
@@ -359,13 +370,14 @@ A.popPick = el => {
     if (!isAdmin()) return;
     const id = p.id;
     let m;
+    const fresh = latestFields('mem', id, ['role']);
     mutate(
       () => {
         m = mem(id); // by id: sync can replace the member while a refused edit waits for "Try again"
         m.role = v;
       },
       () => toast(`${m.name} is now ${v === 'Admin' ? 'an' : 'a'} ${v}`),
-      () => isAdmin() && !!mem(id), // the reconnect can change who is an admin
+      () => fresh() && isAdmin() && !!mem(id), // the reconnect can change who is an admin
     );
     S.ui.pop = null;
     render();
@@ -490,13 +502,14 @@ A.toggleFavTask = el => {
   const id = el.dataset.id;
   if (!task(id)) return;
   let t;
+  const fresh = latestFields('task', id, ['fav']);
   mutate(
     () => {
       t = task(id); // by id: sync or Undo can replace the task while a refused edit waits for "Try again"
       t.fav = !t.fav;
     },
     () => toast(t.fav ? 'Added to favorites' : 'Removed from favorites', { ms: 1800 }),
-    () => !!task(id),
+    () => fresh() && !!task(id),
   );
   S.ui.pop = null;
   render();
@@ -505,13 +518,14 @@ A.toggleFavProj = el => {
   const id = el.dataset.id;
   if (!proj(id)) return;
   let p;
+  const fresh = latestFields('proj', id, ['fav']);
   mutate(
     () => {
       p = proj(id); // by id, as above
       p.fav = !p.fav;
     },
     () => toast(p.fav ? `Added ${p.name} to favorites` : 'Removed from favorites', { ms: 1800 }),
-    () => !!proj(id),
+    () => fresh() && !!proj(id),
   );
   S.ui.pop = null;
   render();
@@ -540,6 +554,7 @@ A.archiveTask = el => {
   const id = el.dataset.id;
   let t, snap;
   S.ui.pop = null;
+  const fresh = latestFields('task', id, ['archived']);
   mutate(
     () => {
       t = task(id); // by id: sync or Undo can replace the task while a refused edit waits for "Try again"
@@ -550,7 +565,7 @@ A.archiveTask = el => {
       logAct('archived', t);
     },
     () => toast(`Archived “${t.title}”`, { action: 'Undo', onAction: () => restore(snap) }),
-    () => !!task(id), // not for a task that has gone since
+    () => fresh() && !!task(id), // not for a task that has gone since
   );
 };
 export function deleteTasks(ids) {
@@ -848,6 +863,7 @@ KEY.blur = el => el.blur();
 /* subtasks */
 A.toggleSub = el => {
   const { id, sid } = el.dataset;
+  const fresh = latestFields('sub', sid, ['done']);
   mutate(
     () => {
       const t = task(id); // by id: sync or Undo can replace the task and its subtasks while a refused edit waits for "Try again"
@@ -857,7 +873,7 @@ A.toggleSub = el => {
       logAct(s.done ? 'completed subtask on' : 'reopened subtask on', t, `“${s.title}”`);
     },
     undefined,
-    () => !!task(id)?.subtasks.some(x => x.id === sid),
+    () => fresh() && !!task(id)?.subtasks.some(x => x.id === sid),
   );
 };
 A.rmSub = el => {
@@ -909,7 +925,7 @@ A.rmAttach = el => {
       logAct('removed a file from', t);
     },
     () => toast(`Removed ${f.name}`),
-    () => !!task(id),
+    () => !!task(id)?.attachments.some(a => a.id === aid), // the attachment itself can be gone too
   );
 };
 A.filePreview = el => {
@@ -1180,6 +1196,7 @@ A.react = el => {
   const id = el.dataset.id;
   const e = el.dataset.e;
   S.ui.pop = null;
+  const fresh = latestFields('comment', id, [`react:${e}`]);
   mutate(
     () => {
       const c = D().comments.find(x => x.id === id); // by id: sync can replace the comment while a refused edit waits for "Try again"
@@ -1188,7 +1205,7 @@ A.react = el => {
       c.re[e] = l.includes(D().me) ? l.filter(x => x !== D().me) : [...l, D().me];
     },
     undefined,
-    () => D().comments.some(x => x.id === id),
+    () => fresh() && D().comments.some(x => x.id === id),
   );
 };
 
@@ -1250,19 +1267,17 @@ A.bulkSet = el => {
   let v = el.dataset.v || null;
   const ids = [...S.ui.sel];
   S.ui.pop = null;
+  const live = liveTasks(ids, [f]); // per task: one that was edited again since is left alone
   let n = 0;
   mutate(
     () => {
-      n = 0;
-      for (const id of ids) {
-        const t = task(id); // by id: sync or Undo can replace or remove a task while a refused edit waits for "Try again"
-        if (!t) continue;
-        applyPatch(t, { [f]: v });
-        n++;
-      }
+      const ts = live().map(task); // by id: sync or Undo can replace or remove a task while a refused edit waits for "Try again"
+      ts.forEach(t => applyPatch(t, { [f]: v }));
+      n = ts.length;
     },
     () => toast(`Updated ${n} task${n > 1 ? 's' : ''}`),
-    () => ids.some(id => !!task(id)),
+    // the project or member can be gone by the time "Try again" runs: applyPatch would skip the field, and "Updated N" would be wrong
+    () => live().length > 0 && (f !== 'project' || !!proj(v)) && (f !== 'assignee' || !v || !!mem(v)),
   );
 };
 A.bulkDelete = () => {
@@ -1454,38 +1469,46 @@ export function colTasks(key, st) {
   return (pid ? tasksOf(pid) : allTasks()).filter(t => t.status === st);
 }
 A.colDoneAll = el => {
-  const ids = colTasks(S.ui.pop.key, el.dataset.id).map(t => t.id);
+  const col = el.dataset.id;
+  const ids = colTasks(S.ui.pop.key, col).map(t => t.id);
   S.ui.pop = null;
   if (!ids.length) {
     render();
     return;
   }
   let ts, snap;
+  const fresh = liveTasks(ids, ['status']);
+  const live = () => fresh().filter(id => task(id).status === col); // still in the column: one moved out since is left where it is
   mutate(
     () => {
       snap = snapshot(); // taken here, not at the click: after "Try again" the one from the click is too old to undo to
-      ts = ids.map(task).filter(Boolean); // by id: sync or Undo can replace or remove tasks while a refused edit waits for "Try again"
+      ts = live().map(task); // by id: sync or Undo can replace or remove tasks while a refused edit waits for "Try again"
       ts.forEach(t => applyPatch(t, { status: 'done' }));
     },
     () => toast(`Marked ${ts.length} tasks as done`, { action: 'Undo', onAction: () => restore(snap) }),
-    () => ids.some(id => !!task(id)),
+    () => live().length > 0,
   );
 };
 A.colArchive = () => {
   const ids = colTasks(S.ui.pop.key, 'done').map(t => t.id);
   S.ui.pop = null;
   let ts, snap;
+  const live = liveTasks(ids, ['archived']);
+  const completed = () =>
+    live()
+      .map(task)
+      .filter(t => t.status === 'done' && !t.archived); // colTasks' criterion again: not a task reopened or archived since
   mutate(
     () => {
       snap = snapshot(); // taken here, not at the click: after "Try again" the one from the click is too old to undo to
-      ts = ids.map(task).filter(Boolean); // by id, as above
+      ts = completed(); // by id, as above
       ts.forEach(t => {
         t.archived = true;
         t.archivedAt = Date.now();
       });
     },
     () => toast(`Archived ${ts.length} completed tasks`, { action: 'Undo', onAction: () => restore(snap) }),
-    () => ids.some(id => !!task(id)),
+    () => completed().length > 0,
   );
 };
 A.colSortPrio = el => {
@@ -1493,14 +1516,16 @@ A.colSortPrio = el => {
   const base = Math.min(...ts.map(t => t.order));
   const ids = ts.map(t => t.id);
   S.ui.pop = null;
+  const live = liveTasks(ids, ['order']);
   mutate(
-    () =>
+    () => {
+      const alive = new Set(live());
       ids.forEach((id, i) => {
-        const t = task(id); // by id: sync or Undo can replace or remove a task while a refused edit waits for "Try again"
-        if (t) t.order = base + i * 0.001;
-      }),
+        if (alive.has(id)) task(id).order = base + i * 0.001; // by id: sync or Undo can replace or remove a task while a refused edit waits for "Try again"
+      });
+    },
     undefined,
-    () => ids.some(id => !!task(id)),
+    () => live().length > 0,
   );
 };
 
@@ -1703,6 +1728,7 @@ A.archiveProject = el => {
       const id = p.id;
       if (!proj(id)) return; // gone while the dialog was open
       let pr, snap;
+      const fresh = latestFields('proj', id, ['archived']);
       mutate(
         () => {
           pr = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
@@ -1714,7 +1740,7 @@ A.archiveProject = el => {
           if (S.ui.route === 'project' && S.ui.params.id === id) go('projects');
           toast(`Archived ${pr.name}`, { action: 'Undo', onAction: () => restore(snap) });
         },
-        () => !!proj(id), // not for a project that has gone since
+        () => fresh() && !!proj(id), // not for a project that has gone since
       );
     },
   });
@@ -1722,6 +1748,7 @@ A.archiveProject = el => {
 A.restoreProject = el => {
   const id = el.dataset.id;
   let p;
+  const fresh = latestFields('proj', id, ['archived']);
   mutate(
     () => {
       p = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
@@ -1729,7 +1756,7 @@ A.restoreProject = el => {
       p.archivedAt = null;
     },
     () => toast(`Restored ${p.name}`),
-    () => !!proj(id),
+    () => fresh() && !!proj(id),
   );
 };
 A.delProject = el => {
@@ -1783,13 +1810,14 @@ A.shareAdd = el => {
   const id = el.dataset.id;
   const m = mem(el.dataset.mid);
   let p;
+  const fresh = latestFields('proj', id, [`perm:${m.id}`]); // the same key as sharePerm: adding and removing a person are edits of the same thing
   mutate(
     () => {
       p = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
       p.members.push(m.id);
     },
     () => toast(`${m.name} can now edit ${p.name}`),
-    () => !!proj(id) && !proj(id).members.includes(m.id), // not for a project that has gone since; a replay would list them twice
+    () => fresh() && !!proj(id) && !proj(id).members.includes(m.id), // not for a project that has gone since; a replay would list them twice
   );
   S.ui.shareQ = '';
   render();
@@ -1806,14 +1834,16 @@ A.shareInvite = () => {
   if (ex) {
     const shared = () => toast(`Shared with ${ex.name}`);
     if (p.members.includes(ex.id)) shared();
-    else
+    else {
+      const fresh = latestFields('proj', p.id, [`perm:${ex.id}`]);
       mutate(
         () => {
           proj(p.id).members.push(ex.id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
         },
         shared,
-        () => !!proj(p.id) && !proj(p.id).members.includes(ex.id), // not for a project that has gone since; a replay would list them twice
+        () => fresh() && !!proj(p.id) && !proj(p.id).members.includes(ex.id), // not for a project that has gone since; a replay would list them twice
       );
+    }
     S.ui.shareQ = '';
     render();
     return;
@@ -1830,6 +1860,7 @@ IN.sharePerm = el => {
   const mid = el.dataset.mid;
   if (!proj(id) || el.value !== '__remove') return;
   let snap;
+  const fresh = latestFields('proj', id, [`perm:${mid}`]);
   mutate(
     () => {
       snap = snapshot(); // taken here, not at the click: after "Try again" the one from the click is too old to undo to
@@ -1837,7 +1868,7 @@ IN.sharePerm = el => {
       p.members = p.members.filter(x => x !== mid);
     },
     () => toast(`Removed ${mem(mid)?.name || FORMER}`, { action: 'Undo', onAction: () => restore(snap) }),
-    () => !!proj(id), // not for a project that has gone since
+    () => fresh() && !!proj(id)?.members.includes(mid), // not for a project that has gone since, or a person who is no longer on it
   );
 };
 /* "Only people invited" sets `private`, the column the server's access rules read, so the server stops handing the project (and its
@@ -1852,6 +1883,7 @@ IN.shareAccess = el => {
   if (priv === !!p.private) return;
   const mine = D().me;
   let pr;
+  const fresh = latestFields('proj', id, ['access']);
   mutate(
     () => {
       pr = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
@@ -1863,7 +1895,7 @@ IN.shareAccess = el => {
       toast(priv ? `${pr.name} is private now. Only the people invited, and admins, can open it.` : `Everyone at ${D().ws.name} can open ${pr.name} now.`, {
         ms: 4800,
       }),
-    () => !!proj(id), // not for a project that has gone since
+    () => fresh() && !!proj(id), // not for a project that has gone since
   );
 };
 A.viewProfile = el => go('member', { id: el.dataset.id });
@@ -1907,7 +1939,8 @@ A.renameFile = el => {
     run: v => {
       const id = f.id;
       if (!D().files.some(x => x.id === id)) return; // gone while the dialog was open
-      if (v && v !== f.name)
+      if (v && v !== f.name) {
+        const fresh = latestFields('file', id, ['name']);
         mutate(
           () => {
             const cur = D().files.find(x => x.id === id); // by id: sync can replace the file while a refused rename waits for "Try again"
@@ -1915,8 +1948,9 @@ A.renameFile = el => {
             cur.type = fileType(v);
           },
           undefined,
-          () => D().files.some(x => x.id === id),
+          () => fresh() && D().files.some(x => x.id === id),
         );
+      }
     },
   });
 };
@@ -2063,8 +2097,9 @@ export function createWorkspace(then, why = '') {
           A.switchWs({ dataset: { v: w.id } });
           then?.();
         },
-        // The prompt closes before this runs, so there is no modal to test: skip the retry if a later attempt has been made, or this one went in.
-        () => fresh() && !D().workspaces.some(x => x.id === w.id),
+        // The prompt closes before this runs, so there is no modal to test: skip the retry if a later attempt has been made, this one went in,
+        // or a workspace of that name has appeared since (names aren't unique on the server).
+        () => fresh() && !D().workspaces.some(x => x.id === w.id || x.name.toLowerCase() === v.toLowerCase()),
       );
     },
   });
@@ -2228,6 +2263,7 @@ A.saveWorkspace = () => {
     return;
   }
   loadingBtn('ws-save', 600, () => {
+    const fresh = latest('ws-settings'); // not 'workspace': that key is the create dialog's
     mutate(
       () => {
         D().ws.name = n;
@@ -2236,6 +2272,7 @@ A.saveWorkspace = () => {
         if (w) Object.assign(w, { name: n, url: D().ws.url });
       },
       () => toast('Workspace settings saved'),
+      () => isAdmin() && fresh(), // the reconnect can change who is an admin
     );
   });
 };
@@ -2254,12 +2291,14 @@ A.saveProfile = () => {
   S.ui.errors.pname2 = null;
   const tt = $('#pf-title').value.trim();
   loadingBtn('pf-save', 600, () => {
+    const fresh = latest('profile');
     mutate(
       () => {
         me().name = n;
         me().title = tt;
       },
       () => toast('Profile updated'),
+      fresh,
     );
   });
 };

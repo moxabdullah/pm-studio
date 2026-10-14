@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, esc } from '../core/utils.js';
 import { S, logAct, save, task } from '../core/store.js';
-import { mutate, toast } from '../ui/toast.js';
+import { latestFields, mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
 import { A, BLUR, IN, createTask } from './actions.js';
 
@@ -38,7 +38,8 @@ BLUR.commitSubTitle = el => {
   const { id, sid } = el.dataset;
   const s = subOf(task(id), sid);
   const v = el.value.trim();
-  if (s && v && v !== s.title)
+  if (s && v && v !== s.title) {
+    const fresh = latestFields('sub', sid, ['title']);
     mutate(
       () => {
         // by id: sync or Undo can replace the task and its subtasks while a refused rename waits for "Try again"
@@ -47,8 +48,9 @@ BLUR.commitSubTitle = el => {
         t.updated = Date.now();
       },
       undefined,
-      () => !!subOf(task(id), sid), // not for a subtask that has gone since
+      () => !!subOf(task(id), sid) && fresh(), // not for a subtask that has gone since, nor over a newer rename
     );
+  }
 };
 IN.subNote = el => {
   const t = task(el.dataset.id);

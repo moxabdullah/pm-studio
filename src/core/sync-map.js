@@ -365,7 +365,7 @@ const wellFormedView = v =>
   typeof v.q === 'string' &&
   Array.isArray(v.hidden) &&
   isObj(v.colW) &&
-  Object.values(v.colW).every(x => typeof x === 'number');
+  Object.values(v.colW).every(x => Number.isFinite(x) && x >= 0);
 function cleanPrefs(obj) {
   const out = { ...obj };
   const fix = (k, ok, make = x => x) => {
