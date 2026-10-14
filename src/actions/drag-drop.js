@@ -48,14 +48,25 @@ document.addEventListener('dragend', () => {
   DRAG = null;
   clearDropMarks();
 });
+/* A drag that carries files from the computer. Where nothing in the app takes them the browser would open the first one in this
+   very tab, in place of the app (and whatever was being typed or edited with it). So everywhere outside the places that do take
+   files, the drag is claimed and told it has nowhere to land: the cursor shows "not allowed" and a drop does nothing. */
+const carriesFiles = e => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+const DROP_TARGETS = '[data-dropzone],[data-dropzone-task],.drawer';
+document.addEventListener('dragenter', e => {
+  if (carriesFiles(e)) e.preventDefault(); // a drop target has to say so on dragenter as well as dragover
+});
 document.addEventListener('dragover', e => {
-  const hasFiles = e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
-  if (hasFiles) {
-    const dz = e.target.closest?.('[data-dropzone],[data-dropzone-task],.drawer');
+  if (carriesFiles(e)) {
+    const dz = e.target.closest?.(DROP_TARGETS);
     if (dz) {
       e.preventDefault();
       $$('.dropzone.over').forEach(x => x !== dz && x.classList.remove('over'));
       dz.classList?.add('over');
+    } else {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+      $$('.dropzone.over').forEach(x => x.classList.remove('over'));
     }
     return;
   }
@@ -116,11 +127,11 @@ document.addEventListener('dragleave', e => {
 });
 document.addEventListener('drop', e => {
   const files = e.dataTransfer?.files;
-  if (files && files.length && !DRAG) {
-    const dz = e.target.closest?.('[data-dropzone],[data-dropzone-task],.drawer');
-    if (!dz) return;
-    e.preventDefault();
+  if (!DRAG && ((files && files.length) || carriesFiles(e))) {
+    e.preventDefault(); // never let the browser open the file, here or anywhere else in the page
     clearDropMarks();
+    const dz = e.target.closest?.(DROP_TARGETS);
+    if (!dz) return;
     if (dz.dataset.dropzone) handleFiles(files, { project: dz.dataset.dropzone });
     else {
       const t = task(dz.dataset.dropzoneTask || S.ui.drawer);

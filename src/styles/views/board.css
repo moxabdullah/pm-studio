@@ -216,6 +216,9 @@
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
   min-height: 44px;
+  /* it sits in a column that is only as tall as the screen: when it wraps to a second row it must grow, not shrink back to one row
+     and let the next block paint over the buttons it has pushed down */
+  flex-shrink: 0;
 }
 .toolbar .btn-ghost {
   height: var(--h-sm);

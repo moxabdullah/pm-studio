@@ -4,7 +4,7 @@ import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
 import { D, S, mem, pColor, proj, task, teamsList } from '../core/store.js';
 import { isRaster } from '../core/files.js';
-import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
+import { FT, av, filePrev, lbl, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
 
@@ -42,7 +42,7 @@ export function modalHtml(m) {
     case 'prompt':
       return wrap(
         'sm',
-        `${H(m.title)}<form class="modal-b" data-submit="promptSubmit"><div class="field"><label class="label" for="prompt-in">${esc(m.label)}</label><input class="input" id="prompt-in" value="${esc(m.value || '')}" autofocus></div></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="promptSubmit">${esc(m.ok || 'Save')}</button></div>`,
+        `${H(m.title, m.sub ? esc(m.sub) : '')}<form class="modal-b" data-submit="promptSubmit"><div class="field"><label class="label" for="prompt-in">${esc(m.label)}</label><input class="input" id="prompt-in" value="${esc(m.value || '')}" autofocus></div></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="promptSubmit">${esc(m.ok || 'Save')}</button></div>`,
       );
     case 'shortcuts':
       return wrap('lg', shortcutsModal(H));
@@ -170,15 +170,15 @@ export function projectModal(m, H) {
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
 }
-export const PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
+/* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
+   level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the
+   list can edit, and the only per-person choice that does something is removing them. */
 export function shareModal(m, H) {
   const p = proj(m.id);
-  p.perms = p.perms || {};
-  p.access = p.access || 'workspace';
+  const priv = !!p.private;
   return `${H(`Share “${esc(p.name)}”`)}
   <div class="modal-b">
     <form class="row" style="gap:6px" data-submit="shareInvite"><div class="grow"><label class="sr" for="share-in">Add people by name or email</label><input class="input" id="share-in" placeholder="Add people by name or email" value="${esc(S.ui.shareQ || '')}" data-in="shareQ" autofocus></div>
-      <select class="select" id="share-perm" style="width:132px" aria-label="Permission">${PERMS.map(x => `<option ${x === 'Can edit' ? 'selected' : ''}>${x}</option>`).join('')}</select>
       <button class="btn btn-primary" data-a="shareInvite" type="button">Add</button></form>
     ${
       S.ui.shareQ
@@ -201,14 +201,13 @@ export function shareModal(m, H) {
         .map(id => {
           const x = mem(id);
           if (!x) return '';
-          const perm = id === p.lead ? 'Full access' : p.perms[id] || 'Can edit';
           return `<div class="row" style="height:44px">${av(id, 'md', false)}<div class="grow"><div style="font-weight:500;font-size:13px">${esc(x.name)}${id === D().me ? ' <span class="faint" style="font-weight:400">(you)</span>' : ''}</div><div class="faint" style="font-size:11.5px">${esc(x.email)}${id === p.lead ? ' · Project lead' : ''}</div></div>
-          ${id === p.lead ? `<span class="muted" style="font-size:12.5px;padding-right:8px">Full access</span>` : `<select class="select" style="width:auto;height:26px;font-size:12px;border-color:transparent;background-color:transparent" data-in="sharePerm" data-id="${esc(p.id)}" data-mid="${esc(id)}" aria-label="Permission for ${esc(x.name)}">${PERMS.map(q => `<option ${q === perm ? 'selected' : ''}>${q}</option>`).join('')}<option value="__remove">Remove access</option></select>`}</div>`;
+          ${id === p.lead ? `<span class="muted" style="font-size:12.5px;padding-right:8px">Can edit</span>` : `<select class="select" style="width:auto;height:26px;font-size:12px;border-color:transparent;background-color:transparent" data-in="sharePerm" data-id="${esc(p.id)}" data-mid="${esc(id)}" aria-label="Access for ${esc(x.name)}"><option selected>Can edit</option><option value="__remove">Remove access</option></select>`}</div>`;
         })
         .join('')}
     </div>
     <div style="border-top:1px solid var(--divider);padding-top:12px"><div class="eyebrow" style="margin-bottom:8px">General access</div>
-      <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(p.access === 'private' ? 'lock' : 'building-2', 14)}</span><div class="grow"><select class="select" style="height:28px;width:auto;border-color:transparent;padding-left:4px;font-weight:500" data-in="shareAccess" data-id="${esc(p.id)}" aria-label="General access"><option value="private" ${p.access === 'private' ? 'selected' : ''}>Only people invited</option><option value="workspace" ${p.access === 'workspace' ? 'selected' : ''}>Everyone at ${esc(D().ws.name)}</option></select><div class="faint" style="font-size:11.5px;padding-left:4px">${p.access === 'private' ? 'Only people listed above can open this project.' : 'Anyone in the workspace can view and comment.'}</div></div></div></div>
+      <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(priv ? 'lock' : 'building-2', 14)}</span><div class="grow"><select class="select" style="height:28px;width:auto;border-color:transparent;padding-left:4px;font-weight:500" data-in="shareAccess" data-id="${esc(p.id)}" aria-label="General access"><option value="private" ${priv ? 'selected' : ''}>Only people invited</option><option value="workspace" ${priv ? '' : 'selected'}>Everyone at ${esc(D().ws.name)}</option></select><div class="faint" style="font-size:11.5px;padding-left:4px">${priv ? 'Only the people listed above, and admins, can open this project.' : 'Everyone in the workspace can open this project.'}</div></div></div></div>
   </div>
   <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-pid="${esc(p.id)}">${ic('link', 14)}Copy link</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">Done</button></div>`;
 }
@@ -279,7 +278,7 @@ export function filePreviewModal(m, H) {
   const t = FT[f.type] || FT.other;
   const prev = filePrev(f, !gone && isRaster(f) ? m.src : '').replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"');
   const note = gone ? 'This file was deleted.' : !served ? "This attachment isn't linked to an uploaded file, so there is nothing to download." : '';
-  return `${H(esc(f.name), `${t.n} · ${esc(f.size)} · Uploaded by ${esc(mem(f.by)?.name || 'you')} ${ago(f.at)}`)}
+  return `${H(esc(f.name), `${t.n} · ${esc(f.size)} · Uploaded by ${esc(nameOf(f.by))} ${ago(f.at)}`)}
   <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${prev}</div>
   ${note ? `<div class="alert info">${ic('info', 14)}<span>${note}</span></div>` : ''}
   ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}Attached to <button class="link" data-a="openTask" data-id="${esc(m.tid)}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>

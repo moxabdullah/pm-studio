@@ -1,8 +1,8 @@
 /* ---------- SEARCH RESULTS ---------- */
 import { ago, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, allTasks, canSee, inWs, mem, pColor, proj, task, visibleProjects, wsFiles } from '../core/store.js';
-import { FT, av, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
+import { D, S, allTasks, canSee, inWs, pColor, proj, task, visibleProjects, wsFiles } from '../core/store.js';
+import { FORMER, FT, av, empty, hl, nameOf, pIcon, pStatus, stIcon } from '../ui/helpers.js';
 
 export function searchAll(q) {
   q = (q || '').trim().toLowerCase();
@@ -91,7 +91,7 @@ export function pageSearch() {
               r.comments
                 .map(
                   c =>
-                    `<div class="mini" style="align-items:flex-start;padding-top:10px;padding-bottom:10px" data-a="openTask" data-id="${esc(c.task)}">${av(c.by, 'sm')}<div class="grow" style="min-width:0"><div style="font-size:12px" class="muted"><b style="color:var(--text);font-weight:500">${esc(mem(c.by)?.name)}</b> on ${esc(task(c.task).title)} · ${ago(c.at)}</div><div style="font-size:13px">${hl(c.text, q)}</div></div></div>`,
+                    `<div class="mini" style="align-items:flex-start;padding-top:10px;padding-bottom:10px" data-a="openTask" data-id="${esc(c.task)}">${av(c.by, 'sm', FORMER)}<div class="grow" style="min-width:0"><div style="font-size:12px" class="muted"><b style="color:var(--text);font-weight:500">${esc(nameOf(c.by))}</b> on ${esc(task(c.task).title)} · ${ago(c.at)}</div><div style="font-size:13px">${hl(c.text, q)}</div></div></div>`,
                 )
                 .join(''),
             )
