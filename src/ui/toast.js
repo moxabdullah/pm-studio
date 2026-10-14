@@ -55,13 +55,27 @@ export function mutate(fn, done, still) {
   done?.();
   return true;
 }
-/* Call on every submit, before mutate(), and pass the result as its `still`: it holds only while this is the newest attempt for `key`. */
+/* Call on every submit, before mutate(), and pass the result as its `still`: it holds only while this is the newest attempt for `key`.
+   Every attempt takes a new number, so a key that was forgotten and is taken again never matches an attempt from before. String keys
+   (latestFields takes one per record field) are forgotten 10 minutes after their last attempt, so a long-lived tab does not keep one for
+   every field it ever edited: the toast is long gone by then, and a forgotten key only refuses a "Try again", as a newer edit would. */
 const attempts = { obj: new WeakMap(), str: new Map() };
+const FORGET_MS = 10 * 60e3;
+let seq = 0;
 export function latest(key) {
-  const reg = typeof key === 'string' ? attempts.str : attempts.obj;
-  const n = (reg.get(key) || 0) + 1;
-  reg.set(key, n);
-  return () => reg.get(key) === n;
+  const n = ++seq;
+  if (typeof key !== 'string') {
+    attempts.obj.set(key, n);
+    return () => attempts.obj.get(key) === n;
+  }
+  const now = performance.now();
+  for (const [k, a] of attempts.str) {
+    if (now - a.at < FORGET_MS) break; // oldest first: a key taken again is put back at the end
+    attempts.str.delete(k);
+  }
+  attempts.str.delete(key);
+  attempts.str.set(key, { n, at: now });
+  return () => attempts.str.get(key)?.n === n;
 }
 /* latest() for the fields of one record that an edit writes, e.g. latestFields('task', id, ['status']): holds while this is the newest
    attempt for every one of them, so an older edit's "Try again" can never overwrite a newer edit of the same field. */

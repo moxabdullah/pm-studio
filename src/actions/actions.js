@@ -1817,7 +1817,7 @@ A.shareAdd = el => {
       p.members.push(m.id);
     },
     () => toast(`${m.name} can now edit ${p.name}`),
-    () => fresh() && !!proj(id) && !proj(id).members.includes(m.id), // not for a project that has gone since; a replay would list them twice
+    () => fresh() && !!mem(m.id) && !!proj(id) && !proj(id).members.includes(m.id), // not for a person or project that has gone since; a replay would list them twice
   );
   S.ui.shareQ = '';
   render();
@@ -1841,7 +1841,7 @@ A.shareInvite = () => {
           proj(p.id).members.push(ex.id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
         },
         shared,
-        () => fresh() && !!proj(p.id) && !proj(p.id).members.includes(ex.id), // not for a project that has gone since; a replay would list them twice
+        () => fresh() && !!mem(ex.id) && !!proj(p.id) && !proj(p.id).members.includes(ex.id), // not for a person or project that has gone since; a replay would list them twice
       );
     }
     S.ui.shareQ = '';
