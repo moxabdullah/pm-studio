@@ -9,7 +9,8 @@
                     loggedOut(message) shows the sign-in page after the session ended.
      startSync({ boot })
                     Call once the PocketBase auth store holds a valid session. Loads everything the user may read, builds S.data,
-                    applies the user's saved preferences, and subscribes to live updates. Rejects when the load fails (a
+                    applies the user's saved preferences, and subscribes to live updates (first, so that no change can fall between
+                    the load and the stream). Rejects when the load fails (a
                     ClientResponseError; check .status). With boot: true it first refreshes the stored session and, while the server
                     cannot be reached, shows the offline state and keeps trying; it only rejects for a session the server refuses.
      stopSync({ flush })
@@ -112,6 +113,17 @@ export const stats = { flushes: 0, lastDiffMs: 0, lastFlushMs: 0, lastOps: 0, re
 const DEV = !!import.meta.env?.DEV;
 
 const same = (a, b) => stableStringify(a) === stableStringify(b);
+/* Resolves when `promise` has settled (however it ended) or after `ms`, whichever comes first. */
+const within = (promise, ms) =>
+  new Promise(resolve => {
+    const timer = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    promise.then(done, done);
+  });
+const STREAM_WAIT_MS = 3000;
 /* A baseline entry: the payload p, its key-sorted string s, a plain string j of how the app builds it (see differs()), and u. */
 const entryOf = (p, u = '') => ({ p, s: stableStringify(p), j: JSON.stringify(p), u });
 /* Does the app's payload `p` differ from baseline entry `b`? The plain JSON string says "no" cheaply (the same payload built the same
@@ -943,7 +955,14 @@ export async function startSync({ boot = false } = {}) {
     while (!all) {
       try {
         if (boot) await pb.collection('users').authRefresh();
-        [all] = await Promise.all([loadAll(), subscribeAll().catch(err => console.warn('sync: live updates are not connected', err))]);
+        // The stream first, then the load, as in recover(): started together, the load can read a record just before a colleague
+        // changes it and the server only then registers the stream, and the change is in neither. What arrives during the load waits in
+        // st.queue. A stream that will not connect (a proxy that buffers it) holds the load back for three seconds, not the SDK's fifteen.
+        await within(
+          subscribeAll().catch(err => console.warn('sync: live updates are not connected', err)),
+          STREAM_WAIT_MS,
+        );
+        all = await loadAll();
       } catch (err) {
         if (!boot || classify(err) !== 'network') throw err;
         setOffline(true); // the server is down: show the offline bar and try again
