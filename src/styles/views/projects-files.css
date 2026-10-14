@@ -210,6 +210,15 @@
 .fcard:hover {
   border-color: var(--border-strong);
 }
+/* The preview is its own button and Download and More sit beside it, so no button is nested in another (as in .attc-open). */
+.fcard-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.fcard-open:focus-visible {
+  outline-offset: -2px; /* .fcard clips what is drawn outside it */
+}
 .fprev {
   aspect-ratio: 16/10;
   display: grid;
