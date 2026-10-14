@@ -1087,7 +1087,7 @@ function goOffline(kind = 'network') {
   st.cause = kind === 'server' ? 'server' : 'network';
   if (st.offline) return;
   setOffline(true);
-  hooks.toast("Your changes couldn't be saved. You're offline.", { kind: 'err', action: 'Try again', onAction: retryNow, ms: 8000 });
+  hooks.toast("Your changes couldn't be saved. You're offline.", { kind: 'err', action: 'Try again', onAction: retryNow, ms: 8000, key: 'offline' });
 }
 /* One recovery or reload at a time. */
 function exclusive(fn) {

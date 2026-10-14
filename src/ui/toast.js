@@ -23,6 +23,9 @@ export function toast(msg, opt = {}) {
       kill();
     };
   el.querySelector('.ibtn').onclick = kill;
+  // `key` names a toast that a later one can take the place of (`replaces`), so two look-alike "Try again" toasts never sit side by side
+  if (opt.key) el.dataset.key = opt.key;
+  if (opt.replaces) host.querySelectorAll(`.toast[data-key="${opt.replaces}"]`).forEach(t => t.querySelector('.ibtn').onclick());
   host.appendChild(el);
   setTimeout(kill, opt.ms || 4200);
 }
@@ -36,6 +39,7 @@ export function mutate(fn, done, still) {
     toast("Your changes couldn't be saved. You're offline.", {
       kind: 'err',
       action: 'Try again',
+      replaces: 'offline', // the sync engine's own offline toast only reconnects; this one also applies the edit
       onAction: async () => {
         if (tried) return;
         tried = true;
