@@ -39,5 +39,5 @@ export function teamModal(m, H) {
       <span class="hint">Only admins can change who is on a team.</span></div>`
     }
   </form>
-  <div class="modal-f">${m.edit ? `<button class="btn btn-danger-ghost" data-a="delTeam" data-id="${esc(m.edit)}">${ic('trash-2', 14)}Delete team</button>` : ''}<span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTeam">${m.edit ? 'Save changes' : 'Create team'}</button></div>`;
+  <div class="modal-f">${m.edit && isAdmin() ? `<button class="btn btn-danger-ghost" data-a="delTeam" data-id="${esc(m.edit)}">${ic('trash-2', 14)}Delete team</button>` : ''}<span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTeam">${m.edit ? 'Save changes' : 'Create team'}</button></div>`;
 }

@@ -2,8 +2,10 @@
    with realistic content. Start the server first (npm run server) and run this against a fresh database.
 
    It must never touch anything but a throwaway local database. Guarantees:
+   - It does nothing unless you pass --dev-database ("npm run seed:dev -- --dev-database"): you vouch that this is a dev database.
+     An empty database is not proof of that, because a brand-new production database is empty too.
    - It only talks to 127.0.0.1, localhost or ::1 (PB_URL, default http://127.0.0.1:8090). Any other host is refused before a request is made.
-   - It refuses to run if the database already has users or projects (delete server/pb_data and restart the server to reseed).
+   - It refuses to run if any collection it writes to already has records (only if it is a throwaway dev database: delete server/pb_data and restart the server to reseed).
    - The dev superuser is created with the local PocketBase binary, straight into the local data directory (PB_DIR, default
      server/pb_data), so its password exists nowhere else. That only happens after the database has been checked and found empty;
      the check itself signs in with a throwaway superuser that is deleted again.
@@ -17,13 +19,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import PocketBase from 'pocketbase';
 import * as constants from '../src/core/constants.js';
-import { COLLECTIONS, buildUserPrefs, toFormData, toRecord, toRecords } from '../src/core/sync-map.js';
+import { COLLECTIONS, USER_PREFS, buildUserPrefs, toFormData, toRecord, toRecords } from '../src/core/sync-map.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const windows = process.platform === 'win32';
 const bin = path.join(root, 'server', windows ? 'pocketbase.exe' : 'pocketbase');
 const dataDir = process.env.PB_DIR ? path.resolve(process.env.PB_DIR) : path.join(root, 'server', 'pb_data');
 const shownDir = path.relative(root, dataDir).startsWith('..') ? dataDir : path.relative(root, dataDir);
+
+const OPT_IN = '--dev-database';
+// every collection the seed writes to, parents first
+const WRITTEN = [...COLLECTIONS.map(c => c.coll), USER_PREFS];
 
 const SUPERUSER = { email: 'dev@gr8rstudio.local', password: 'gr8r-dev-superuser' };
 const USER_PASSWORD = 'gr8r-dev-1234';
@@ -87,16 +93,25 @@ function dropProbe(probe) {
   }
 }
 
-/* Returns why the database must not be seeded, or '' when it has no users and no projects. */
+/* Returns why the database must not be seeded, or '' when every collection the seed writes to is empty. */
 async function whyNotEmpty(origin, probe) {
   const pb = await signIn(origin, probe);
-  const [users, projects] = await Promise.all([pb.collection('users').getList(1, 1), pb.collection('projects').getList(1, 1)]).catch(err => {
-    if (err.status === 404)
-      throw new Error('the users and projects collections are missing. Is the server running with this repo\'s migrations ("npm run server")?');
-    throw err;
-  });
-  if (!users.totalItems && !projects.totalItems) return '';
-  return `the database already has ${users.totalItems} users and ${projects.totalItems} projects. Seed a fresh one: stop the server, delete ${shownDir}, start it again.`;
+  const counts = await Promise.all(
+    WRITTEN.map(coll =>
+      pb
+        .collection(coll)
+        .getList(1, 1)
+        .then(page => [coll, page.totalItems])
+        .catch(err => {
+          if (err.status === 404) throw new Error(`the ${coll} collection is missing. Is the server running with this repo's migrations ("npm run server")?`);
+          throw err;
+        }),
+    ),
+  );
+  const used = counts.filter(([, total]) => total);
+  if (!used.length) return '';
+  const found = used.map(([coll, total]) => `${total} ${coll}`).join(', ');
+  return `the database already has ${found}. If it is a throwaway dev database, seed a fresh one: stop the server, delete ${shownDir}, start it again. Never do that to real data.`;
 }
 
 /* ---------- seed data ---------- */
@@ -242,6 +257,12 @@ function fileForm(payload, file) {
 }
 
 async function main() {
+  if (!process.argv.includes(OPT_IN)) {
+    throw new Error(
+      `this fills the database with demo accounts that share a published password, so it needs your word that the database is a throwaway one. ` +
+        `Run: npm run seed:dev -- ${OPT_IN}`,
+    );
+  }
   const origin = localOrigin(process.env.PB_URL || 'http://127.0.0.1:8090');
   if (!fs.existsSync(bin)) {
     throw new Error(

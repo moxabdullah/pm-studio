@@ -46,6 +46,7 @@ for (const [received, forwarded] of [
   ['SIGBREAK', 'SIGTERM'],
 ]) {
   process.on(received, () => {
+    if (stopping) return;
     stopping = true;
     if (!windows) child.kill(forwarded);
   });

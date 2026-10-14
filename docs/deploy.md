@@ -145,7 +145,7 @@ curl -s http://127.0.0.1:8090/api/health
 
 Stop it with Ctrl+C. The first start created every collection from `server/pb_migrations`, so the database is ready.
 
-Never run `npm run seed:dev` on this server. It fills an empty database with demo accounts that all share a published password. It refuses a database that already has users or projects, but a brand-new production database is empty.
+Never run `npm run seed:dev` on this server. It fills an empty database with demo accounts that all share a published password. It refuses to seed if any collection it writes to already has records and does nothing without the `--dev-database` flag, but a brand-new production database is empty, so the flag is the only thing standing in the way.
 
 ## 4. Run as a service
 

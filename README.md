@@ -18,12 +18,13 @@ runs two processes.
 npm install
 scripts/get-pocketbase.sh   # once: downloads the pinned PocketBase into server/ (Windows: scripts\get-pocketbase.ps1)
 npm run server              # terminal 1: PocketBase on http://127.0.0.1:8090
-npm run seed:dev            # once: demo users and data; prints the sign-in details
+npm run seed:dev -- --dev-database   # once: demo users and data; prints the sign-in details
 npm run dev                 # terminal 2: http://localhost:5173 with hot reload, /api proxied to PocketBase
 ```
 
 Sign in with one of the accounts that `seed:dev` prints. It only runs against a local, empty dev
-server and refuses anything else; never run it on production.
+server, needs the `--dev-database` flag as your word that the database is a throwaway one, and refuses anything else;
+never run it on production.
 
 ```bash
 npm run build         # production build in dist/

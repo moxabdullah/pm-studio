@@ -43,8 +43,16 @@ const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const numOrNull = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const bool = v => v === true;
 /* A calendar day as the app stores it, 'YYYY-MM-DD'. "No date" has two spellings that the app writes and that stay as they are: null
-   (a task's due date once cleared) and '' (the project settings form with its date field emptied). Anything else is not a day. */
-const day = v => ((typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) || v === null || v === '' ? v : null);
+   (a task's due date once cleared) and '' (the project settings form with its date field emptied). Anything else is not a day, and
+   neither is a date that does not exist (2025-02-31): parse() would roll it over into March. */
+const real = s => {
+  const [y, m, d] = s.split('-').map(Number);
+  // in UTC, not local time as parse() builds it: in a zone that skipped a day (Samoa, 2011-12-30) a real date would be dropped
+  const t = new Date(0);
+  t.setUTCFullYear(y, m - 1, d);
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+};
+const day = v => ((typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && real(v)) || v === null || v === '' ? v : null);
 const arr = v => (Array.isArray(v) ? v : []);
 const strs = v => arr(v).filter(x => typeof x === 'string');
 const withDefault = (fn, d) => v => fn(v) || d;

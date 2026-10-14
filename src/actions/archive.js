@@ -3,19 +3,23 @@
    ===================================================================== */
 import { esc } from '../core/utils.js';
 import { logAct, task } from '../core/store.js';
-import { mutate, toast } from '../ui/toast.js';
+import { latestFields, mutate, toast } from '../ui/toast.js';
 import { A, confirmDlg, deleteTasks } from './actions.js';
 
 A.restoreTask = el => {
-  const t = task(el.dataset.id);
-  if (
-    mutate(() => {
+  const { id } = el.dataset;
+  const fresh = latestFields('task', id, ['archived']);
+  let t;
+  mutate(
+    () => {
+      t = task(id); // by id: sync or Undo can replace the task while a refused restore waits for "Try again"
       t.archived = false;
       t.archivedAt = null;
       logAct('restored', t);
-    })
-  )
-    toast(`Restored “${t.title}”`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
+    },
+    () => toast(`Restored “${t.title}”`, { action: 'Open', onAction: () => A.openTask({ dataset: { id } }) }),
+    () => task(id)?.archived === true && fresh(), // not for a task that has gone or is out of the archive already (a second click on Restore)
+  );
 };
 A.purgeTask = el => {
   const t = task(el.dataset.id);
@@ -25,7 +29,11 @@ A.purgeTask = el => {
     ok: 'Delete permanently',
     danger: true,
     run: () => {
-      if (mutate(() => deleteTasks([t.id]))) toast(`Deleted “${t.title}”`);
+      mutate(
+        () => deleteTasks([t.id]),
+        () => toast(`Deleted “${t.title}”`),
+        () => !!task(t.id), // not for a task that has gone since
+      );
     },
   });
 };

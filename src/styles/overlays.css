@@ -324,6 +324,14 @@
   padding: 7px;
   gap: 4px;
 }
+.attc-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.attc-open:focus-visible {
+  outline-offset: -2px; /* .attc clips what is drawn outside it */
+}
 .attc .fi {
   padding: 7px 9px;
 }

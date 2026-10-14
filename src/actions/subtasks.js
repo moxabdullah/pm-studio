@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, esc } from '../core/utils.js';
 import { S, logAct, save, task } from '../core/store.js';
-import { mutate, toast } from '../ui/toast.js';
+import { latestFields, mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
 import { A, BLUR, IN, createTask } from './actions.js';
 
@@ -35,14 +35,22 @@ A.subNav = el => {
   }
 };
 BLUR.commitSubTitle = el => {
-  const t = task(el.dataset.id);
-  const s = subOf(t, el.dataset.sid);
+  const { id, sid } = el.dataset;
+  const s = subOf(task(id), sid);
   const v = el.value.trim();
-  if (s && v && v !== s.title)
-    mutate(() => {
-      s.title = v;
-      t.updated = Date.now();
-    });
+  if (s && v && v !== s.title) {
+    const fresh = latestFields('sub', sid, ['title']);
+    mutate(
+      () => {
+        // by id: sync or Undo can replace the task and its subtasks while a refused rename waits for "Try again"
+        const t = task(id);
+        subOf(t, sid).title = v;
+        t.updated = Date.now();
+      },
+      undefined,
+      () => !!subOf(task(id), sid) && fresh(), // not for a subtask that has gone since, nor over a newer rename
+    );
+  }
 };
 IN.subNote = el => {
   const t = task(el.dataset.id);
@@ -53,12 +61,14 @@ IN.subNote = el => {
   }
 };
 A.promoteSub = el => {
-  const t = task(el.dataset.id);
-  const s = subOf(t, el.dataset.sid);
-  if (!s) return;
+  const { id, sid } = el.dataset;
+  if (!subOf(task(id), sid)) return;
   let n;
-  if (
-    !mutate(() => {
+  mutate(
+    () => {
+      // looked up again, by id: the task and its subtasks can be replaced (sync, Undo) while a refused conversion waits for "Try again"
+      const t = task(id);
+      const s = subOf(t, sid);
       n = createTask({
         title: s.title,
         project: t.project,
@@ -69,12 +79,14 @@ A.promoteSub = el => {
         labels: [...t.labels],
         desc: s.note ? `<p>${esc(s.note)}</p>` : '',
       });
-      t.subtasks = t.subtasks.filter(x => x !== s);
+      t.subtasks = t.subtasks.filter(x => x.id !== sid);
       logAct('converted a subtask of', t, `into ${n.key}`);
-    })
-  )
-    return;
-  S.ui.subOpen = null;
-  render();
-  toast(`Converted to ${n.key}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+    },
+    () => {
+      S.ui.subOpen = null;
+      render();
+      toast(`Converted to ${n.key}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+    },
+    () => !!subOf(task(id), sid), // not converted already
+  );
 };

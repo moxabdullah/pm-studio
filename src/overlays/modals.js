@@ -275,6 +275,7 @@ export function filePreviewModal(m, H) {
   const f = live || m.file;
   const gone = served && !live;
   const canDownload = served && !gone;
+  const canLink = !!(live || D().files.find(x => x.id === m.file.id)); // a link names a files record; an attachment with none has no link
   const t = FT[f.type] || FT.other;
   const prev = filePrev(f, !gone && isRaster(f) ? m.src : '').replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"');
   const note = gone ? 'This file was deleted.' : !served ? "This attachment isn't linked to an uploaded file, so there is nothing to download." : '';
@@ -282,5 +283,5 @@ export function filePreviewModal(m, H) {
   <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${prev}</div>
   ${note ? `<div class="alert info">${ic('info', 14)}<span>${note}</span></div>` : ''}
   ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}Attached to <button class="link" data-a="openTask" data-id="${esc(m.tid)}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>
-  <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-fid="${esc(f.id)}">${ic('link', 14)}Copy link</button><span class="sp"></span><button class="btn ${canDownload ? 'btn-secondary' : 'btn-primary'}" data-a="closeModal">Close</button>${canDownload ? `<button class="btn btn-primary" data-a="downloadFile" data-id="${esc(f.id)}">${ic('download', 14)}Download</button>` : ''}</div>`;
+  <div class="modal-f">${canLink ? `<button class="btn btn-secondary" data-a="copyLink" data-fid="${esc(f.id)}">${ic('link', 14)}Copy link</button>` : ''}<span class="sp"></span><button class="btn ${canDownload ? 'btn-secondary' : 'btn-primary'}" data-a="closeModal">Close</button>${canDownload ? `<button class="btn btn-primary" data-a="downloadFile" data-id="${esc(f.id)}">${ic('download', 14)}Download</button>` : ''}</div>`;
 }

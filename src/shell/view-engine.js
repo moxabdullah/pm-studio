@@ -5,6 +5,8 @@ import { LABELS, PR, PRIOS, STATUSES } from '../core/constants.js';
 import { D, S, canSee, isOver, mem, pColor, proj, visibleProjects } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
 
+// Its keys, and the groupings groupTasks() handles, are listed again in core/sync-map.js (VIEW_FIELDS, VIEW_GROUPS), which drops a synced
+// view that names any other. Add a field or grouping in both places.
 export const FIELDS = {
   status: { name: 'Status', icon: 'circle-dot', opts: () => STATUSES.map(s => ({ id: s.id, name: s.name, html: stIcon(s.id) })) },
   assignee: {
@@ -103,20 +105,21 @@ export function applyView(ts, v) {
 export function sortTasks(ts, s) {
   const d = s.dir || 1;
   const a = [...ts];
-  const key =
-    {
-      manual: t => t.order,
-      title: t => String(t.title).toLowerCase(),
-      due: t => t.due || '9999',
-      start: t => t.start || '9999',
-      priority: t => -PR[t.priority || 'none'].w,
-      status: t => STATUSES.findIndex(x => x.id === t.status),
-      assignee: t => mem(t.assignee)?.name || 'zzz',
-      created: t => -t.created,
-      updated: t => -t.updated,
-      estimate: t => t.estimate || 'zzz',
-      project: t => proj(t.project)?.name,
-    }[s.f] || (t => t.order);
+  // own keys only: a synced sort named after an Object.prototype method (valueOf) must fall back to manual order, not call it
+  const keys = {
+    manual: t => t.order,
+    title: t => String(t.title).toLowerCase(),
+    due: t => t.due || '9999',
+    start: t => t.start || '9999',
+    priority: t => -PR[t.priority || 'none'].w,
+    status: t => STATUSES.findIndex(x => x.id === t.status),
+    assignee: t => mem(t.assignee)?.name || 'zzz',
+    created: t => -t.created,
+    updated: t => -t.updated,
+    estimate: t => t.estimate || 'zzz',
+    project: t => proj(t.project)?.name,
+  };
+  const key = Object.prototype.hasOwnProperty.call(keys, s.f) ? keys[s.f] : t => t.order;
   return a.sort((x, y) => {
     const p = key(x),
       q = key(y);
