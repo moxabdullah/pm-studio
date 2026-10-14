@@ -1,7 +1,8 @@
 /* ---------- sync-map: app objects <-> PocketBase records ----------
    The data contract between the app (the shapes seed() returns and the UI mutates) and the PocketBase collections defined in
-   server/pb_migrations. Pure functions only: no DOM, no imports from other app modules. The browser sync engine
-   (src/core/sync.js) and scripts/seed-dev.js both build on it, so records seeded in development have exactly the shape the app syncs.
+   server/pb_migrations. Pure functions only: no DOM, and no imports from other app modules but normalize.js (also pure). The browser
+   sync engine (src/core/sync.js) and scripts/seed-dev.js both build on it, so records seeded in development have exactly the shape
+   the app syncs.
 
    Every record is { id, ...columns, doc }. The columns are what PocketBase needs for filtering and access rules (relations, status,
    flags). `doc` is the rest of the app object as-is. Fields of the app object that are not columns therefore need no mapping.
@@ -31,10 +32,17 @@
      numbers live inside doc and are untouched. Empty relations come back as null for assignee, lead and activity.project/task/by,
      comments.by and files.by, and as '' for team and workspace. Extras: members keep `email` ('' when the account hides it);
      files get `file`, the stored file name for download URLs (see fileUrl in pb.js). Not restored: `fav` (call applyFavs / applyUserPrefs).
-     Members get defaults for what a dashboard-created account leaves blank: c '#6B7280', status 'active', role 'Member', title '',
-     team '', tz '\u2014' (an em dash), last null, and name = the email's local part ('Unnamed user' when the email is hidden too).
+     Members get defaults for what a dashboard-created account leaves blank (MEMBER_DEFAULTS, one table shared with normalize.js):
+     c '#6B7280', status 'active', role 'Member', title '', team '', tz '\u2014' (an em dash), last null, and name = the email's local
+     part ('Unnamed user' when the email is hidden too).
      toRecord leaves those defaults out again, so a bare account loads, round-trips and saves without anyone writing a value they
      didn't choose (a stored role is always sent: roles are never blank, see server/pb_hooks/users_defaults.pb.js).
+     Normalized: the object ends up in normalizeRecord() (normalize.js), because any signed-in user can store any JSON in `doc`: a
+     value of the wrong type (labels: null, subtasks: 'x', due: {x: 1}) is coerced and a missing one is added, so no record can
+     break a page for everyone. Every other path to S.data (load, live update, reload, adopt, undo) goes through fromRecord, so
+     that is the one place. user_prefs has no app key and is returned as it is. The object that comes out is the app's own form
+     again under toRecord(): toRecord(fromRecord(toRecord(x))) is toRecord(x) for everything the app writes, and the sync baseline
+     (toRecord(fromRecord(rec))) is what the app's copy of an unchanged record produces, so a malformed record is never written back.
    toRecords(coll, data)        -> payloads for every object of data[key], with ctx (me, order) filled from `data`.
    toFormData(payload, blob, filename)
                                 -> the payload as multipart FormData plus the upload in the `file` field. Use it to create a files
@@ -42,7 +50,7 @@
                                    plain JSON payload.
    stableStringify(v)           JSON with object keys sorted at every level (same content -> same string).
    samePayload(a, b)            stableStringify(a) === stableStringify(b); the check to use when diffing against a snapshot.
-     Snapshot what was loaded as toRecord(fromRecord(rec)), never as the raw record: defaults, `doc: null` -> {} and the
+     Snapshot what was loaded as toRecord(fromRecord(rec)), never as the raw record: defaults, normalization, `doc: null` -> {} and the
      boolean flags are then part of the baseline and can't look like a change.
    projOrderFrom(records)       ids of project records (anything with { id, order }) sorted by order: rebuilds D().projOrder.
 
@@ -60,6 +68,8 @@
    applyFavs(data, favs)        only the fav flags: sets fav = true/false on every project and task of `data` (call after a remote
                                    change to a project/task, since fromRecord does not restore it).
    wsFromWorkspace(w)           -> the D().ws object { id, name, url, c, brand } for a workspaces entry. */
+
+import { MEMBER_DEFAULTS, normalizeRecord } from './normalize.js';
 
 /* ---------- helpers ---------- */
 const clone = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
@@ -85,8 +95,8 @@ const ROLE = { to: serverRole, from: appRole };
 /* Accounts that admins create by hand in the dashboard have a blank colour, status and doc. Members read back with the values the
    app expects, and those values are left out of the payload again: a loaded account never differs from itself because of its
    defaults, and the app never writes a value nobody chose. */
-const MEMBER_COLOR = '#6B7280';
-const UNNAMED = 'Unnamed user';
+const MEMBER_COLOR = MEMBER_DEFAULTS.c;
+const UNNAMED = MEMBER_DEFAULTS.name;
 const localPart = email => String(email || '').split('@')[0];
 const BLANKABLE = fallback => ({ to: v => (v == null || v === '' || v === fallback ? '' : String(v)), from: v => str(v) || fallback });
 const isDefault = (value, fallback) => value === fallback || (typeof fallback === 'string' && value === '');
@@ -107,12 +117,12 @@ const SPECS = {
       ['name', 'name', TEXT],
       ['title', 'title', TEXT],
       ['c', 'color', BLANKABLE(MEMBER_COLOR)],
-      ['status', 'status', BLANKABLE('active')],
+      ['status', 'status', BLANKABLE(MEMBER_DEFAULTS.status)],
       ['role', 'role', ROLE],
     ],
     readOnly: [['email', 'email']],
     skip: ['email', 'password', 'passwordConfirm', 'verified'],
-    docDefaults: { team: '', tz: '\u2014', last: null },
+    docDefaults: { team: MEMBER_DEFAULTS.team, tz: MEMBER_DEFAULTS.tz, last: MEMBER_DEFAULTS.last },
     // no name: the email's local part, or a placeholder when the account hides its email too
     afterRead: out => {
       out.name = out.name || localPart(out.email) || UNNAMED;
@@ -275,7 +285,7 @@ export function fromRecord(coll, rec) {
   for (const [appKey, column] of s.readOnly || []) out[appKey] = str(rec[column]);
   s.afterRead?.(out);
   out.id = rec.id;
-  return out;
+  return s.key ? normalizeRecord(s.key, out) : out; // user_prefs is not an app record
 }
 
 export function toRecords(coll, data) {

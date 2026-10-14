@@ -9,7 +9,8 @@
                     loggedOut(message) shows the sign-in page after the session ended.
      startSync({ boot })
                     Call once the PocketBase auth store holds a valid session. Loads everything the user may read, builds S.data,
-                    applies the user's saved preferences, and subscribes to live updates. Rejects when the load fails (a
+                    applies the user's saved preferences, and subscribes to live updates (first, so that no change can fall between
+                    the load and the stream). Rejects when the load fails (a
                     ClientResponseError; check .status). With boot: true it first refreshes the stored session and, while the server
                     cannot be reached, shows the offline state and keeps trying; it only rejects for a session the server refuses.
      stopSync({ flush })
@@ -17,7 +18,7 @@
                     any unsaved change (when online). Sign-out calls this; it does not touch the auth store or S.data.
      flush()        Sends what differs between S.data and the server's copy. store.js save() calls it 150 ms after the last change.
                     Runs one at a time; a call during a run makes it go round once more. Resolves true when nothing was left behind.
-     retryNow()     Tries to leave the offline state right now (flush, reload, resubscribe). Resolves true when back online. Wired to
+     retryNow()     Tries to leave the offline state right now (new stream, reload, flush). Resolves true when back online. Wired to
                     the "Try again" button and the offline toast.
      resubscribe() / quietResync()
                     For when the account's token was replaced (the password was changed, actions.js savePassword): PocketBase then
@@ -42,6 +43,10 @@
                record's `updated` time. It only ever advances to a state the server confirmed (a load, a live update, or the answer
                to our own request), never to what we merely sent. So while a write is in flight it still shows what the server had,
                and the user's edit is still recognisably "mine" if someone else's change to the same record arrives meanwhile.
+               Every record read from the server reaches S.data through fromRecord(), which normalizes it (a value of the wrong type
+               is coerced, a missing one added: sync-map.js, normalize.js), and base holds the payload of that normalized object. So a
+               malformed record is never "changed" and never written back, and what the app itself writes must come out of
+               normalization unchanged, or its record would differ from base for ever (see stuck()).
      flush     Diffs S.data against base and sends creates and updates together, a create that needs a parent created in the same
                flush after it, then deletes. A create carries the whole record. An update carries only the top-level fields that
                changed, and of `doc` only the keys that changed (docPatch: key -> new value, docUnset: keys that went away), which
@@ -58,9 +63,15 @@
                (3-way against base): fields with an unsent local edit keep the local value, the rest take the remote one. The
                object is patched in place.
      offline   Entered when a request cannot reach the server (or a proxy answers 502-504), or the live stream stays down and the
-               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery: reload by merging (not
-               replacing, so nothing typed meanwhile is lost), then send what is unsent (built on the fresh copy, so it does not
-               overwrite other people's changes to the same record), then start a new stream.
+               server does not answer a health check. Polls every 3 s and on the SDK's reconnect. Recovery, in this order: a new stream,
+               registered on the server before anything is read (so no change can fall between the reload and the stream); then
+               reload by merging (not replacing, so nothing typed meanwhile is lost); then send what is unsent (built on the fresh
+               copy, so it does not overwrite other people's changes to the same record). See recover().
+     access    PocketBase sends a client no event when it stops being able to see a record (it was taken off a private project's members,
+               the project was made private ...): the open page would show the project for ever. So every round of the safety net
+               (20 s) asks which projects the server still shows this user, and lets go of the others with their tasks, comments,
+               activity, files, events and saved views, as if somebody else had deleted them (dropRevoked()). Nothing is written.
+     prefs     A user without a settings record (user_prefs) gets one with the first save after a setting has changed, not at sign-in.
      journal   The last minute of remote changes that were applied to S.data, for restoreState(). */
 import { authStore, pb } from './pb.js';
 import {
@@ -100,6 +111,7 @@ const st = {
   reloading: false, // a full reload is merging in: skip per-record follow-up fetches
   queue: [], // live events that arrived while the first load was in flight
   prefsId: '', // id for the user_prefs record this user does not have yet
+  prefsInit: null, // the settings (doc) this user had at sign-in when no settings record existed: until they differ there is nothing to create
   pollT: 0,
   netT: 0,
   graceT: 0,
@@ -111,6 +123,17 @@ export const stats = { flushes: 0, lastDiffMs: 0, lastFlushMs: 0, lastOps: 0, re
 const DEV = !!import.meta.env?.DEV;
 
 const same = (a, b) => stableStringify(a) === stableStringify(b);
+/* Resolves when `promise` has settled (however it ended) or after `ms`, whichever comes first. */
+const within = (promise, ms) =>
+  new Promise(resolve => {
+    const timer = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    promise.then(done, done);
+  });
+const STREAM_WAIT_MS = 3000;
 /* A baseline entry: the payload p, its key-sorted string s, a plain string j of how the app builds it (see differs()), and u. */
 const entryOf = (p, u = '') => ({ p, s: stableStringify(p), j: JSON.stringify(p), u });
 /* Does the app's payload `p` differ from baseline entry `b`? The plain JSON string says "no" cheaply (the same payload built the same
@@ -321,6 +344,14 @@ function refreshWs() {
 /* Whatever the view held about something that is gone. */
 function forgetUi(key, id) {
   const u = S.ui;
+  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task, a file's preview.
+  const open = u.modals.filter(m => {
+    if (key === 'projects') return !(m.id === id || m.pid === id || (m.type === 'project' && m.edit === id));
+    if (key === 'tasks') return !((m.type === 'task' && m.edit === id) || m.tid === id);
+    return true;
+  });
+  if (open.length !== u.modals.length) u.modals = open;
+  if (key === 'projects' && u.pop?.id === id) u.pop = null;
   if (key !== 'tasks') return;
   u.sel.delete(id);
   if (u.drawer === id) {
@@ -473,6 +504,7 @@ function install(all) {
   if (rec) applyUserPrefs(S, fromRecord(USER_PREFS, rec));
   refreshWs();
   if (rec) base.get(USER_PREFS).set(rec.id, entryOf(prefsPayload(rec.id), rec.updated));
+  else st.prefsInit = prefsPayload('').doc;
 }
 /* Reloads everything and merges it in like a burst of live events: unsent local edits survive, new records appear, records the
    server no longer has go away. Returns true when S.data changed. */
@@ -515,9 +547,16 @@ async function confirmGone(key, coll, id) {
 }
 
 /* ---------- live updates ---------- */
+/* Replaces whatever stream there is with a new one, and resolves once the server has registered its subscriptions: from then on every
+   change committed on the server is sent down it. (What was committed before is for the caller to fetch afterwards: see recover().) */
 async function subscribeAll() {
   pb.realtime.onDisconnect = onDisconnect;
-  await pb.realtime.unsubscribe(); // drop what an earlier attempt left behind
+  await pb.realtime.unsubscribe(); // drop what an earlier attempt left behind (this also closes an open stream)
+  // While the SDK is retrying a lost connection by itself (it keeps trying for as long as the server is down, every 0.2 to 2 s),
+  // subscribe() does not connect: it records the subscriptions and returns at once, and the SDK's next retry sends them. A caller
+  // that has just seen the server answer must not mistake that for a live stream, so the retrying is ended here and the subscribes
+  // below connect right away.
+  pb.realtime.disconnect();
   const colls = [...COLLECTIONS.map(c => c.coll), USER_PREFS];
   await Promise.all(colls.map(coll => pb.collection(coll).subscribe('*', e => onEvent(coll, e))));
   await pb.realtime.subscribe('PB_CONNECT', onConnect); // fires on every (re)connect
@@ -547,6 +586,7 @@ function applyEvent(coll, { action, record }) {
     if (action !== 'delete') return applyRecord(key, record);
     if (key !== USER_PREFS) return removeRecord(key, record.id);
     base.get(USER_PREFS).delete(record.id); // the next flush creates a fresh one
+    st.prefsInit = null;
     return false;
   } catch (err) {
     console.error('sync: could not apply a live update', coll, action, err);
@@ -605,8 +645,11 @@ function computeDiff() {
   const id = cur ? cur.p.id : st.prefsId || (st.prefsId = uid());
   const p = prefsPayload(id);
   let prefs = null;
-  if (!cur) prefs = { type: 'create', key: USER_PREFS, coll: USER_PREFS, id, payload: p };
-  else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p), was: cur.p };
+  if (!cur) {
+    // A user the dashboard created has no settings record, and signing in does not give them one: it is created by the first save
+    // after a setting (a view, a favourite, the theme, the workspace ...) has come to differ from what it was at sign-in.
+    if (!st.prefsInit || !same(p.doc, st.prefsInit)) prefs = { type: 'create', key: USER_PREFS, coll: USER_PREFS, id, payload: p };
+  } else if (differs(p, cur)) prefs = { type: 'update', key: USER_PREFS, coll: USER_PREFS, id, fields: changedFields(cur.p, p), was: cur.p };
   return { creates, updates, deletes: deletes.reverse(), prefs };
 }
 export function pendingChanges() {
@@ -813,7 +856,10 @@ async function adoptServerTruth({ key, coll, id }) {
     if (key === USER_PREFS) {
       const rec = (await pb.collection(coll).getFullList())[0];
       if (rec) applyRecord(key, rec, true);
-      else base.get(key).clear(); // none exists: the next flush creates it
+      else {
+        base.get(key).clear(); // none exists: the next flush creates it
+        st.prefsInit = null;
+      }
     } else applyRecord(key, await pb.collection(coll).getOne(id), true);
   } catch (err) {
     const kind = classify(err);
@@ -860,17 +906,28 @@ function reloadFailure(err) {
   }
   return kind === 'network' || kind === 'abort' ? 'offline' : 'other';
 }
-/* Leaves the offline state: the server answers, unsent changes are sent, everything is reloaded and merged, live updates are back. */
+/* Leaves the offline state: the server answers, live updates are back, everything is reloaded and merged, unsent changes are sent.
+   The order matters twice.
+   - Stream first, reload second. A change reaches this browser by one of two doors: the stream (if the server had the stream's
+     subscriptions registered when the change was committed) or the reload (if the change was committed before the reload read the
+     records). Opening the stream last left a gap between them: a change committed after the reload read and before the new stream was
+     registered came through neither, and the page stayed stale until the next reload. Registering first leaves no gap: whatever was
+     committed before it is in the reload, which reads afterwards, and whatever is committed after it is on the stream. A change that
+     comes through both is applied once (applyRecord drops an event that is older than the baseline or identical to it). The safety
+     net and the password change already work in this order. The stream is replaced rather than trusted, because after an outage the
+     old one may be dead without the browser knowing.
+     (A second reload once the stream is up would close the gap too, but it makes every recovery do the work of a full reload twice,
+     in every browser at once when the server comes back. Reordering costs nothing.)
+   - Merge before send. The reload keeps unsent edits (it merges, it does not replace), so what goes out is worked out against the
+     server's current copy: only what we really changed, and nothing the server already holds. */
 function recover() {
   return exclusive(async () => {
     const gen = st.gen;
     try {
       await ping();
-      // Merge first, then send. The reload keeps unsent edits (it merges, it does not replace), so what goes out is worked out
-      // against the server's current copy: only what we really changed, and nothing the server already holds.
+      await resubscribe();
       await resync();
       if (!(await flush({ recovering: true }))) return false;
-      await resubscribe(); // after an outage the old stream may be dead without the browser knowing
     } catch (err) {
       if (reloadFailure(err) !== 'other') return false;
       // The server answers but refuses the reload. Staying offline would never end, so carry on with what is loaded.
@@ -924,7 +981,14 @@ export async function startSync({ boot = false } = {}) {
     while (!all) {
       try {
         if (boot) await pb.collection('users').authRefresh();
-        [all] = await Promise.all([loadAll(), subscribeAll().catch(err => console.warn('sync: live updates are not connected', err))]);
+        // The stream first, then the load, as in recover(): started together, the load can read a record just before a colleague
+        // changes it and the server only then registers the stream, and the change is in neither. What arrives during the load waits in
+        // st.queue. A stream that will not connect (a proxy that buffers it) holds the load back for three seconds, not the SDK's fifteen.
+        await within(
+          subscribeAll().catch(err => console.warn('sync: live updates are not connected', err)),
+          STREAM_WAIT_MS,
+        );
+        all = await loadAll();
       } catch (err) {
         if (!boot || classify(err) !== 'network') throw err;
         setOffline(true); // the server is down: show the offline bar and try again
@@ -974,6 +1038,7 @@ async function teardown() {
     reloading: false,
     queue: [],
     prefsId: '',
+    prefsInit: null,
     rtDown: false,
   });
   S.ui.offline = false;
@@ -998,10 +1063,73 @@ authStore.onChange(() => {
   // Another tab signed out, or signed in as somebody else: never keep writing as the wrong person.
   if (st.active && !st.stopping && (!authStore.isValid || authStore.record?.id !== st.me)) expire('Your session ended in another tab. Sign in again.');
 });
+/* ---------- access that was taken away ----------
+   PocketBase sends a client the events of the records it can see, and of those only. When somebody is taken off a private project's
+   members, or the project is made private, or an admin stops being one, the project and everything in it stop being visible to
+   them, and no event says so: their open page goes on showing them until a reload. So every round of the safety net asks which
+   projects the server shows this user (ids only) and lets go of the ones it no longer shows, with everything that hangs off them.
+   - Only projects the server has told us about are considered. One we have just created and not yet sent has no baseline entry.
+   - A project missing from the answer is asked for by id before it goes: the list may have been read just before it was created, or
+     the answer may be wrong. A 404 on its own id is what "cannot see it" looks like; anything else keeps it for this round.
+   - Nothing is written to the server. The removal is the ordinary one (removeRecord), so the baseline entries go with the records and
+     nothing looks deleted or new, and the work done on those records offline is dropped with them (it could not be saved any more).
+   - The removals are recorded in the journal like any change somebody else made. That is what keeps Undo from bringing them back:
+     Undo restores a snapshot, which still holds these records, and replays the journal over it, which removes them again. */
+const patient = () => ({ signal: AbortSignal.timeout(8000) }); // a request nobody answers ends after 8 s instead of holding the sync lock
+async function dropRevoked(gen) {
+  let visible;
+  try {
+    visible = new Set((await pb.collection('projects').getFullList({ fields: 'id', batch: 500, ...patient() })).map(r => r.id));
+  } catch (err) {
+    if (classify(err) === 'auth') expire();
+    return; // cannot tell now; the next round asks again
+  }
+  if (gen !== st.gen) return;
+  const known = base.get('projects');
+  const missing = D().projects.filter(p => known.has(p.id) && !visible.has(p.id));
+  if (!missing.length) return;
+  const gone = [];
+  let changed = false;
+  await Promise.all(
+    missing.map(async p => {
+      try {
+        changed = applyRecord('projects', await pb.collection('projects').getOne(p.id, patient())) || changed; // after all it is visible
+      } catch (err) {
+        if (err?.status === 404) gone.push(p);
+      }
+    }),
+  );
+  if (gen !== st.gen) return;
+  if (gone.length) {
+    dropProjects(new Set(gone.map(p => p.id)));
+    const name = gone.length === 1 ? `“${gone[0].name}”` : `${gone.length} projects`;
+    hooks.toast(`You no longer have access to ${name}.`, { kind: 'info', ms: 6000 });
+  }
+  if (gone.length || changed) hooks.render();
+}
+/* Removes projects and everything that hangs off them: tasks, their comments, activity, files, events and the user's saved views. */
+function dropProjects(ids) {
+  const tasks = D()
+    .tasks.filter(t => ids.has(t.project))
+    .map(t => t.id);
+  const inTasks = new Set(tasks);
+  const hanging = {
+    comments: D().comments.filter(c => inTasks.has(c.task)),
+    activity: D().activity.filter(a => ids.has(a.project) || inTasks.has(a.task)),
+    files: D().files.filter(f => ids.has(f.project)),
+    events: D().events.filter(e => ids.has(e.project)),
+    savedViews: D().savedViews.filter(v => ids.has(v.project)),
+  };
+  for (const [key, list] of Object.entries(hanging)) for (const x of list) removeRecord(key, x.id, true);
+  for (const id of tasks) removeRecord('tasks', id, true);
+  for (const id of ids) removeRecord('projects', id, true);
+}
+
 /* Safety net, every 20 s. The live stream can die without anyone noticing (a server killed behind a proxy, a network that dropped):
    the browser keeps calling it open and no event ever arrives, so the page would go stale in silence. PocketBase forgets a stream's
    client id when it restarts, and answers 404 when asked to confirm the subscriptions of one it does not know. A stream that is
-   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded.
+   not confirmed (or never connected, behind a proxy that buffers it) is replaced, and what was missed is reloaded. When the stream is
+   confirmed, the round goes on to its other job: asking which projects this user can still see (dropRevoked, above).
    The SDK has no call for "is my stream still known to the server", so this repeats the request it makes itself when it subscribes,
    with its `clientId` and `lastSentSubscriptions`. Those are SDK internals (not in its documented API) that this relies on, which is
    why package.json pins pocketbase to an exact version (0.28.1): look at them again before upgrading. */
@@ -1018,8 +1146,10 @@ function safetyNet() {
       if (kind === 'network' || kind === 'abort') return goOffline();
       if (kind === 'auth') return expire();
       await resubscribe();
-      if (gen === st.gen) await reloadQuietly();
+      if (gen === st.gen) await reloadQuietly(); // a reload also lets go of what the user can no longer see
+      return;
     }
+    await dropRevoked(gen);
   });
 }
 
