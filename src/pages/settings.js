@@ -225,12 +225,7 @@ export function settingsBody(sec, title) {
       );
     }
     case 'permissions':
-      return (
-        H('Control what each role can do.') +
-        srow('Members can create projects', '', tog('permCreate', P.permCreate !== false)) +
-        srow('Allow public share links', 'Anyone with the link can view a project.', tog('permPublic', !!P.permPublic)) +
-        `<div class="sblock"><h2>Role permissions</h2><div style="margin-top:12px">${permsTable()}</div></div>`
-      );
+      return H('Control what each role can do.') + `<div class="sblock"><h2>Role permissions</h2><div style="margin-top:12px">${permsTable()}</div></div>`;
     case 'notif-email':
       return (
         H('Choose which emails you receive.') +

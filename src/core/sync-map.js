@@ -367,6 +367,7 @@ export const DEFAULT_PREFS = {
   openTasks: 'drawer',
   defaultTab: 'board',
   showDoneBoard: true,
+  // The page no longer shows these two; they stay so that a record holding them reads as it did before.
   permCreate: true,
   permPublic: false,
   confirmDel: true,

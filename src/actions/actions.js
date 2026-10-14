@@ -26,7 +26,7 @@ import { fileUrl, pb, setRemember } from '../core/pb.js';
 import { flush, hasUnsaved, pendingChanges, quietResync, restoreState, resubscribe, retryNow, snapshotState, startSync, stopSync } from '../core/sync.js';
 import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessage } from '../core/files.js';
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
-import { effectiveDark } from '../core/theme.js';
+import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
@@ -2235,6 +2235,7 @@ IN.noop = () => {};
 /* settings */
 IN.prefToggle = el => {
   S.prefs[el.dataset.k] = el.checked;
+  applyPrefs(); // a toggle does not re-render the page, and spellcheck is applied to the document
   save();
 };
 IN.npToggle = el => {
