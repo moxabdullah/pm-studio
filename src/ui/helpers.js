@@ -69,10 +69,8 @@ export const lbl = id => (LB[id] ? `<span class="lbl" style="--c:${LB[id].c}"><i
 export const pIcon = (p, cls = '', s = 15) => `<span class="picon ${cls}" style="--c:${pColor(p)}">${ic(p.icon, s)}</span>`;
 /* A project's stage (its name comes from whoever made the set; the colour is a key, resolved here) and its health, which shows only
    when it is not "On track". */
-export const pStage = p => {
-  const s = stageOf(p);
-  return `<span class="pstatus" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span></span>`;
-};
+export const stagePill = s => `<span class="pstatus" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span></span>`;
+export const pStage = p => stagePill(stageOf(p));
 export const pHealth = p =>
   p.health && p.health !== 'ok' ? `<span class="pstatus" style="--c:${HEALTH[p.health].c}"><i></i>${HEALTH[p.health].name}</span>` : '';
 /* The colour of a project's progress bar: green once it is in a finished stage, red when it is at risk. */
