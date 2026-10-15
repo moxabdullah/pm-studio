@@ -107,6 +107,10 @@
                Until then, the first record to arrive (another tab made it) is merged against the settings held at sign-in (prefsInit),
                also when it is handed over by a refused create (a second tab's, which the unique `user` rejects); the tab's own create,
                recognised by its id, is not: what was changed since it was sent stays, even if that is the sign-in value again.
+               A live record is merged a level deeper than other records (mergePrefs()): a setting, a view, a notification setting, a
+               favourite is each its own entry, so an unsent change to one does not overwrite another tab's change to a different one.
+               What it names that this tab has not loaded (a favourite's project or task, a workspace) is kept, not erased by the next
+               save and not left pending: see prefsPayload() and wantedWs().
      sessions  Every wait in this module (a request, a timer, the boot loop's pause) captures st.gen first and gives up quietly, touching
                nothing and showing nothing, when it has changed by the time it wakes: sign-out and a newer start both change it at once.
      journal   The last minute of remote changes that were applied to S.data, for restoreState(). */
@@ -154,6 +158,7 @@ const st = {
   queue: [], // live events that arrived while the first load was in flight
   prefsId: '', // id for the user_prefs record this user does not have yet
   prefsInit: null, // the settings (doc) this user had at sign-in when no settings record existed: until they differ there is nothing to create
+  wsWanted: null, // { id, had }: the workspace a live settings record names that is not loaded here, and the one this tab was in then (see wantedWs())
   pollT: 0, // the offline poll's timer
   netT: 0,
   graceT: 0,
@@ -333,10 +338,37 @@ function fieldNames(fields) {
     return [f];
   });
 }
-/* The user_prefs payload the app would write now. */
-const prefsPayload = id => toRecord(USER_PREFS, buildUserPrefs(S, id), { me: D().me });
+/* The user_prefs payload the app would write now. Two parts of the record can name something this tab does not have, and the payload
+   passes them through as the baseline holds them, so that they are not a difference (they would stay pending for ever) and a save
+   does not erase them:
+   - favourites: the ids of the baseline's favs whose project or task is not loaded here (it has not arrived yet, or the user cannot
+     see it). This tab decides only about the records it has. `held` is the favs to take them from: the baseline's, except at install(),
+     which sets the baseline from this payload. insertObject() flags a record that arrives later from the same baseline. Accepted: the
+     id of a record deleted elsewhere (or here) stays in the list for good. Harmless: applyFavs() flags only what is loaded.
+   - the workspace: the one a live record named that is not loaded here, while the tab is still where it was then (wantedWs()). */
+function prefsPayload(id, held = prefsEntry()?.p.doc?.favs) {
+  const out = buildUserPrefs(S, id);
+  for (const key of ['projects', 'tasks']) {
+    const have = new Set((D()[key] || []).map(x => x.id));
+    const away = (held?.[key] || []).filter(x => !have.has(x));
+    if (away.length) out.favs[key] = [...new Set([...out.favs[key], ...away])].sort();
+  }
+  const ws = wantedWs();
+  if (ws) out.ws = ws;
+  return toRecord(USER_PREFS, out, { me: D().me });
+}
 const prefsEntry = () => base.get(USER_PREFS).values().next().value;
 const favSet = key => new Set(prefsEntry()?.p.doc?.favs?.[key] || []);
+/* The workspace a live settings record names that this tab has not loaded (it was created or shared meanwhile): applyUserPrefs()
+   ignores such an id, and sending the old one back would undo the other tab's choice. It is remembered with the workspace this tab was
+   in then, and is the payload's `ws` for as long as the tab is still in that one. refreshWs() moves the tab to it when it arrives. A
+   tab that has moved on (the user picked a workspace here) has made its own choice, and that is what goes out: this forgets the
+   memory the first time it finds the tab elsewhere (a save follows every switch, and builds the payload). */
+function wantedWs() {
+  const w = st.wsWanted;
+  if (w && D().ws.id !== w.had) st.wsWanted = null;
+  return st.wsWanted?.id;
+}
 
 /* ---------- merging ---------- */
 /* Three-way merge of two versions of a record against the version both started from, field by field: columns, and the top-level
@@ -351,6 +383,42 @@ function merge3(b, mine, theirs) {
   for (const k of new Set([...Object.keys(bd), ...Object.keys(md), ...Object.keys(td)])) {
     const v = same(md[k], bd[k]) ? td[k] : md[k];
     if (v !== undefined) out.doc[k] = v;
+  }
+  return out;
+}
+/* merge3() for the settings record, one level deeper where it holds independent entries, so that an unsent change to one setting does
+   not overwrite another tab's change to a different one. Same rule: an entry `mine` still has as `b` had takes `theirs` (absent
+   included: `undefined` is absent, and an absent entry stays out of the result); any other stays mine. Applied to
+     - prefs, notifPrefs: per key; views: per page key (one view is a unit, a view changed on both sides is mine);
+     - favs.projects, favs.tasks: as sets, theirs plus the ids mine added since `b`, minus the ids mine removed since `b`, sorted;
+   and not to recentSearches, ws and collapsed, which are single values. A part that is not a map in `mine` or `theirs` (the record lacks
+   it) goes by the whole-part rule of merge3(). The result is what cleanPrefs() would give it: a view at its default is in none of
+   the three, so not in the result either, and prefs come out whole as long as theirs has them whole. Sent as before, whole top-level keys. */
+const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const own = (o, k) => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined); // (a key named like a method of Object.prototype is an entry)
+function mergeEntries(b, mine, theirs) {
+  const rows = [];
+  for (const k of new Set([...Object.keys(b), ...Object.keys(mine), ...Object.keys(theirs)])) {
+    const v = same(own(mine, k), own(b, k)) ? own(theirs, k) : own(mine, k);
+    if (v !== undefined) rows.push([k, v]);
+  }
+  return Object.fromEntries(rows); // (an own "__proto__" key stays a plain key)
+}
+function mergeIds(b = [], mine = [], theirs = []) {
+  const was = new Set(b);
+  const has = new Set(mine);
+  const gone = new Set(b.filter(id => !has.has(id)));
+  return [...new Set([...theirs, ...mine.filter(id => !was.has(id))])].filter(id => !gone.has(id)).sort();
+}
+function mergePrefs(b, mine, theirs) {
+  const out = merge3(b, mine, theirs);
+  const bd = b.doc || {};
+  const md = mine.doc || {};
+  const td = theirs.doc || {};
+  for (const k of ['prefs', 'views', 'notifPrefs']) if (isMap(md[k]) && isMap(td[k])) out.doc[k] = mergeEntries(isMap(bd[k]) ? bd[k] : {}, md[k], td[k]);
+  if (isMap(md.favs) && isMap(td.favs)) {
+    const was = isMap(bd.favs) ? bd.favs : {};
+    out.doc.favs = { projects: mergeIds(was.projects, md.favs.projects, td.favs.projects), tasks: mergeIds(was.tasks, md.favs.tasks, td.favs.tasks) };
   }
   return out;
 }
@@ -423,10 +491,16 @@ function insertObject(key, obj) {
   else list.push(obj);
   if (key === 'projects' || key === 'tasks') obj.fav = favSet(key).has(obj.id);
 }
-/* D().ws mirrors the current workspace's entry in D().workspaces (and falls back to the first one). */
+/* D().ws mirrors the current workspace's entry in D().workspaces (and falls back to the first one). The workspace a live settings
+   record named before it was loaded (wantedWs()) is the current one once it is, unless the user chose another meanwhile. */
 function refreshWs() {
   const d = D();
-  const w = d.workspaces.find(x => x.id === d.ws.id) || d.workspaces[0];
+  const want = wantedWs();
+  const arrived = want && d.workspaces.find(x => x.id === want);
+  if (arrived) st.wsWanted = null;
+  const w = arrived || d.workspaces.find(x => x.id === d.ws.id) || d.workspaces[0];
+  // (the current one was deleted: the fallback is not the user's choice, so the wanted one stays wanted from there)
+  if (want && !arrived && w && w.id !== d.ws.id) st.wsWanted.had = w.id;
   const next = w && wsFromWorkspace(w);
   if (next && !same(d.ws, next)) d.ws = next;
 }
@@ -510,11 +584,15 @@ function applyPrefsRecord(rec, force) {
   // record is this tab's own create (its answer or its echo, the id is ours): that holds what this tab sent, so what the user changed
   // since (even back to the sign-in value) is the only difference and must win.
   const from = b ? b.p : rec.id !== st.prefsId && st.prefsInit && { ...mine, doc: st.prefsInit };
-  const merged = force ? theirs : from ? merge3(from, mine, theirs) : mine;
+  const merged = force ? theirs : from ? mergePrefs(from, mine, theirs) : mine;
   known.set(rec.id, entryOf(theirs, rec.updated));
   st.prefsInit = null; // there is a baseline now
   const changed = !same(merged, mine);
   if (changed) applyUserPrefs(S, { id: rec.id, ...merged.doc });
+  // A workspace that is not loaded here cannot be applied: remember it (or forget an earlier one the record no longer names).
+  const ws = merged.doc.ws;
+  const d = D();
+  st.wsWanted = ws && ws !== d.ws.id && !d.workspaces.some(x => x.id === ws) ? { id: ws, had: d.ws.id } : null;
   if (!same(merged, theirs)) save();
   return changed;
 }
@@ -618,10 +696,13 @@ function install(all) {
   sortLists(data);
   applyFavs(data, {});
   S.data = data;
+  st.wsWanted = null; // (a workspace the record names that is not loaded falls back to a loaded one here, and the baseline says so)
   const rec = all[USER_PREFS][0];
-  if (rec) applyUserPrefs(S, fromRecord(USER_PREFS, rec));
+  const saved = rec && fromRecord(USER_PREFS, rec);
+  if (saved) applyUserPrefs(S, saved);
   refreshWs();
-  if (rec) base.get(USER_PREFS).set(rec.id, entryOf(prefsPayload(rec.id), rec.updated));
+  // (the favourites of records that are not loaded are the record's: see prefsPayload())
+  if (rec) base.get(USER_PREFS).set(rec.id, entryOf(prefsPayload(rec.id, saved.favs), rec.updated));
   else st.prefsInit = prefsPayload('').doc;
 }
 /* Reloads everything and merges it in like a burst of live events: unsent local edits survive, new records appear, records the
@@ -1191,8 +1272,8 @@ async function adoptServerTruth(op, gen) {
      while its project is on the page: a file of a project that was deleted with it stays baselined, like the project.
    - a create is not removed: what was made with it and is not sent yet would be left without it (the palette and the search read
      `proj(t.project).name` unguarded).
-   - the settings are not put back: the server's copy can hold what the page cannot rebuild (the favourite of a project or task it has
-     not loaded, a workspace id it does not load: applyUserPrefs() ignores one), so putting it back would not empty the diff. */
+   - the settings are not put back: the server's copy can hold what the page cannot rebuild (a workspace id it does not load:
+     applyUserPrefs() ignores one), so putting it back would not empty the diff. */
 function putBack(op) {
   const { type, key, id } = op;
   const known = base.get(key);
@@ -1526,6 +1607,7 @@ async function teardown() {
     queue: [],
     prefsId: '',
     prefsInit: null,
+    wsWanted: null,
     rtDown: false,
   });
   S.ui.offline = false;

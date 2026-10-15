@@ -69,7 +69,8 @@
                                    which also hides the Project column in a project's views); what a page's view with no entry in
                                    S.views reads as, so cleanPrefs() and buildUserPrefs() both leave a view equal to it out.
    applyUserPrefs(S, obj)       sets those back on the store (prefs merged into S.prefs, a value only when prefOk() accepts
-                                   it; a workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
+                                   it, and a key of S.prefs that `obj.prefs` lacks and DEFAULT_PREFS does not have removed; a
+                                   workspace id that is not loaded is ignored) and stamps `fav` on every loaded project and
                                    task. Parts missing from `obj` are left alone.
    Settings are as untrusted as any doc: fromRecord() runs the user_prefs record through cleanPrefs(), which drops a part of the wrong
    type (and the wrong-typed entries of a list or map), so the store never holds, say, recentSearches that is not a list. The one
@@ -410,6 +411,7 @@ function prefOk(k, v) {
    where a view starts, so it is not a change (an action may put a view back to it), and buildUserPrefs() leaves the same views out. The two must strip identically,
    or an old record that holds an explicit default view would look like an unsent change. */
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const texts = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 // The filter fields and groupings the view engine knows: the keys of FIELDS and the cases of groupTasks() in shell/view-engine.js.
 // Any other name makes the filter chips or the grouping throw. Keep these in step with that file.
@@ -489,6 +491,10 @@ export function applyUserPrefs(S, obj) {
     // only what prefOk() accepts, which never includes a name Object.prototype has, so nothing is assigned through S.prefs.__proto__
     // and no method of S.prefs ("toString") is shadowed
     for (const [k, v] of Object.entries(obj.prefs)) if (prefOk(k, v)) S.prefs[k] = v;
+    // `obj.prefs` is the whole object (cleanPrefs() makes it so, and so does the merge of a live record), so a key it lacks was
+    // dropped: a setting of a newer page that the other tab no longer has. Keeping it would leave the settings looking changed for
+    // ever. The settings this page knows are never dropped: cleanPrefs() gives each its default.
+    for (const k of Object.keys(S.prefs)) if (!has(obj.prefs, k) && !has(DEFAULT_PREFS, k)) delete S.prefs[k];
   }
   if (obj.views) S.views = clone(obj.views);
   if (obj.collapsed !== undefined) S.ui.collapsed = !!obj.collapsed;
