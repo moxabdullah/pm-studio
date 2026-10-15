@@ -46,7 +46,7 @@ Each collection gets a few real columns that PocketBase needs for filtering and 
 | `projects`     | workspace, team, lead, private, members (relation to users), archived, order                                    | key, name, icon, status, dates, everything else                |
 | `tasks`        | project, status, assignee, archived                                                                             | title, priority, due, labels, est, subtasks, deps, recur, etc. |
 | `comments`     | task, author                                                                                                    | body, reactions                                                |
-| `activity`     | project, task, by                                                                                               | verb, extra                                                    |
+| `activity`     | project, task, workspace, by                                                                                    | verb, extra                                                    |
 | `notifs`       | recipient                                                                                                       | everything else                                                |
 | `files`        | project, uploaded_by, file (real upload)                                                                        | display name, type                                             |
 | `events`       | project                                                                                                         | title, date, time                                              |
