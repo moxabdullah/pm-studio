@@ -254,11 +254,13 @@ const ORDER_LIMIT = 1e12;
    that hook the placeholder is stored, and it can equal a hidden project's: ties are settled by id, so the visible order does not
    change, and it is only if that project is ever shown that it lands next to the new one.)
    The server refuses a changed value beyond ORDER_LIMIT (an unchanged one passes), and a superuser or a migration can leave a project
-   beyond it. Handing that project's value to a neighbour would then be refused, so when a known project would be given a value that
-   is both new and beyond the limit, the hand-out is worked out again with the projects that are beyond it taken as unplaced: they
-   get values between their in-range neighbours, in the order shown, and the others keep theirs. (A project that is new here does
-   not count: the server ignores the value of a create, and a placeholder beside a far project can itself be far.) When the first
-   hand-out is fine nothing is renumbered, so a far project left where it is keeps its value and is not written. */
+   beyond it. Handing that value to a neighbour would be refused, so while a known project would be given a value that is both new
+   and beyond the limit, the projects whose far values were handed away are taken as unplaced and the hand-out is worked out again:
+   they get values between their neighbours and the others keep theirs, so a far project left where it is is not written. Each round
+   unplaces one more, so it ends. When there is none to unplace (a far value is still beside an unplaced project that has to be put
+   next to it) every far project is unplaced, the last resort. Beyond the ends the values go one apart, unless that would leave the
+   range: then they are spread over what is left of it (up to a neighbour at exactly the limit, that is a tie, settled by id). A project
+   that is new here does not count: the server ignores the value of a create, and a placeholder beside a far project can itself be far. */
 function projectOrders() {
   const known = base.get('projects');
   const have = new Set(D().projects.map(p => p.id));
@@ -268,6 +270,7 @@ function projectOrders() {
       .projects.map(p => p.id)
       .filter(id => !D().projOrder.includes(id)),
   ];
+  const far = o => Math.abs(o) > ORDER_LIMIT;
   // `placed` says which ids take part in the hand-out of the server's values; the others are put between them.
   const place = placed => {
     const sorted = ids
@@ -286,17 +289,26 @@ function projectOrders() {
       while (j < ids.length && !out.has(ids[j])) j++;
       const lo = i > 0 ? out.get(ids[i - 1]) : undefined;
       const hi = j < ids.length ? out.get(ids[j]) : undefined;
-      for (let x = 0; x < j - i; x++) {
-        if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : hi - (j - i) + x);
-        else out.set(ids[i + x], hi === undefined ? lo + x + 1 : lo + ((hi - lo) * (x + 1)) / (j - i + 1));
+      const n = j - i;
+      const squeeze = lo === undefined ? hi !== undefined && !far(hi) && hi - n < -ORDER_LIMIT : hi === undefined && !far(lo) && lo + n > ORDER_LIMIT;
+      for (let x = 0; x < n; x++) {
+        if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : squeeze ? -ORDER_LIMIT + ((hi + ORDER_LIMIT) * x) / n : hi - n + x);
+        else if (hi === undefined) out.set(ids[i + x], squeeze ? lo + ((ORDER_LIMIT - lo) * (x + 1)) / n : lo + x + 1);
+        else out.set(ids[i + x], lo + ((hi - lo) * (x + 1)) / (n + 1));
       }
       i = j;
     }
     return out;
   };
-  const out = place(id => known.has(id));
-  const refused = ids.some(id => known.has(id) && out.get(id) !== known.get(id).p.order && Math.abs(out.get(id)) > ORDER_LIMIT);
-  return refused ? place(id => known.has(id) && Math.abs(known.get(id).p.order) <= ORDER_LIMIT) : out;
+  const unplaced = new Set();
+  for (;;) {
+    const out = place(id => known.has(id) && !unplaced.has(id));
+    const changed = id => known.has(id) && out.get(id) !== known.get(id).p.order;
+    if (!ids.some(id => changed(id) && far(out.get(id)))) return out;
+    const handed = ids.filter(id => changed(id) && !unplaced.has(id) && far(known.get(id).p.order));
+    if (!handed.length) return place(id => known.has(id) && !far(known.get(id).p.order));
+    for (const id of handed) unplaced.add(id);
+  }
 }
 /* The payload of one live app object. */
 function payloadOf(key, obj) {
