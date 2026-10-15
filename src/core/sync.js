@@ -464,25 +464,24 @@ function takeServerOrder() {
   const server = serverOrder().filter(id => have.has(id));
   D().projOrder = [...server, ...D().projOrder.filter(id => have.has(id) && !server.includes(id))];
 }
-/* One project goes back to its place in the server's order, for a change to it that the server refused (a re-order, or a delete: a
+/* Projects go back to their places in the server's order, for changes to them that the server refused (a re-order, or a delete: a
    project put back goes last, where reorderProjects() leaves it). reorderProjects() cannot do it, see takeServerOrder(), and
    takeServerOrder() would put the others back too, losing a re-order the user made since that is not sent yet. The rest of the page
-   order stays as the user left it, and the project is put among them so that as many projects the server knows come before it as do in
-   the server's order: projectOrders() gives the k-th of those the k-th smallest value of the baseline, which is the project's own, so
-   nothing is sent for it again, and the moves of the others go out. A project the server does not know yet (an unsent create) keeps
-   its place. */
-function takeServerPlace(id) {
+   order stays as the user left it, and each project is put among them so that as many projects the server knows come before it as do
+   in the server's order: projectOrders() gives the k-th of those the k-th smallest value of the baseline, which is the project's own,
+   so nothing is sent for it again, and the moves of the others go out. They go in together, lowest first: placed one at a time, a
+   later one moved off its refused place changes how many come before an earlier one (see refuse()). A project the server does not
+   know yet (an unsent create) keeps its place, ahead of one that goes in before the same project. */
+function takeServerPlace(ids) {
   const have = new Set(D().projects.map(p => p.id));
-  if (!have.has(id)) return;
-  const k = serverOrder()
-    .filter(x => have.has(x))
-    .indexOf(id);
-  if (k < 0) return;
-  const rest = D().projOrder.filter(x => x !== id && have.has(x));
+  const server = serverOrder().filter(x => have.has(x));
+  const back = server.filter(x => ids.includes(x)); // lowest first
   const known = base.get('projects');
-  let at = 0;
-  for (let seen = 0; seen < k && at < rest.length; at++) if (known.has(rest[at])) seen++;
-  rest.splice(at, 0, id);
+  const rest = D().projOrder.filter(x => have.has(x) && !back.includes(x));
+  for (const id of back) {
+    const next = rest.filter(x => known.has(x))[server.indexOf(id)]; // the one it comes before, if any
+    rest.splice(next === undefined ? rest.length : rest.indexOf(next), 0, id);
+  }
   D().projOrder = rest;
 }
 function insertObject(key, obj) {
@@ -1182,6 +1181,8 @@ async function refuse(list, gen) {
   }
   toldRefusals += loud.length;
   const left = await Promise.all(list.map(r => adoptServerTruth(r.op, gen)));
+  // Each project above went back with the others of this refusal still on their refused places: together they all land on their own.
+  if (gen === st.gen) takeServerPlace(list.filter(r => movesProject(r.op)).map(r => r.op.id));
   refusals += loud.length; // after the above: a refusal that puts the page offline is lost when it is back (see setOffline())
   if (gen === st.gen) hooks.render();
   if (left.includes('stale')) reloadSoon(gen);
@@ -1205,6 +1206,9 @@ function reloadSoon(gen) {
    answers 200 with no items, for a record that does not exist and for one the user may not see alike (list and view have the same rule
    on every collection: see `all()` in server/pb_migrations/1791849600_init_schema.js). No items is what the 404 meant: gone, or not
    ours to see. A list read of a collection that exists has no 404 to answer. */
+// A refused change that leaves a project's place on the page wrong: reorderProjects() kept the refused order, or put a project whose
+// delete was refused last (every one after it would be sent a new order). takeServerPlace() puts it right.
+const movesProject = ({ type, key, fields }) => key === 'projects' && (type === 'delete' || (type === 'update' && 'order' in fields));
 async function adoptServerTruth(op, gen) {
   const { type, key, coll, id } = op;
   try {
@@ -1227,8 +1231,7 @@ async function adoptServerTruth(op, gen) {
       if (gen !== st.gen) return '';
       if (items[0]) {
         applyRecord(key, items[0], true, true); // journaled: an Undo of something done since must not bring the refused value back
-        // reorderProjects() kept the refused order, or put a project whose delete was refused last (every one after it would be sent a new order)
-        if (key === 'projects' && (type === 'delete' || (type === 'update' && 'order' in op.fields))) takeServerPlace(id);
+        if (movesProject(op)) takeServerPlace([id]);
         if (key === 'files') D().files.sort(byAtDesc); // it comes in first: back where its date puts it
       } else removeRecord(key, id, true); // gone, or not ours to see
     }
@@ -1285,7 +1288,7 @@ function putBack(op) {
     const rec = { ...obj, ...old.p, updated: old.u };
     if ('order' in op.fields) {
       applyRecord(key, rec, true, true); // forced, as the stand-in below cannot hold the order; journaled all the same
-      takeServerPlace(id); // its refused place is still on the page: reorderProjects() takes it for an unsent re-order
+      takeServerPlace([id]); // its refused place is still on the page: reorderProjects() takes it for an unsent re-order
     } else {
       known.set(id, entryOf(withFields(old.p, op.fields), old.u)); // the stand-in: the server's copy, had it taken the change
       applyRecord(key, rec);
