@@ -506,10 +506,12 @@ function refreshWs() {
 /* Whatever the view held about something that is gone. */
 function forgetUi(key, id) {
   const u = S.ui;
-  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task, a file's preview.
+  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task or template, the
+  // question about deleting a template, a file's preview.
   const open = u.modals.filter(m => {
     if (key === 'projects') return !(m.id === id || m.pid === id || (m.type === 'project' && m.edit === id));
     if (key === 'tasks') return !((m.type === 'task' && m.edit === id) || m.tid === id);
+    if (key === 'templates') return !((m.type === 'template' && m.edit === id) || m.tmplId === id);
     return true;
   });
   if (open.length !== u.modals.length) u.modals = open;
@@ -649,8 +651,8 @@ function sortLists(data) {
 let answered = 0;
 const SETTLE_MS = 3000;
 /* Every collection the user may read, in parallel, as { appKey: [records], user_prefs: [record] }. The activity feed and the
-   notification list load only their newest entries. When one read fails, the others are given up to SETTLE_MS to land (and be
-   counted) before the failure is thrown. */
+   notification list load only their newest entries, and an optional collection the server does not have (it answers 404) reads as
+   empty. When one read fails, the others are given up to SETTLE_MS to land (and be counted) before the failure is thrown. */
 async function loadAll() {
   const full = coll => pb.collection(coll).getFullList({ batch: 500, sort: 'created,id' });
   const newest = (coll, n) =>
@@ -658,7 +660,10 @@ async function loadAll() {
       .collection(coll)
       .getList(1, n, { sort: '-created,id', skipTotal: true })
       .then(r => r.items);
-  const jobs = COLLECTIONS.map(({ key, coll }) => [key, CAPS[key] ? newest(coll, CAPS[key]) : full(coll)]);
+  const jobs = COLLECTIONS.map(({ key, coll, optional }) => [
+    key,
+    CAPS[key] ? newest(coll, CAPS[key]) : optional ? full(coll).catch(err => (err?.status === 404 ? [] : Promise.reject(err))) : full(coll),
+  ]);
   jobs.push([USER_PREFS, full(USER_PREFS)]);
   let open = true; // a read that lands after the failure was thrown counts for nobody: the next try would take it as its own
   const reads = jobs.map(j =>

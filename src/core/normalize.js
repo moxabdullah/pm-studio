@@ -18,7 +18,8 @@
    - The app's own values come out unchanged. Whatever the app writes (src/actions, the overlays, drag and drop, seed()) must be a
      fixed point, or the record would differ from its baseline for ever and be sent again and again (sync.js has a guard for that,
      stuck(), which must never be needed for ordinary data). So each coercer keeps the forms the app uses for "nothing":
-       null    a task's due and start dates (cleared), estimate, recur, completedAt, archivedAt; a subtask's assignee and due date
+       null    a task's due and start dates (cleared), estimate, recur, completedAt, archivedAt; a subtask's assignee and due date;
+               a template task's estimate and its startOff and dueOff (whole days, 0 included)
        ''      a project's due date, when its date field is emptied in the project settings (days: see day())
        []/{}   labels, deps, subtasks, attachments, milestones, perms, a comment's reactions (also one emoji's list once everybody
                took theirs back)
@@ -41,6 +42,7 @@ const ref = v => (typeof v === 'string' && v ? v : null); // an id, or nothing
 const text = v => (typeof v === 'string' && v ? v : null); // free text that may be absent
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const numOrNull = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const intOrNull = v => (Number.isInteger(v) ? v : null); // 0 is a value here (a template task that starts on the project's first day)
 const bool = v => v === true;
 /* A calendar day as the app stores it, 'YYYY-MM-DD'. "No date" has two spellings that the app writes and that stay as they are: null
    (a task's due date once cleared) and '' (the project settings form with its date field emptied). Anything else is not a day, and
@@ -91,6 +93,12 @@ export const MEMBER_DEFAULTS = Object.freeze({
   last: null,
 });
 const MD = MEMBER_DEFAULTS;
+/* The most a template holds: tasks, and subtasks in each task. Copies of TEMPLATE_TASKS_MAX and TEMPLATE_SUBTASKS_MAX in constants.js,
+   on purpose: this module imports nothing from the app (sync-map.js and the dev seed script load it in Node). The list is cut before its
+   entries are shaped, so a huge one written through the API costs no more than its first n. */
+const TEMPLATE_TASKS_MAX = 300;
+const TEMPLATE_SUBTASKS_MAX = 50;
+const first = (n, fn) => v => fn(arr(v).filter(isObj).slice(0, n));
 
 const KINDS = {
   member: shape({
@@ -126,17 +134,32 @@ const KINDS = {
     filters: list(shape({ f: str, op: v => (v === 'not' ? 'not' : 'is'), v: strs }), f => f.f),
   }),
   team: shape({ id: str, name: str, desc: str, icon: str, c: str }, { workspace: str }),
+  template: shape(
+    {
+      id: str, name: str, desc: str, icon: str, color: str,
+      tasks: first(
+        TEMPLATE_TASKS_MAX,
+        list(
+          shape({
+            title: str, status: withDefault(str, 'todo'), priority: withDefault(str, 'none'), estimate: text, desc: str, labels: strs,
+            subtasks: first(TEMPLATE_SUBTASKS_MAX, list(shape({ title: str }))), startOff: intOrNull, dueOff: intOrNull,
+          }),
+        ),
+      ),
+    },
+    { workspace: str, updated: num },
+  ),
   workspace: shape({ id: str, name: str, c: str }, { url: str, brand: bool }),
 }; // prettier-ignore
 
 /* The keys of S.data (and so of sync-map's COLLECTIONS) name the same kinds in the plural. */
 const KIND_OF = {
   members: 'member', projects: 'project', tasks: 'task', comments: 'comment', activity: 'activity', notifs: 'notif', files: 'file',
-  events: 'event', savedViews: 'savedView', teams: 'team', workspaces: 'workspace',
+  events: 'event', savedViews: 'savedView', teams: 'team', templates: 'template', workspaces: 'workspace',
 }; // prettier-ignore
 
-/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team or workspace, or the
-   S.data key of that list (members, projects, tasks, ..., savedViews, teams, workspaces), so a caller that knows the
+/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team, template or workspace, or the
+   S.data key of that list (members, projects, tasks, ..., savedViews, teams, templates, workspaces), so a caller that knows the
    collection can pass keyOf(coll). Returns a new object; the argument is not touched. Throws on any other kind. */
 export function normalizeRecord(kind, rec) {
   const name = own(KIND_OF, kind) ? KIND_OF[kind] : kind;
@@ -163,6 +186,7 @@ export function normalizeData(d) {
   each('savedViews', 'savedView');
   each('workspaces', 'workspace');
   if (d.teams !== undefined) each('teams', 'team');
+  if (d.templates !== undefined) each('templates', 'template');
   d.projOrder = strs(d.projOrder);
   d.recentSearches = strs(d.recentSearches);
   d.me = str(d.me);

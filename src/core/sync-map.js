@@ -7,10 +7,10 @@
    Every record is { id, ...columns, doc }. The columns are what PocketBase needs for filtering and access rules (relations, status,
    flags). `doc` is the rest of the app object as-is. Fields of the app object that are not columns therefore need no mapping.
 
-   COLLECTIONS   ordered list of { key, coll, updateOnly? } for the array-backed collections: `key` is the property on S.data, `coll`
+   COLLECTIONS   ordered list of { key, coll, updateOnly?, optional? } for the array-backed collections: `key` is the property on S.data, `coll`
                  the PocketBase collection. Parents come first, so creating in this order and deleting in reverse satisfies every relation.
                    members->users (first; the app only ever UPDATES users: admins create accounts in PocketBase),
-                   workspaces, teams, projects, tasks, comments, activity, notifs, files, events, savedViews->saved_views
+                   workspaces, teams, projects, tasks, comments, activity, notifs, files, events, savedViews->saved_views, templates
    USER_PREFS    'user_prefs': the one composite collection, see buildUserPrefs/applyUserPrefs. Not an array on S.data.
    keyOf(coll)   app key for a PocketBase collection name ('saved_views' -> 'savedViews'); null if not synced
    collOf(key)   PocketBase collection name for an app key
@@ -31,7 +31,7 @@
    fromRecord(coll, rec)        -> app object: { id, ...columns, ...rec.doc } (columns win over doc). Also a fresh copy.
      System fields (collectionId, collectionName, created, updated, expand, ...) are ignored; the app's own created/updated/at
      numbers live inside doc and are untouched. Empty relations come back as null for assignee, lead and activity.project/task/workspace/by,
-     comments.by and files.by, and as '' for team and for the workspace of a project or team. Extras: members keep `email` ('' when the account hides it);
+     comments.by and files.by, and as '' for team and for the workspace of a project, team or template. Extras: members keep `email` ('' when the account hides it);
      files get `file`, the stored file name for download URLs (see fileUrl in pb.js). Not restored: `fav` (call applyFavs / applyUserPrefs).
      Members get defaults for what a dashboard-created account leaves blank (MEMBER_DEFAULTS, one table shared with normalize.js):
      c '#6B7280', status 'active', role 'Member', title '', team '', tz '\u2014' (an em dash), last null, and name = the email's local
@@ -158,6 +158,18 @@ const SPECS = {
       ['name', 'name', TEXT],
     ],
   },
+  templates: {
+    key: 'templates',
+    coll: 'templates',
+    // Read as none when the server has no such collection (it answers the list with 404): the app is served before the restart that
+    // applies 1791849606, and one failed read would stop the whole load. The next reload after the restart brings the templates in.
+    // Can go once every server has 1791849606.
+    optional: true,
+    cols: [
+      ['workspace', 'workspace', ONE('')],
+      ['name', 'name', TEXT],
+    ],
+  },
   projects: {
     key: 'projects',
     coll: 'projects',
@@ -237,11 +249,11 @@ const SPECS = {
 };
 
 /* Create order: parents first. Everything may point at a user, so users come first. */
-const ORDER = ['members', 'workspaces', 'teams', 'projects', 'tasks', 'comments', 'activity', 'notifs', 'files', 'events', 'savedViews'];
+const ORDER = ['members', 'workspaces', 'teams', 'projects', 'tasks', 'comments', 'activity', 'notifs', 'files', 'events', 'savedViews', 'templates'];
 export const COLLECTIONS = Object.freeze(
   ORDER.map(k => {
     const s = SPECS[k];
-    return Object.freeze(s.updateOnly ? { key: s.key, coll: s.coll, updateOnly: true } : { key: s.key, coll: s.coll });
+    return Object.freeze({ key: s.key, coll: s.coll, ...(s.updateOnly ? { updateOnly: true } : {}), ...(s.optional ? { optional: true } : {}) });
   }),
 );
 export const USER_PREFS = 'user_prefs';

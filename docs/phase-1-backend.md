@@ -11,7 +11,7 @@ Turn PM Space from a single-browser demo into a shared app that about 20 Sam Eng
 ## Not in this phase
 
 - Department roles and permission rules beyond "signed in" and "private projects": Phase 2.
-- Sam Engineering stages, templates, fields and labels: Phase 3.
+- Sam Engineering stages, fields and labels: Phase 3. (Templates were built ahead of it: each workspace keeps its own, see `templates` below.)
 - Service contracts, SLA tickets and timers: Phase 4.
 - Microsoft 365 sign-in. This phase only checks that it is possible; see the spike below.
 
@@ -51,6 +51,7 @@ Each collection gets a few real columns that PocketBase needs for filtering and 
 | `files`        | project, uploaded_by, file (real upload)                                                                        | display name, type                                             |
 | `events`       | project                                                                                                         | title, date, time                                              |
 | `saved_views`  | project, owner                                                                                                  | name, type, filters                                            |
+| `templates`    | workspace, name                                                                                                 | description, icon, colour, tasks (title, status, dates, ...)   |
 | `user_prefs`   | user (unique)                                                                                                   | prefs, views, collapsed, notifPrefs, recentSearches            |
 
 **IDs.** Change `uid()` to produce 15-character lowercase IDs that PocketBase accepts, and send them as the record `id` on create. The app can then keep creating objects synchronously, exactly as it does now. Store an optional prefix such as `t` in `doc` if anything depends on it.

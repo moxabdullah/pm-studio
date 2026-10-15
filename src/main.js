@@ -51,6 +51,7 @@ import './features/teams.js';
 import './features/subtasks.js';
 import './features/archive.js';
 import './actions/teams.js';
+import './actions/templates.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
 import { S, D } from './core/store.js';

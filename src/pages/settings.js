@@ -3,7 +3,7 @@
    ===================================================================== */
 import { dOff, esc, fmtDate, fmtTime } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { D, S, inWs, isAdmin, me } from '../core/store.js';
+import { D, S, canManageTemplates, inWs, isAdmin, me, templatesOf } from '../core/store.js';
 import { av, pIcon } from '../ui/helpers.js';
 import { permsTable, teamsGrid } from './members.js';
 import { page404 } from './errors.js';
@@ -25,6 +25,7 @@ export const SET_NAV = [
       ['members', 'Members', 'users'],
       ['teams', 'Teams', 'users-round'],
       ['projects', 'Projects', 'folder-kanban'],
+      ['templates', 'Templates', 'layers'],
       ['permissions', 'Permissions', 'shield'],
     ],
   ],
@@ -224,6 +225,17 @@ export function settingsBody(sec, title) {
         `<div class="sblock"><h2>Archived projects</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${esc(p.id)}">Restore</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${esc(p.id)}">Delete</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">No archived projects. Archived projects are hidden from the sidebar but keep all their tasks.</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}Open archive</button></div></div>`
       );
     }
+    case 'templates': {
+      const manage = canManageTemplates();
+      const list = templatesOf(d.ws.id);
+      return (
+        H(`Templates for ${esc(d.ws.name)}. New projects can start from one.`) +
+        (list.length
+          ? `<div class="sblock" style="margin-top:0">${list.map(t => templateRow(t, manage)).join('')}</div>`
+          : `<p class="faint" style="padding:12px 0">No templates yet.${manage ? ' Open a project and choose ••• › Save as template.' : ''}</p>`) +
+        (manage ? '' : '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change templates.</p>')
+      );
+    }
     case 'permissions':
       return H('Control what each role can do.') + `<div class="sblock"><h2>Role permissions</h2><div style="margin-top:12px">${permsTable()}</div></div>`;
     case 'notif-email':
@@ -320,6 +332,33 @@ export function settingsBody(sec, title) {
     }
   }
   return page404();
+}
+/* One template in Settings > Templates: its name, description and size, the whole description and the task titles when it is open, and
+   what can be done with it. */
+function templateRow(t, manage) {
+  const open = !!S.ui.expanded[t.id];
+  const n = t.tasks.length;
+  const meta = `${n} task${n === 1 ? '' : 's'}${t.updated ? ` · updated ${fmtDate(new Date(t.updated))}` : ''}`;
+  const desc = t.desc ? `<p class="muted" style="margin:0 0 8px 46px;font-size:12.5px;white-space:pre-line;overflow-wrap:anywhere">${esc(t.desc)}</p>` : '';
+  // the task list shows only when the row is open: a collapsed row does not build it
+  const titles = !open
+    ? ''
+    : t.tasks.length
+      ? `<ol class="muted" style="margin:0 0 14px 46px;padding:0 0 0 18px;font-size:12.5px;line-height:1.7">${t.tasks
+          .map(
+            x =>
+              `<li>${esc(x.title)}${x.subtasks.length ? ` <span class="faint">· ${x.subtasks.length} subtask${x.subtasks.length === 1 ? '' : 's'}</span>` : ''}</li>`,
+          )
+          .join('')}</ol>`
+      : '<p class="faint" style="margin:0 0 14px 46px;font-size:12.5px">This template has no tasks.</p>';
+  return `<div style="border-bottom:1px solid var(--divider)"><div class="srow" style="border-bottom:0">
+    <div class="row" style="gap:10px;min-width:0;align-items:flex-start">
+      <button class="ibtn ibtn-sm" data-a="toggleExpand" data-id="${esc(t.id)}" aria-expanded="${open}" aria-label="${open ? 'Hide' : 'Show'} the tasks in ${esc(t.name)}">${ic(open ? 'chevron-down' : 'chevron-right', 14)}</button>
+      ${pIcon(t, '', 14)}
+      <div style="min-width:0"><div class="t trunc">${esc(t.name)}</div>${t.desc ? `<div class="faint trunc" style="font-size:12.5px">${esc(t.desc)}</div>` : ''}<div class="faint" style="font-size:12px;margin-top:2px">${meta}</div></div>
+    </div>
+    <div class="row" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="newProject" data-tmpl="${esc(t.id)}" aria-label="New project from ${esc(t.name)}">New project</button>${manage ? `<button class="btn btn-secondary btn-sm" data-a="editTemplate" data-id="${esc(t.id)}" aria-label="Edit template ${esc(t.name)}">Edit</button><button class="btn btn-danger-ghost btn-sm" data-a="delTemplate" data-id="${esc(t.id)}" aria-label="Delete template ${esc(t.name)}">Delete</button>` : ''}</div>
+  </div>${open ? desc + titles : ''}</div>`;
 }
 export function strengthMeter(pw) {
   let s = 0;
