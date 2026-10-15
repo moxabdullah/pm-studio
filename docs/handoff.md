@@ -1,8 +1,22 @@
-# Handoff — follow-ups: #8–#16 merged; only the smaller gaps (Next 8) remain (2026-10-15)
+# Handoff — workspace templates PR open for review; follow-ups #8–#16 merged (2026-10-15)
 
 ## Goal
 
 Work through the follow-ups left after PRs #1–#3, one PR per theme, each branched from `main` unless it builds on an open PR. PRs #4–#7 are merged.
+
+**Session of 2026-10-15 (templates): replace the hard-coded project templates** (the user: "no use for me"). Their answers (binding):
+
+- Scope: **templates only**, one PR. Custom stages, fields and labels (the rest of the old Phase 3 line) are a later theme (Next 9).
+- Who manages: **admins and managers**; members use templates.
+- What a template copies: task title, status (Backlog stays, the rest become To do), priority, estimate, description, dates as days from the project start, subtasks, labels. Not assignees.
+- The six built-ins are **deleted**; "Blank project" stays as the no-template choice (the `'blank'` sentinel, not a record).
+- Per workspace.
+
+Progress:
+
+- Branch `feat/workspace-templates` (worktree `wt/templates` in the 14ce156e scratchpad), commits 376f875 (feature), 4be72ad (review fixes), 136c514 (byte-size check, `aria-describedby`), plus this handoff. PR opened for review, **not merged** (the user hasn't said to merge): `gh pr list --head feat/workspace-templates`. PR body: `pr-templates.md` in the 14ce156e scratchpad.
+- Checks: lint/format/build; server rules on scratch PocketBase (member writes refused, workspace move 404, name 81 chars 400, doc over 2 MB 400, cascade, migrate down/up); sync round trip a fixed point at 300×50; logic/UI/security reviews (all P2s fixed, P3s tracked in the PR body); browser QA 15/15 on 376f875 and 12/12 on 4be72ad (`qa-templates/`, `qa-templates/r2/` in the 14ce156e scratchpad). 136c514 is not browser-tested. cubic not yet checked.
+- After merge: back up `pb_data`, `npm run build:server`, restart :8090 (applies 1791849606).
 
 **Session of 2026-10-14 (afternoon): the user asked to complete ALL of Next 1–8.** Their answers (binding):
 
@@ -71,6 +85,8 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
    - (PR #15) From PR #3: a refused project reorder is not put back, although the toast says "discarded"; a refused file delete reappears only on the next reload; a force-applied put-back isn't journaled, so Undo within about 60 s could re-send the refused value.
    - From PR #12 (cubic P2, tracked): a project whose `order` a superuser or migration left outside ±1e12 blocks a member's reorder around it: `projectOrders()` hands that value to another project, and the update guard refuses it (400).
    - (PR #11, merged) From PR #5: show the lost change in the reconnect toast when the reload was also refused (`recover()`, the `if (refused) … else if (refusals…)` order), and the two red toasts if "Try again" is clicked on the give-up try.
+   - (Templates PR, P3s in its body) Offline "Try again" after the project/template went away does nothing silently (`templates.js` `still`); an offline retry can replace a same-name template saved meanwhile without asking; a hand-picked icon equal to a template's counts as template-set (`pickIcon`); `loadAll` is one `Promise.all`, so a new client against a server without 1791849606 fails its first load.
+9. **Rest of Phase 3: custom stages, fields and labels** (`docs/phase-1-backend.md:14`). Statuses are a fixed list used by the board, timeline, filters and `sync-map.js` view validation; labels are the `LABELS` constant (`core/constants.js`), not data. A multi-PR theme: ask the user how Sam Engineering's stages differ before designing.
 
 ## Decisions (still binding)
 
@@ -94,12 +110,15 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
 - **Accepted design.** A successful retry on a "Create more" form resets the live form. Label, dependency and drag `order` values are computed at click time.
 - **`server/README.md` migrate paths are correct.** cubic flagged them twice, and both flags were invalid.
 - **Stopping rule for cubic.** Fix any P0 or P1. Track P2 and P3 edge cases as follow-ups instead of starting another round.
+- **Templates are readable by every signed-in user**, whatever project they came from; saving a private project warns about it. Their size caps (300 tasks, 50 subtasks each) are in `constants.js` and copied on purpose in `normalize.js`: change both together, or a template is cut on read and stays pending for ever. `templateTasks()` must write exactly the shape `normalize.js` yields.
 
 ## Gotchas
 
 - Force-pushing is refused by the auto-mode classifier. To bring a PR branch up to date, merge `main` into it in a separate worktree and push that as a fast-forward (`git push origin <local>:<pr-branch>`).
 
-- `npm run seed:dev -- --dev-database`: the flag is required, and so is the `--`.
+- `npm run seed:dev -- --dev-database`: the flag is required, and so is the `--`. In a worktree it looks for `server/pocketbase` inside the worktree: symlink the main checkout's binary (git-ignored) and remove it afterwards.
+- Migration 1791849606 was edited in place before the first push. A scratch database migrated from 376f875 keeps the old rule and caps; QA templates on a fresh database.
+- Scratch PocketBase servers go on 8095 and up; :8090 is the real server.
 - `docs/handoff.md` is tracked, and CI runs `npm run format:check` on it: run `npx prettier --write docs/handoff.md` before committing it.
 - `git push` over HTTPS: `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
 - `gh pr create --body-file` works. `gh pr edit` fails; use `gh api -X PATCH repos/moxabdullah/pm-studio/pulls/N -F body=@file`.
