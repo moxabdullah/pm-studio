@@ -1,8 +1,16 @@
-# Handoff — workspace templates merged as #17, not deployed yet; follow-ups #8–#16 merged (2026-10-15)
+# Handoff — templates (#17) deployed; Next 8 split into two PRs (2026-10-15)
 
 ## Goal
 
 Work through the follow-ups left after PRs #1–#3, one PR per theme, each branched from `main` unless it builds on an open PR. PRs #4–#7 are merged.
+
+**Session of 2026-10-15 (evening): the user asked to deploy the templates PR, then start Next 8.**
+
+- **Deployed:** `npm run build:server` on 7c6d360 (= 2db1e52 + handoff), server stopped, `pb_data` copied to `/root/backups/pm-studio/pb_data.2026-10-15-before-606-templates`, :8090 restarted with the deploy.md §3.3 flags. 1791849606 is in `_migrations`; `/api/health` 200; `/` serves `PM Space`; `templates` answers 401 to anonymous.
+- **Next 8 checked against the code** (three scouts): `toString`, "`applyUserPrefs` never deletes", "`prefs` is one merge unit" and the refused-reorder put-back are closed (pruned below). The rest is split into two PRs:
+  - **PR A `fix/small-ui-gaps`** (all confirmed): scope the sidebar `.sub` rule (also un-hides the palette's `.pi .sub` text), `tz` default + `PREF_OPTIONS` entry, outline the favicon's "PM", deploy guide file permissions (Linux `pb_data`, Windows `C:\pm-space` inheritance), the two wordmark P3s if a few CSS lines.
+  - **PR B `fix/sync-small-gaps`** (reproduce in the harness first, drop what doesn't): stray-pending `favs`/`ws`, `projectOrders()` handing out a baseline value outside ±1e12, one red toast per try on reconnect (mention lost changes when the reload was also refused), a "That template is gone" toast on the edit/delete retry. Not fixing: the refused file delete hidden until reload (only on a 4xx read-back), the `optional` templates shim (other deployments may lack 1791849606; the user's call).
+  - The 10-14 answer allows merging once clean, but auto mode refuses a merge unless the user's latest message asks for it: get each PR clean, then ask.
 
 **Session of 2026-10-15 (templates): replace the hard-coded project templates** (the user: "no use for me"). Their answers (binding):
 
@@ -16,7 +24,7 @@ Progress:
 
 - Branch `feat/workspace-templates` (worktree `wt/templates` in the 14ce156e scratchpad), commits 376f875 (feature), 4be72ad (review fixes), 136c514 (byte-size check, `aria-describedby`), df80fac (handoff), e70fb78 (cubic fixes), 9971430 (handoff), f4c5168 (cubic round 2: save retry). **PR #17 merged 2026-10-15 as 2db1e52** (user: "Merge the pr"; cubic's re-review of f4c5168 passed with no threads): https://github.com/moxabdullah/pm-studio/pull/17. PR body: `pr-templates.md` in the 14ce156e scratchpad.
 - Checks: lint/format/build; server rules on scratch PocketBase (member writes refused, workspace move 404, name 81 chars 400, doc over 2 MB 400, cascade, migrate down/up); sync round trip a fixed point at 300×50; logic/UI/security reviews (all P2s fixed, P3s tracked in the PR body); browser QA 15/15 on 376f875 and 12/12 on 4be72ad (`qa-templates/`, `qa-templates/r2/` in the 14ce156e scratchpad). cubic round 1 (11 threads on df80fac): 10 fixed in e70fb78; the `handoff.md` migration thread was invalid (the branch's first push already had the edited migration) and was answered and resolved. Browser QA on e70fb78: old checks 1-14 plus 9 new ones all pass (`qa/RESULTS.md` in the 29d28e68 scratchpad), including the offline same-name clash, the size check with a kept description, and a client against a server without 1791849606. cubic round 2 (2 P3 threads on 9971430), both fixed: the handoff wording, and the save's "Try again" no longer drops silently when the project or the replaced template is gone. Template smoke test (`smoke-src/` in the 29d28e68 scratchpad, `run.sh`): 30 ok; the 3 new retry checks fail on 9971430. Not browser-tested; sync.js untouched.
-- **Not deployed yet (the next step, needs the user's go):** back up `pb_data`, `npm run build:server`, restart :8090 (applies 1791849606). Until the restart, a client built from `main` still loads against :8090 (the `optional` read of `templates`), with no templates.
+- **Deployed 2026-10-15 (evening)**: 1791849606 applied to the real `server/pb_data`; see the evening session above.
 
 **Session of 2026-10-14 (afternoon): the user asked to complete ALL of Next 1–8.** Their answers (binding):
 
@@ -50,7 +58,7 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
 
 ## Done
 
-- **PR #17 merged** as 2db1e52: workspace templates (replaces the six built-ins). Migration 1791849606 is not yet applied to `server/pb_data`; see Progress above.
+- **PR #17 merged** as 2db1e52 and deployed: workspace templates (replaces the six built-ins). Migration 1791849606 is applied to `server/pb_data`.
 - **PR #7 merged** into `main` as 0d1ef0b with the user's OK: https://github.com/moxabdullah/pm-studio/pull/7 (branch `fix/missing-pref-defaults`, commit 42809e8, only `src/core/sync-map.js`; no migrations). cubic: "No issues found in 1 file", 0 review threads.
   - **Fix:** `DEFAULT_PREFS` gains `timeFmt: '12'`, `spell: true`, `defaultTab: 'board'`, `showDoneBoard: true`, `permCreate: true`, `permPublic: false`, `confirmDel: true`. Each one is what its readers already take an unset value for (`|| 'board'`, `|| '12'`, `!== false`, `!!P.permPublic`). `prefOk()` is unchanged: a key with a default needs the default's type. The comment on `DEFAULT_PREFS` states the rule (see Decisions).
   - **Before/after (browser):** with a record holding `defaultTab: 5`, `main` shows "Something went wrong." on every project opened through the default tab (`tab.startsWith is not a function`, project.js:39). The fix opens on Board, with no errors and nothing pending. On a thin record, the seven controls show the old unset values, and toggling "Allow public share links" sends one PATCH 200 with all 18 keys and leaves nothing pending.
@@ -80,10 +88,10 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
 8. **Smaller gaps** (low value; each pre-existing):
    - (PR #16 QA) The sign-in card's "Sign in to <workspace>" subtitle (`<p class="sub">`, src/pages/auth.js) is never shown: the sidebar's global `.sub { …; display:none }` in src/styles/shell.css also matches it. Both date from the initial commit. Scope the sidebar rule.
    - (PR #16 P3s, in its body) The "PM" monogram is live text fitted with `textLength`, so the favicon (no web font) is squeezed in wide fallback fonts; outline the two glyphs as paths. The sign-in card's 30px wordmark sits above a same-weight heading. The 10px palette wordmark has tight letter-spacing. Linux `pb_data` is world-readable under the default umask, and on Windows `C:\pm-space` inherits Authenticated Users: Modify (deploy guide).
-   - (PR #14) The stray-pending class remains for `favs` and `ws`: after an echo the baseline can hold a favourite of an unloaded record or an unloaded workspace id, so a `doc.favs`/`doc.ws` update waits for the next save. Also for an unknown settings key that a live record drops: `applyUserPrefs` never deletes from `S.prefs`.
-   - (PR #14) `prefs` is one merge unit in `merge3`: an unsent change to one setting overwrites another tab's change to a different setting. Related: once a user saves any setting, the record holds all 18 values, so a later change to a default reaches only users who never saved.
-   - Unknown settings keys such as `toString` are accepted and shadow the method on `S.prefs` (nothing calls it today). Refusing unknown keys or a null-prototype `S.prefs` would close it.
-   - (PR #15) From PR #3: a refused project reorder is not put back, although the toast says "discarded"; a refused file delete reappears only on the next reload; a force-applied put-back isn't journaled, so Undo within about 60 s could re-send the refused value.
+   - (PR #14) The stray-pending class may remain for `favs` and `ws`: after an echo the baseline can hold a favourite of an unloaded record or an unloaded workspace id, so a `doc.favs`/`doc.ws` update waits for the next save. Unconfirmed: `prefsPayload()` re-adds unloaded favs from the baseline and `wantedWs()` keeps the ws id; reproduce in the harness before fixing.
+   - Once a user saves any setting, the record holds all 18 values, so a later change to a default reaches only users who never saved. (The live path merges `prefs` per key in `mergePrefs()`; `merge3` still takes it whole.)
+   - `DEFAULT_PREFS.tz` is `(GMT-07:00) Pacific Time` but the settings select offers `(GMT-08:00)`, so the select shows the first option; `tz` has no `PREF_OPTIONS` entry and no reader outside the select.
+   - (PR #15) A refused file delete stays hidden until the next reload when its read-back fails with a 4xx (other read-back outcomes put it back at once). The stuck put-back path is unjournaled.
    - From PR #12 (cubic P2, tracked): a project whose `order` a superuser or migration left outside ±1e12 blocks a member's reorder around it: `projectOrders()` hands that value to another project, and the update guard refuses it (400).
    - (PR #11, merged) From PR #5: show the lost change in the reconnect toast when the reload was also refused (`recover()`, the `if (refused) … else if (refusals…)` order), and the two red toasts if "Try again" is clicked on the give-up try.
    - (Templates PR, P3 in its body) Offline "Try again" on a template edit or delete does nothing when the template is gone by then (the edit dialog has already closed, as a task's does; the delete has already happened). The save's retry now reports a gone project and makes a new template when the replaced one is gone (cubic round 2). (The same-name replace on an offline retry, the `pickIcon` equality and the first load against a server without 1791849606 were fixed in e70fb78.)
@@ -119,7 +127,7 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
 - Force-pushing is refused by the auto-mode classifier. To bring a PR branch up to date, merge `main` into it in a separate worktree and push that as a fast-forward (`git push origin <local>:<pr-branch>`).
 
 - `npm run seed:dev -- --dev-database`: the flag is required, and so is the `--`. In a worktree it looks for `server/pocketbase` inside the worktree: symlink the main checkout's binary (git-ignored) and remove it afterwards.
-- Migration 1791849606 was edited in place before the branch's first push (df80fac already carried the edited file), so no shared database ever ran the earlier version; the real `server/pb_data` has not applied 1791849606 at all. Only a local scratch database migrated from 376f875 keeps the old rule and caps: QA templates on a fresh database.
+- Migration 1791849606 was edited in place before the branch's first push (df80fac already carried the edited file), so no shared database ever ran the earlier version; the real `server/pb_data` applied the final one on 2026-10-15. Only a local scratch database migrated from 376f875 keeps the old rule and caps: QA templates on a fresh database.
 - Scratch PocketBase servers go on 8095 and up; :8090 is the real server.
 - `docs/handoff.md` is tracked, and CI runs `npm run format:check` on it: run `npx prettier --write docs/handoff.md` before committing it.
 - `git push` over HTTPS: `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
