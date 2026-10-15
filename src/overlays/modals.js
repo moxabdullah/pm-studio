@@ -1,8 +1,8 @@
 /* ---------------- MODALS ---------------- */
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { PCOLORS, PICONS } from '../core/constants.js';
-import { D, S, mem, pColor, proj, task, teamsList } from '../core/store.js';
+import { PCOLORS, PICONS, TEMPLATE_NAME_MAX } from '../core/constants.js';
+import { D, S, canManageTemplates, mem, pColor, proj, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lbl, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -42,12 +42,14 @@ export function modalHtml(m) {
     case 'prompt':
       return wrap(
         'sm',
-        `${H(m.title, m.sub ? esc(m.sub) : '')}<form class="modal-b" data-submit="promptSubmit"><div class="field"><label class="label" for="prompt-in">${esc(m.label)}</label><input class="input" id="prompt-in" value="${esc(m.value || '')}" autofocus></div></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="promptSubmit">${esc(m.ok || 'Save')}</button></div>`,
+        `${H(m.title, m.sub ? esc(m.sub) : '')}<form class="modal-b" data-submit="promptSubmit"><div class="field"><label class="label" for="prompt-in">${esc(m.label)}</label><input class="input" id="prompt-in" value="${esc(m.value || '')}"${m.max ? ` maxlength="${Number(m.max)}"` : ''} autofocus></div></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="promptSubmit">${esc(m.ok || 'Save')}</button></div>`,
       );
     case 'shortcuts':
       return wrap('lg', shortcutsModal(H));
     case 'team':
       return wrap('', teamModal(m, H));
+    case 'template':
+      return wrap('sm', templateModal(m, H));
     case 'filePreview':
       return wrap('lg', filePreviewModal(m, H));
     case 'saveView':
@@ -90,51 +92,17 @@ export function taskModal(m, H) {
     <span class="faint hide-m" style="font-size:11.5px"><kbd>${MOD}</kbd> <kbd>↵</kbd></span>
     <button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTask" id="f-submit">${m.edit ? 'Save changes' : 'Create task'}</button></div>`;
 }
-export const TEMPLATES = [
-  { id: 'blank', name: 'Blank project', icon: 'file', desc: 'Start from scratch', tasks: [] },
-  {
-    id: 'product',
-    name: 'Product Development',
-    icon: 'target',
-    desc: 'Discovery to launch',
-    tasks: ['Define problem statement', 'User research plan', 'Write PRD', 'Design exploration', 'Build MVP', 'Beta launch'],
-  },
-  {
-    id: 'web',
-    name: 'Website',
-    icon: 'globe',
-    desc: 'IA, design, build, launch',
-    tasks: ['Sitemap & information architecture', 'Wireframes', 'Visual design', 'Build page templates', 'Content migration', 'QA & launch'],
-  },
-  {
-    id: 'mkt',
-    name: 'Marketing Campaign',
-    icon: 'megaphone',
-    desc: 'Brief, assets, channels',
-    tasks: ['Campaign brief', 'Audience research', 'Creative assets', 'Channel plan', 'Launch campaign', 'Performance report'],
-  },
-  {
-    id: 'design',
-    name: 'Design Project',
-    icon: 'palette',
-    desc: 'Discovery to handoff',
-    tasks: ['Discovery workshop', 'Moodboard', 'Concept directions', 'Refinement', 'Developer handoff'],
-  },
-  {
-    id: 'software',
-    name: 'Software Development',
-    icon: 'code',
-    desc: 'Spec, build, ship',
-    tasks: ['Technical spec', 'Set up repo & CI', 'Implement core API', 'Write tests', 'Code review', 'Deploy to staging'],
-  },
-  {
-    id: 'personal',
-    name: 'Personal Project',
-    icon: 'heart',
-    desc: 'Plan your own goals',
-    tasks: ['Brain dump ideas', 'Pick top 3 priorities', 'Schedule focus time', 'Weekly review'],
-  },
-];
+/* The Template field of the New project form: "Blank project", then the current workspace's templates. A template that went away since
+   the form opened is not offered, and the form reads as blank (createProject() does the same). */
+function templatePicker(f) {
+  const list = templatesOf(D().ws.id);
+  const on = list.some(t => t.id === f.tmpl) ? f.tmpl : 'blank';
+  const opt = (id, icon, name, sub) =>
+    `<button type="button" role="radio" aria-checked="${on === id}" class="opt ${on === id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${esc(id)}" style="padding:10px">${ic(icon, 16)}<b style="font-size:12.5px">${esc(name)}</b><span>${esc(sub)}</span></button>`;
+  return `<div class="field"><span class="label">Template</span><div class="tmpls" role="radiogroup" aria-label="Template">${opt('blank', 'file', 'Blank project', 'Start from scratch')}${list.map(t => opt(t.id, t.icon, t.name, `${t.tasks.length} task${t.tasks.length === 1 ? '' : 's'}`)).join('')}</div>${
+    list.length || !canManageTemplates() ? '' : '<div class="hint">Save a project as a template from its ••• menu.</div>'
+  }</div>`;
+}
 export function projectModal(m, H) {
   const f = S.ui.pform;
   const err = S.ui.errors.pname;
@@ -166,9 +134,20 @@ export function projectModal(m, H) {
         .join('')}</select></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}"></div>
     </div>
-    ${m.edit ? '' : `<div class="field"><span class="label">Template</span><div class="tmpls" role="radiogroup">${TEMPLATES.map(t => `<button type="button" role="radio" aria-checked="${f.tmpl === t.id}" class="opt ${f.tmpl === t.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${esc(t.id)}" style="padding:10px">${ic(t.icon, 16)}<b style="font-size:12.5px">${t.name}</b><span>${t.tasks.length ? t.tasks.length + ' starter tasks' : t.desc}</span></button>`).join('')}</div></div>`}
+    ${m.edit ? '' : templatePicker(f)}
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
+}
+/* Edit a template's name and description (Settings > Templates). The tasks it carries are not edited here: save the project again to replace them. */
+export function templateModal(m, H) {
+  const f = S.ui.tpform;
+  const err = S.ui.errors.tpname;
+  return `${H('Edit template', 'To change its tasks, save a project as a template again under the same name.')}
+  <form class="modal-b" data-submit="submitTemplate">
+    <div class="field"><label class="label" for="tp-name">Template name</label><input class="input ${err ? 'is-error' : ''}" id="tp-name" data-in="tpform" data-f="name" value="${esc(f.name)}" maxlength="${TEMPLATE_NAME_MAX}" autofocus aria-invalid="${!!err}" aria-describedby="tp-name-err">${err ? `<span class="err" id="tp-name-err" role="alert">${ic('circle-alert', 12)}${esc(err)}</span>` : ''}</div>
+    <div class="field"><label class="label" for="tp-desc">Description</label><textarea class="textarea" id="tp-desc" data-in="tpform" data-f="desc" rows="2" placeholder="What is this template for?">${esc(f.desc)}</textarea></div>
+  </form>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTemplate">Save changes</button></div>`;
 }
 /* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
    level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the

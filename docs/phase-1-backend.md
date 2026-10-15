@@ -51,6 +51,7 @@ Each collection gets a few real columns that PocketBase needs for filtering and 
 | `files`        | project, uploaded_by, file (real upload)                                                                        | display name, type                                             |
 | `events`       | project                                                                                                         | title, date, time                                              |
 | `saved_views`  | project, owner                                                                                                  | name, type, filters                                            |
+| `templates`    | workspace, name                                                                                                 | description, icon, colour, tasks (title, status, dates, ...)   |
 | `user_prefs`   | user (unique)                                                                                                   | prefs, views, collapsed, notifPrefs, recentSearches            |
 
 **IDs.** Change `uid()` to produce 15-character lowercase IDs that PocketBase accepts, and send them as the record `id` on create. The app can then keep creating objects synchronously, exactly as it does now. Store an optional prefix such as `t` in `doc` if anything depends on it.

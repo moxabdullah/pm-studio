@@ -506,10 +506,11 @@ function refreshWs() {
 /* Whatever the view held about something that is gone. */
 function forgetUi(key, id) {
   const u = S.ui;
-  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task, a file's preview.
+  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task or template, a file's preview.
   const open = u.modals.filter(m => {
     if (key === 'projects') return !(m.id === id || m.pid === id || (m.type === 'project' && m.edit === id));
     if (key === 'tasks') return !((m.type === 'task' && m.edit === id) || m.tid === id);
+    if (key === 'templates') return !(m.type === 'template' && m.edit === id);
     return true;
   });
   if (open.length !== u.modals.length) u.modals = open;

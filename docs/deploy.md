@@ -623,6 +623,8 @@ On an install from an earlier version of this guide, use its own folder and serv
 
 The update that renames the product to PM Space signs everyone out once: the app keeps the sign-in under a new name. Its migration also sets **Settings > Application > Application name** to `PM Space`, replacing a name you chose. New backup zips are named `@auto_pb_backup_pm_space_…` from then on; older zips keep their names and still count toward **Max @auto backups to keep**.
 
+The update that adds project templates (migration `1791849606_templates.js`) creates a `templates` collection: a restart applies it, and there is nothing else to do. Only admins and managers may write to it.
+
 Take a backup first (**Settings > Crons > Run** `__pbAutoBackup__`, or **Initialize new backup**): migrations only go forward.
 
 **When is a restart needed?**

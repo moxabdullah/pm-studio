@@ -33,6 +33,7 @@ export function emptyData() {
     files: [],
     events: [],
     teams: [],
+    templates: [],
     projOrder: [],
     savedViews: [],
     recentSearches: [],
@@ -124,6 +125,8 @@ export const me = () =>
     last: null,
   };
 export const isAdmin = () => me()?.role === 'Admin';
+/* Who may save, edit and delete the workspace's project templates (the server's rules on `templates` say the same: admin or manager). */
+export const canManageTemplates = () => ['Admin', 'Manager'].includes(me()?.role);
 export const mem = id => D().members.find(m => m.id === id);
 export const proj = id => D().projects.find(p => p.id === id);
 export const task = id => D().tasks.find(t => t.id === id);
@@ -138,6 +141,10 @@ export const visibleProjects = () =>
 /* The server decides who may see a project (members of a private one, and admins), so whatever was loaded is visible. */
 export const canSee = p => !!p;
 export const tasksOf = pid => D().tasks.filter(t => t.project === pid && !t.archived);
+/* Project templates (see actions/templates.js). tmpl() finds one in any workspace; templatesOf() lists those of one workspace, by name. */
+export const tmpl = id => (D().templates || []).find(t => t.id === id);
+export const templatesOf = wsId =>
+  (D().templates || []).filter(t => t.workspace === wsId).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 export const allTasks = () =>
   D().tasks.filter(t => {
     const p = proj(t.project);

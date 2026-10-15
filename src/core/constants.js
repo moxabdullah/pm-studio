@@ -68,6 +68,8 @@ export const PICONS = [
   'folder',
   'sparkles',
 ];
+/* The longest name a project template can have: the Save as template prompt and the edit dialog stop typing there. */
+export const TEMPLATE_NAME_MAX = 80;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },

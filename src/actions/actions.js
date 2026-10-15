@@ -1,8 +1,8 @@
 /* =====================================================================
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
-import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { PR, PSTAT, ST } from '../core/constants.js';
+import { $, $$, TODAY, addD, clamp, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
+import { LB, PCOLORS, PICONS, PR, PRIOS, PSTAT, ST } from '../core/constants.js';
 import { lookup, sanitizeHtml } from '../core/safe.js';
 import {
   D,
@@ -21,6 +21,7 @@ import {
   task,
   tasksOf,
   teamsList,
+  templatesOf,
   visibleProjects,
 } from '../core/store.js';
 import { fileUrl, pb, setRemember } from '../core/pb.js';
@@ -44,7 +45,7 @@ import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/to
 import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
-import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
+import { closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
 
@@ -1577,11 +1578,13 @@ A.clearProjFilters = () => {
   S.ui.projStatus = 'all';
   render();
 };
-A.newProject = () => {
+/* `el.dataset.tmpl`, when there is one (Settings > Templates), is the template the form starts with. */
+A.newProject = el => {
   if (needWorkspace(A.newProject)) return;
   const teams = teamsList();
   const team = (teams.find(t => t.id === me().team) || teams[0])?.id || '';
   S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', team, lead: D().me, due: dOff(30), tmpl: 'blank' };
+  pickTemplate(S.ui.pform, el?.dataset?.tmpl);
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'project' });
@@ -1600,12 +1603,18 @@ IN.pform = el => {
     render();
   }
 };
+/* Picks a template in the New project form (an id of the current workspace's, else 'blank'). A template sets the icon and colour of the
+   form to its own, as far as they are ones the form offers (they came from the server); a blank project leaves them as they are. */
+function pickTemplate(f, id) {
+  const t = templatesOf(D().ws.id).find(x => x.id === id);
+  f.tmpl = t ? t.id : 'blank';
+  if (!t) return;
+  if (PICONS.includes(t.icon)) f.icon = t.icon;
+  if (Object.hasOwn(PCOLORS, t.color)) f.color = t.color;
+}
 A.pformSet = el => {
-  S.ui.pform[el.dataset.f] = el.dataset.v;
-  if (el.dataset.f === 'tmpl') {
-    const t = TEMPLATES.find(x => x.id === el.dataset.v);
-    if (t && S.ui.pform.icon === 'folder') S.ui.pform.icon = t.icon === 'file' ? 'folder' : t.icon;
-  }
+  if (el.dataset.f === 'tmpl') pickTemplate(S.ui.pform, el.dataset.v);
+  else S.ui.pform[el.dataset.f] = el.dataset.v;
   render();
 };
 export function makeKey(name) {
@@ -1647,16 +1656,23 @@ export function createProject(f, tmplId) {
   D().projects.push(p);
   D().projOrder.unshift(p.id);
   pushAct('created project', null, p.id);
-  const tm = TEMPLATES.find(t => t.id === tmplId);
-  (tm?.tasks || []).forEach((title, i) =>
+  // Looked up now, in the current workspace: the template may have been deleted, or changed, since the dialog opened (then this is a blank project).
+  // It came from the server, so each value is checked as it is used.
+  const tm = templatesOf(D().ws.id).find(t => t.id === tmplId);
+  const day = n => (n == null ? null : dOff(clamp(n, -3650, 3650)));
+  (tm?.tasks || []).forEach(t =>
     createTask({
       project: p.id,
-      title,
-      status: i === 0 ? 'todo' : 'backlog',
-      assignee: i === 0 ? D().me : null,
-      priority: i === 0 ? 'high' : 'medium',
-      due: dOff(5 + i * 5),
-      start: dOff(i * 5),
+      title: t.title || 'Untitled',
+      status: t.status === 'backlog' ? 'backlog' : 'todo',
+      assignee: null,
+      priority: PRIOS.some(x => x.id === t.priority) ? t.priority : 'none',
+      estimate: t.estimate || null,
+      desc: sanitizeHtml(t.desc),
+      labels: [...new Set(t.labels.filter(l => LB[l]))],
+      subtasks: t.subtasks.filter(s => s.title).map(s => ({ id: uid('s'), title: s.title, done: false })),
+      start: day(t.startOff),
+      due: day(t.dueOff),
     }),
   );
   return p;
@@ -1709,7 +1725,7 @@ A.submitProject = () => {
     },
     () => {
       S.ui.modals.pop();
-      go('project', { id: p.id, tab: v.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
+      go('project', { id: p.id, tab: tasksOf(p.id).length ? S.prefs.defaultTab || 'board' : 'overview' }); // an empty project opens on its overview
       toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
     },
     still,
