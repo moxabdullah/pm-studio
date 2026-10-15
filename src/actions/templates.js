@@ -3,7 +3,13 @@
    Starting a project from one is createProject() in actions.js.
    ===================================================================== */
 import { $, TODAY, diffD, parse, uid } from '../core/utils.js';
-import { TEMPLATE_BYTES_MAX, TEMPLATE_NAME_MAX as NAME_MAX, TEMPLATE_SUBTASKS_MAX, TEMPLATE_TASKS_MAX } from '../core/constants.js';
+import {
+  TEMPLATE_BYTES_MAX,
+  TEMPLATE_DESC_MAX as DESC_MAX,
+  TEMPLATE_NAME_MAX as NAME_MAX,
+  TEMPLATE_SUBTASKS_MAX,
+  TEMPLATE_TASKS_MAX,
+} from '../core/constants.js';
 import { D, S, canManageTemplates, proj, tasksOf, templatesOf, tmpl } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
@@ -22,12 +28,14 @@ function mayManage() {
 }
 const nameError = name => (!name ? 'Give the template a name' : name.length > NAME_MAX ? `Template names can be up to ${NAME_MAX} characters` : '');
 /* Why a project cannot be saved as a template, or '': it has no tasks to copy, more than a template holds (archived tasks are not
-   copied), or tasks too long for the server to take. */
-function tasksError(p) {
+   copied), or a template too long for the server to take. The size is that of the doc the save would write; `desc` is the description
+   the template will keep: the one of the template being replaced, none for a new one. */
+function tasksError(p, desc = '') {
   const n = tasksOf(p.id).length;
   if (!n) return 'This project has no tasks to save.';
   if (n > TEMPLATE_TASKS_MAX) return `Templates can hold up to ${TEMPLATE_TASKS_MAX} tasks; this project has ${n}.`;
-  const bytes = new TextEncoder().encode(JSON.stringify(templateTasks(p))).length;
+  const doc = { icon: p.icon, color: p.color, desc, tasks: templateTasks(p), updated: Date.now() };
+  const bytes = new TextEncoder().encode(JSON.stringify(doc)).length;
   return bytes > TEMPLATE_BYTES_MAX ? 'These tasks are too long for a template. Shorten their descriptions and try again.' : '';
 }
 
@@ -54,7 +62,7 @@ export function templateTasks(p) {
 
 /* ---------- save a project as a template ---------- */
 const WHAT_IS_COPIED =
-  "Copies this project's tasks to start new projects. Tasks start as To do (Backlog stays Backlog); dates count from the project's start. Not copied: assignees, comments, files. Everyone can see templates.";
+  "Copies this project's tasks to start new projects. Tasks start as To do (Backlog stays Backlog); dates count from the project's start. Not copied: assignees, dependencies, comments, files, recurrence. Everyone can see templates.";
 /* Templates are read by every signed-in user, whoever can open the project they came from. */
 const PRIVATE_WARNING = 'This project is private. Everyone will be able to see the template, including its task titles and descriptions.';
 A.saveAsTemplate = el => {
@@ -70,7 +78,11 @@ A.saveAsTemplate = el => {
     value: p.name.slice(0, NAME_MAX),
     ok: 'Save template',
     max: NAME_MAX,
-    validate: name => nameError(name) || (proj(id) ? tasksError(proj(id)) : 'That project is gone.'),
+    validate: name => {
+      const p = proj(id);
+      // the description the template will keep, when this replaces one: it counts towards the size
+      return nameError(name) || (p ? tasksError(p, templatesOf(p.workspace).find(t => sameName(t.name, name))?.desc) : 'That project is gone.');
+    },
     run: name => saveTemplate(id, name),
   });
 };
@@ -107,15 +119,21 @@ function writeTemplate(pid, name, replaceId) {
     () => {
       saved = null;
       const p = proj(pid); // by id: sync or Undo can replace the project while a refused save waits for "Try again"
-      why = p ? tasksError(p) : 'That project is gone.'; // it may have gone, or its tasks changed, since the name was checked
+      if (!p) {
+        why = 'That project is gone.';
+        return;
+      }
+      // The replaced template keeps its id, its description and its name (as the question named it: ‘Weekly’ stays ‘Weekly’ when the
+      // project was saved as “weekly”). One of that name that appeared after the name was checked (another admin saved it, or the one
+      // being replaced was deleted and another took its name) is not replaced without asking: the save stops and says so, and "Save
+      // again" asks.
+      const clash = templatesOf(p.workspace).find(t => t.id !== replaceId && sameName(t.name, name));
+      const old = replaceId ? tmpl(replaceId) : null; // gone (deleted while the question was open): a new template is made instead
+      // (the project's tasks may have changed since the name was checked)
+      why = clash ? `A template called ‘${clash.name}’ was saved meanwhile. Save again to replace it.` : tasksError(p, old?.desc);
       if (why) return;
-      const tasks = templateTasks(p);
-      const fields = { icon: p.icon, color: p.color, tasks, updated: Date.now() };
-      // The one being replaced, else any of that name in the project's workspace: another admin may have saved one since the name was
-      // checked, and two of a name would be a mistake. An existing template keeps its id, its description and its name (as the question
-      // named it: ‘Weekly’ stays ‘Weekly’ when the project was saved as “weekly”).
-      saved = (replaceId && tmpl(replaceId)) || templatesOf(p.workspace).find(t => sameName(t.name, name));
-      if (saved) Object.assign(saved, fields);
+      const fields = { icon: p.icon, color: p.color, tasks: templateTasks(p), updated: Date.now() };
+      if (old) Object.assign((saved = old), fields);
       else D().templates.push((saved = { id: uid('tm'), workspace: p.workspace, name, desc: '', ...fields }));
     },
     () => {
@@ -140,6 +158,10 @@ IN.tpform = el => {
     S.ui.errors.tpname = null;
     render();
   }
+  if (el.dataset.f === 'desc' && S.ui.errors.tpdesc && el.value.length <= DESC_MAX) {
+    S.ui.errors.tpdesc = null;
+    render();
+  }
 };
 A.submitTemplate = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
@@ -150,10 +172,13 @@ A.submitTemplate = () => {
   const err =
     nameError(f.name) ||
     (templatesOf(tmpl(m.edit)?.workspace).some(t => t.id !== m.edit && sameName(t.name, f.name)) ? `A template called “${f.name}” already exists` : '');
-  if (err) {
+  // (the edit dialog stops typing at the limit, but a description written through the API can be longer already)
+  const descErr = f.desc.length > DESC_MAX ? `Descriptions can be up to ${DESC_MAX} characters` : '';
+  if (err || descErr) {
     S.ui.errors.tpname = err;
+    S.ui.errors.tpdesc = descErr;
     render();
-    $('#tp-name')?.focus();
+    $(err ? '#tp-name' : '#tp-desc')?.focus();
     return;
   }
   // what was validated: the form stays editable after a refusal, so "Try again" must not read it again
@@ -180,6 +205,7 @@ A.delTemplate = el => {
   if (!t || !mayManage()) return;
   const { id, name } = t;
   confirmDlg({
+    tmplId: id, // so a live deletion of the template closes this question (forgetUi in sync.js)
     title: `Delete template ‘${name}’?`,
     body: 'Projects made from it keep their tasks.',
     ok: 'Delete template',

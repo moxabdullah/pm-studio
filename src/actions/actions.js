@@ -1,7 +1,7 @@
 /* =====================================================================
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
-import { $, $$, TODAY, addD, clamp, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
+import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
 import { LB, PCOLORS, PICONS, PR, PRIOS, PSTAT, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { lookup, sanitizeHtml } from '../core/safe.js';
 import {
@@ -1585,14 +1585,14 @@ A.newProject = el => {
   if (needWorkspace(A.newProject)) return;
   const teams = teamsList();
   const team = (teams.find(t => t.id === me().team) || teams[0])?.id || '';
-  // pickIcon and pickColor: what the template pick (at first, the defaults) put in icon and color; see pickTemplate()
+  // iconByHand and colorByHand: the icon or colour was chosen in the form, so picking a template no longer changes it; see pickTemplate()
   S.ui.pform = {
     name: '',
     desc: '',
     icon: DEFAULT_ICON,
     color: DEFAULT_COLOR,
-    pickIcon: DEFAULT_ICON,
-    pickColor: DEFAULT_COLOR,
+    iconByHand: false,
+    colorByHand: false,
     team,
     lead: D().me,
     due: dOff(30),
@@ -1620,21 +1620,24 @@ IN.pform = el => {
   }
 };
 /* Picks a template in the New project form (an id of the current workspace's, else 'blank'). The form takes the template's icon and
-   colour (as far as they are ones the form offers: they came from the server), Blank the defaults, but only while the form still shows
-   what the last pick (or the defaults) put there: pickIcon and pickColor remember that. An icon or colour chosen by hand is kept. */
+   colour (as far as they are ones the form offers: they came from the server), Blank the defaults, but only until the icon or colour is
+   chosen by hand (iconByHand, colorByHand, set by pformSet): a choice of the user is kept, even when it equals what a template had. */
 function pickTemplate(f, id) {
   const t = templatesOf(D().ws.id).find(x => x.id === id);
   f.tmpl = t ? t.id : 'blank';
   const icon = t && PICONS.includes(t.icon) ? t.icon : DEFAULT_ICON;
   const color = t && Object.hasOwn(PCOLORS, t.color) ? t.color : DEFAULT_COLOR;
-  if (f.icon === f.pickIcon) f.icon = icon;
-  if (f.color === f.pickColor) f.color = color;
-  f.pickIcon = icon;
-  f.pickColor = color;
+  if (!f.iconByHand) f.icon = icon;
+  if (!f.colorByHand) f.color = color;
 }
 A.pformSet = el => {
-  if (el.dataset.f === 'tmpl') pickTemplate(S.ui.pform, el.dataset.v);
-  else S.ui.pform[el.dataset.f] = el.dataset.v;
+  const f = S.ui.pform;
+  if (el.dataset.f === 'tmpl') pickTemplate(f, el.dataset.v);
+  else {
+    f[el.dataset.f] = el.dataset.v;
+    if (el.dataset.f === 'icon') f.iconByHand = true;
+    if (el.dataset.f === 'color') f.colorByHand = true;
+  }
   render();
 };
 export function makeKey(name) {
@@ -1679,7 +1682,13 @@ export function createProject(f, tmplId) {
   // Looked up now, in the current workspace: the template may have been deleted, or changed, since the dialog opened (then this is a blank project).
   // It came from the server, so each value is checked as it is used.
   const tm = templatesOf(D().ws.id).find(t => t.id === tmplId);
-  const day = n => (n == null ? null : dOff(clamp(n, -3650, 3650)));
+  // Any whole number of days is kept; one that lands outside the years 1000-9999 (only a template written through the API can hold one)
+  // leaves the date empty, since the app cannot hold it as a date.
+  const day = n => {
+    if (n == null) return null;
+    const d = dOff(n);
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+  };
   (tm?.tasks || []).slice(0, TEMPLATE_TASKS_MAX).forEach(t =>
     createTask({
       project: p.id,

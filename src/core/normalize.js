@@ -94,10 +94,11 @@ export const MEMBER_DEFAULTS = Object.freeze({
 });
 const MD = MEMBER_DEFAULTS;
 /* The most a template holds: tasks, and subtasks in each task. Copies of TEMPLATE_TASKS_MAX and TEMPLATE_SUBTASKS_MAX in constants.js,
-   on purpose: this module imports nothing from the app (sync-map.js and the dev seed script load it in Node). */
+   on purpose: this module imports nothing from the app (sync-map.js and the dev seed script load it in Node). The list is cut before its
+   entries are shaped, so a huge one written through the API costs no more than its first n. */
 const TEMPLATE_TASKS_MAX = 300;
 const TEMPLATE_SUBTASKS_MAX = 50;
-const first = (n, fn) => v => fn(v).slice(0, n);
+const first = (n, fn) => v => fn(arr(v).filter(isObj).slice(0, n));
 
 const KINDS = {
   member: shape({

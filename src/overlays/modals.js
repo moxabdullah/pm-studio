@@ -1,7 +1,7 @@
 /* ---------------- MODALS ---------------- */
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { PCOLORS, PICONS, TEMPLATE_NAME_MAX } from '../core/constants.js';
+import { PCOLORS, PICONS, TEMPLATE_DESC_MAX, TEMPLATE_NAME_MAX } from '../core/constants.js';
 import { D, S, canManageTemplates, mem, pColor, proj, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lbl, nameOf, prPill, stPill } from '../ui/helpers.js';
@@ -147,10 +147,11 @@ export function projectModal(m, H) {
 export function templateModal(m, H) {
   const f = S.ui.tpform;
   const err = S.ui.errors.tpname;
+  const descErr = S.ui.errors.tpdesc;
   return `${H('Edit template', 'To change its tasks, save a project as a template again under the same name.')}
   <form class="modal-b" data-submit="submitTemplate">
-    <div class="field"><label class="label" for="tp-name">Template name</label><input class="input ${err ? 'is-error' : ''}" id="tp-name" data-in="tpform" data-f="name" value="${esc(f.name)}" maxlength="${TEMPLATE_NAME_MAX}" autofocus aria-invalid="${!!err}" aria-describedby="tp-name-err">${err ? `<span class="err" id="tp-name-err" role="alert">${ic('circle-alert', 12)}${esc(err)}</span>` : ''}</div>
-    <div class="field"><label class="label" for="tp-desc">Description</label><textarea class="textarea" id="tp-desc" data-in="tpform" data-f="desc" rows="2" placeholder="What is this template for?">${esc(f.desc)}</textarea></div>
+    <div class="field"><label class="label" for="tp-name">Template name</label><input class="input ${err ? 'is-error' : ''}" id="tp-name" data-in="tpform" data-f="name" value="${esc(f.name)}" maxlength="${TEMPLATE_NAME_MAX}" autofocus aria-invalid="${!!err}"${err ? ' aria-describedby="tp-name-err"' : ''}>${err ? `<span class="err" id="tp-name-err" role="alert">${ic('circle-alert', 12)}${esc(err)}</span>` : ''}</div>
+    <div class="field"><label class="label" for="tp-desc">Description</label><textarea class="textarea ${descErr ? 'is-error' : ''}" id="tp-desc" data-in="tpform" data-f="desc" rows="2" maxlength="${TEMPLATE_DESC_MAX}" placeholder="What is this template for?" aria-invalid="${!!descErr}"${descErr ? ' aria-describedby="tp-desc-err"' : ''}>${esc(f.desc)}</textarea>${descErr ? `<span class="err" id="tp-desc-err" role="alert">${ic('circle-alert', 12)}${esc(descErr)}</span>` : ''}</div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTemplate">Save changes</button></div>`;
 }

@@ -70,13 +70,16 @@ export const PICONS = [
 ];
 /* The longest name a project template can have: the Save as template prompt and the edit dialog stop typing there. */
 export const TEMPLATE_NAME_MAX = 80;
+/* The longest description a template can have: the edit dialog stops typing there. */
+export const TEMPLATE_DESC_MAX = 1000;
 /* How much a template holds: tasks in all, and subtasks in each task. Saving refuses a bigger project (subtasks beyond the limit are
    left out); normalize.js cuts what the server holds to the same numbers (a copy of them: it imports nothing from the app) and
    createProject() applies them again when it copies a template, so a template written through the API cannot make a huge project. */
 export const TEMPLATE_TASKS_MAX = 300;
 export const TEMPLATE_SUBTASKS_MAX = 50;
-/* The most bytes a template's tasks can take: the server refuses a template record over 2 MB (1791849606_templates.js), and this
-   leaves room for its name, description and the rest, so a project with long descriptions is refused when saving, not after. */
+/* The most bytes a template's doc (everything but its name and workspace: icon, colour, description, tasks) may take, measured as a
+   whole. The server refuses a template record over 2 MB (1791849606_templates.js) and this leaves a margin, so a project with long
+   descriptions is refused when saving, not after. */
 export const TEMPLATE_BYTES_MAX = 1.9 * 1024 * 1024;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [

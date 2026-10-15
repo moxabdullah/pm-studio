@@ -340,14 +340,17 @@ function templateRow(t, manage) {
   const n = t.tasks.length;
   const meta = `${n} task${n === 1 ? '' : 's'}${t.updated ? ` · updated ${fmtDate(new Date(t.updated))}` : ''}`;
   const desc = t.desc ? `<p class="muted" style="margin:0 0 8px 46px;font-size:12.5px;white-space:pre-line;overflow-wrap:anywhere">${esc(t.desc)}</p>` : '';
-  const titles = t.tasks.length
-    ? `<ol class="muted" style="margin:0 0 14px 46px;padding:0 0 0 18px;font-size:12.5px;line-height:1.7">${t.tasks
-        .map(
-          x =>
-            `<li>${esc(x.title)}${x.subtasks.length ? ` <span class="faint">· ${x.subtasks.length} subtask${x.subtasks.length === 1 ? '' : 's'}</span>` : ''}</li>`,
-        )
-        .join('')}</ol>`
-    : '<p class="faint" style="margin:0 0 14px 46px;font-size:12.5px">This template has no tasks.</p>';
+  // the task list shows only when the row is open: a collapsed row does not build it
+  const titles = !open
+    ? ''
+    : t.tasks.length
+      ? `<ol class="muted" style="margin:0 0 14px 46px;padding:0 0 0 18px;font-size:12.5px;line-height:1.7">${t.tasks
+          .map(
+            x =>
+              `<li>${esc(x.title)}${x.subtasks.length ? ` <span class="faint">· ${x.subtasks.length} subtask${x.subtasks.length === 1 ? '' : 's'}</span>` : ''}</li>`,
+          )
+          .join('')}</ol>`
+      : '<p class="faint" style="margin:0 0 14px 46px;font-size:12.5px">This template has no tasks.</p>';
   return `<div style="border-bottom:1px solid var(--divider)"><div class="srow" style="border-bottom:0">
     <div class="row" style="gap:10px;min-width:0;align-items:flex-start">
       <button class="ibtn ibtn-sm" data-a="toggleExpand" data-id="${esc(t.id)}" aria-expanded="${open}" aria-label="${open ? 'Hide' : 'Show'} the tasks in ${esc(t.name)}">${ic(open ? 'chevron-down' : 'chevron-right', 14)}</button>
