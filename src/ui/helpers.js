@@ -70,7 +70,7 @@ export const pIcon = (p, cls = '', s = 15) => `<span class="picon ${cls}" style=
 /* A project's stage (its name comes from whoever made the set; the colour is a key, resolved here) and its health, which shows only
    when it is not "On track". `tail` is markup inside the pill after the text: the chevron of a pill that opens a picker. */
 export const stagePill = (s, tail = '') =>
-  `<span class="pstatus" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span>${tail}</span>`;
+  `<span class="pstatus" title="${esc(s.name)}" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span>${tail}</span>`;
 export const pStage = (p, tail = '') => stagePill(stageOf(p), tail);
 /* The dot beside a project in the sidebar: red or amber when it is at risk or on hold (as the status dot was), else its stage's colour. */
 export const pDot = p => (p.health && p.health !== 'ok' ? HEALTH[p.health].c : STAGE_COLORS[stageOf(p).color]);

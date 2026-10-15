@@ -1,5 +1,5 @@
 /* =====================================================================
-   ACTIONS · STAGE SETS: make one (Customise the built-in, or New), edit, delete (Settings > Stages)
+   ACTIONS · STAGE SETS: make one (Customize the built-in, or New), edit, delete (Settings > Stages)
    A project's own stage and health are in stages.js.
    ===================================================================== */
 import { $, uid } from '../core/utils.js';
@@ -12,6 +12,9 @@ import { A, IN, confirmDlg, isTop, needWorkspace } from './actions.js';
 
 const COLORS = Object.keys(STAGE_COLORS);
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
+/* A name clash is refused only when the name is new or was changed: a set that already clashes (two admins pressed Customize at once)
+   stays editable, or its stages could never be fixed. */
+const renamed = (saved, name) => !saved || saved.name !== name;
 const projectsText = n => `${n} project${n === 1 ? '' : 's'}`;
 /* "3 projects", or "3 projects (1 archived)": archived projects count, since they come back in the stage they were in. */
 const countText = list => {
@@ -48,8 +51,8 @@ const reveal = () => $('#ss-name-err, #ss-row-err, #ss-list-err')?.scrollIntoVie
 const usedError = (set, list) =>
   `${countText(list)} ${list.length === 1 ? 'uses' : 'use'} ${set.name}. Move ${list.length === 1 ? 'it' : 'them'} to another stage set first.`;
 
-/* ---------- make: Customise (the built-in set becomes a record) and New ---------- */
-/* Customise copies the built-in set with the same stage ids, so the projects that name no set keep their stage. */
+/* ---------- make: Customize (the built-in set becomes a record) and New ---------- */
+/* Customize copies the built-in set with the same stage ids, so the projects that name no set keep their stage. */
 A.customiseStages = () => {
   if (!mayManage() || needWorkspace()) return;
   const ws = D().ws.id;
@@ -132,7 +135,9 @@ A.ssMove = el => {
   S.ui.errors.ssrow = -1;
   render();
   const btn = d => $(`[data-a="ssMove"][data-i="${j}"][data-v="${d}"]:not([disabled])`);
-  (btn(v) || btn(v === 'up' ? 'down' : 'up'))?.focus({ preventScroll: true });
+  const to = btn(v) || btn(v === 'up' ? 'down' : 'up');
+  to?.focus({ preventScroll: true });
+  to?.scrollIntoView({ block: 'nearest' }); // a stage moved far (a long list) keeps its button in view
 };
 A.ssRemove = el => {
   const m = S.ui.modals[S.ui.modals.length - 1];
@@ -176,7 +181,7 @@ A.submitStageSet = () => {
     ? 'Give the stage set a name'
     : name.length > STAGE_SET_NAME_MAX
       ? `Names can be up to ${STAGE_SET_NAME_MAX} characters`
-      : stageSetsOf(saved ? saved.workspace : D().ws.id).some(x => x.id !== m.edit && sameName(x.name, name))
+      : renamed(saved, name) && stageSetsOf(saved ? saved.workspace : D().ws.id).some(x => x.id !== m.edit && sameName(x.name, name))
         ? `A stage set called “${name}” already exists`
         : '';
   let listErr = '';
@@ -214,7 +219,7 @@ A.submitStageSet = () => {
           why = 'That stage set is gone';
           return;
         }
-        const clash = stageSetsOf(s.workspace).find(x => x.id !== id && sameName(x.name, v.name));
+        const clash = renamed(s, v.name) && stageSetsOf(s.workspace).find(x => x.id !== id && sameName(x.name, v.name));
         if (clash) {
           nameWhy = `A stage set called “${clash.name}” already exists`;
           return;

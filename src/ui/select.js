@@ -21,8 +21,11 @@ export function enhanceSelects(root = document) {
       sel.getAttribute('aria-label') || (sel.id && document.querySelector(`label[for="${CSS.escape(sel.id)}"]`)?.textContent) || 'Choose',
     );
     if (sel.id) btn.dataset.for = sel.id;
+    // An option inside an <optgroup> shows with its group ("Integrator job · Closed"): the same stage name can sit in two sets.
     const sync = () => {
-      btn.innerHTML = `<span class="trunc">${esc(sel.options[sel.selectedIndex]?.text || '')}</span>`;
+      const o = sel.options[sel.selectedIndex];
+      const g = o?.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : '';
+      btn.innerHTML = `<span class="trunc">${esc(g ? `${g} · ${o.text}` : o?.text || '')}</span>`;
     };
     sync();
     sel.classList.add('select-native');
@@ -56,16 +59,20 @@ export const selectMenu = {
     menu.className = 'pop select-menu enter';
     menu.setAttribute('role', 'listbox');
     menu.setAttribute('data-pop-root', '');
-    // An <optgroup> shows as a heading (not an item: the keyboard skips it) before its first option; `data-i` stays the option's index.
-    let group = null;
-    menu.innerHTML = [...sel.options]
-      .map((o, i) => {
-        const g = o.parentElement.tagName === 'OPTGROUP' ? o.parentElement : null;
-        const head = g && g !== group ? `<div class="mh" role="presentation">${esc(g.label)}</div>` : '';
+    // An <optgroup> shows as a heading (not an item: the keyboard skips it) and its options sit in a role="group" named by it;
+    // `data-i` stays the option's index in `sel.options`.
+    let group = null,
+      html = '';
+    [...sel.options].forEach((o, i) => {
+      const g = o.parentElement.tagName === 'OPTGROUP' ? o.parentElement : null;
+      if (g !== group) {
+        if (group) html += '</div>';
+        if (g) html += `<div class="mh" id="sm-g${i}">${esc(g.label)}</div><div role="group" aria-labelledby="sm-g${i}">`;
         group = g;
-        return `${head}<button type="button" class="mi" role="option" data-i="${i}" aria-selected="${o.selected}"><span class="trunc grow">${esc(o.text)}</span>${o.selected ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`;
-      })
-      .join('');
+      }
+      html += `<button type="button" class="mi" role="option" data-i="${i}" aria-selected="${o.selected}"><span class="trunc grow">${esc(o.text)}</span>${o.selected ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`;
+    });
+    menu.innerHTML = html + (group ? '</div>' : '');
     document.body.appendChild(menu);
     const r = btn.getBoundingClientRect();
     menu.style.minWidth = Math.max(r.width, 160) + 'px';

@@ -376,7 +376,7 @@ function templateRow(t, manage) {
   </div>${open ? desc + titles : ''}</div>`;
 }
 /* One stage set in Settings > Stages: its name, how many stages and projects it has, its stages in order, and what can be done with it.
-   The built-in set (no records yet) cannot be edited: Customise makes a copy of it that can. */
+   The built-in set (no records yet) cannot be edited: Customize makes a copy of it that can. */
 function stageSetRow(set, manage, builtin) {
   const n = set.stages.length;
   const using = projectsUsing(set.id);
@@ -393,7 +393,7 @@ function stageSetRow(set, manage, builtin) {
       <div style="min-width:0"><div class="t trunc">${esc(set.name)}${builtin ? ' <span class="faint" style="font-weight:400">(built-in)</span>' : ''}</div><div class="faint" style="font-size:12px;margin-top:2px">${meta}</div></div>
     </div>
     <div class="row" style="flex-wrap:wrap;justify-content:flex-end">${btns}</div>
-  </div><div class="row" style="flex-wrap:wrap;gap:4px;margin-left:46px">${set.stages.map(stagePill).join('')}</div></div>`;
+  </div><div class="row" style="flex-wrap:wrap;gap:4px;margin-left:46px">${set.stages.map(s => stagePill(s)).join('')}</div></div>`;
 }
 export function strengthMeter(pw) {
   let s = 0;

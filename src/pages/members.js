@@ -3,7 +3,7 @@ import { ago, esc, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ROLES } from '../core/constants.js';
 import { D, S, TM, allTasks, canSee, isAdmin, isFinished, isOver, mem, progressOf, team, teamsList, visibleProjects, wsActivity } from '../core/store.js';
-import { av, avStack, empty, pHealth, pIcon, pStage, progBar, safeColor } from '../ui/helpers.js';
+import { av, avStack, empty, pIcon, pStatuses, progBar, safeColor } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
 import { page404 } from './errors.js';
@@ -101,7 +101,7 @@ export function pageTeam() {
   return `<div class="page">
     <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${safeColor(t.c)}">${ic(t.icon, 18)}</span><div><h1>${esc(t.name)}</h1><p style="margin:2px 0 0">${esc(t.desc)}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${esc(t.id)}">${ic('pencil', 14)}Edit team</button></div></div>
     <div class="grid2"><div class="stack">
-      <section class="panel"><div class="panel-h"><h2>Projects</h2><span class="faint">${ps.length}</span></div>${ps.map(p => `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 14)}<span class="tt">${esc(p.name)}</span>${pStage(p)}${pHealth(p)}<span class="row" style="width:120px">${progBar(progressOf(p.id))}</span></div>`).join('') || '<div class="panel-b faint">No projects</div>'}</section>
+      <section class="panel"><div class="panel-h"><h2>Projects</h2><span class="faint">${ps.length}</span></div>${ps.map(p => `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 14)}<span class="tt">${esc(p.name)}</span>${pStatuses(p)}<span class="row" style="width:120px">${progBar(progressOf(p.id))}</span></div>`).join('') || '<div class="panel-b faint">No projects</div>'}</section>
       <section class="panel"><div class="panel-h"><h2>Open tasks</h2><span class="faint">${ts.length}</span></div>${sortTasks(ts, { f: 'due', dir: 1 })
         .slice(0, 8)
         .map(x => miniRow(x))

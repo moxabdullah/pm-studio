@@ -3,7 +3,8 @@
    ===================================================================== */
 import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, canSee, proj, tasksOf } from '../core/store.js';
+import { D, S, canSee, proj, stageOf, tasksOf } from '../core/store.js';
+import { HEALTH } from '../core/constants.js';
 import { avStack, empty, pHealth, pIcon, pStage } from '../ui/helpers.js';
 import { applyView, groupTasks, peekView, viewToolbar } from '../shell/view-engine.js';
 import { listHtml } from '../components/task-list.js';
@@ -53,7 +54,7 @@ export function pageProject() {
         ${pIcon(p, 'lg', 18)}
         <h1>${esc(p.name)}</h1>${p.private ? `<span class="faint row" data-tip="Private project" role="img" aria-label="Private project">${ic('lock', 14)}</span>` : ''}
         <button class="ibtn ibtn-sm" data-a="toggleFavProj" data-id="${esc(p.id)}" data-tip="${p.fav ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${!!p.fav}" aria-label="Favorite" style="${p.fav ? 'color:var(--amber)' : ''}">${ic('star', 15)}</button>
-        <button class="pillbtn" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}" aria-label="Project stage" style="height:24px">${pStage(p, ic('chevron-down', 12))}</button>${pHealth(p, ic('chevron-down', 12)) ? `<button class="pillbtn" data-a="pop" data-pop="phealth" data-id="${esc(p.id)}" aria-label="Project health" style="height:24px">${pHealth(p, ic('chevron-down', 12))}</button>` : ''}
+        <button class="pillbtn" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}" aria-label="Project stage: ${esc(stageOf(p).name)}" style="height:24px">${pStage(p, ic('chevron-down', 12))}</button>${pHealth(p, ic('chevron-down', 12)) ? `<button class="pillbtn" data-a="pop" data-pop="phealth" data-id="${esc(p.id)}" aria-label="Project health: ${HEALTH[p.health].name}" style="height:24px">${pHealth(p, ic('chevron-down', 12))}</button>` : ''}
         <span class="sp"></span>
         <div class="row" style="gap:4px">
           <button class="row" data-a="share" data-id="${esc(p.id)}" aria-label="Members" style="gap:0">${avStack(p.members, 5, 'md')}</button>

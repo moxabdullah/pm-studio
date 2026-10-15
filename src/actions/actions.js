@@ -338,7 +338,8 @@ A.ctxBtn = el => {
 A.popStageSets = () => {
   S.ui.pop = { ...S.ui.pop, type: 'pstagesets', set: null, q: '' };
   render();
-  $('.pop.floating [data-a="popPickSet"]')?.focus({ preventScroll: true });
+  // the project's own set (checked), also when this is "Back" from the stages of another one
+  ($('.pop.floating [data-a="popPickSet"][aria-checked="true"]') || $('.pop.floating [data-a="popPickSet"]'))?.focus({ preventScroll: true });
 };
 A.popPickSet = el => {
   S.ui.pop = { ...S.ui.pop, type: 'pstage', set: el.dataset.v, q: '' };
@@ -383,6 +384,9 @@ A.popPick = el => {
       if (shown) moveProject(id, v, shown.id !== setOf(pr).id ? shown.id : undefined);
     }
     render();
+    // "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page
+    if (p.type === 'phealth' && (!document.activeElement || document.activeElement === document.body))
+      $(`[data-pop="pstage"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     return;
   }
   if (p.type === 'role') {

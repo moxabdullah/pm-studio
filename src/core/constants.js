@@ -56,7 +56,7 @@ export const STAGE_COLORS = lookup(
   },
   'var(--gray)',
 );
-/* The stages a workspace has until it makes its own set (Settings > Stages > Customise copies these, with the same ids, so a project
+/* The stages a workspace has until it makes its own set (Settings > Stages > Customize copies these, with the same ids, so a project
    keeps its stage). `finished` stages leave the "Active" lists. */
 export const DEFAULT_STAGE_SET = Object.freeze({
   id: 'builtin',
