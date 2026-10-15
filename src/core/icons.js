@@ -18,12 +18,13 @@ export function ic(name, size = 16, cls = '') {
 }
 /* PM Space brand. The wordmark is plain text in the app's own font, in the theme's text colour, in a box h px tall. It is HTML rather than svg
    because the width of text depends on the font, which loads late: an svg would have to guess its width and could clip or leave a gap.
-   The app mark is a white "PM" on a black tile, the same tile as public/favicon.svg. textLength fixes the width of the letters, so it fits
-   the tile in whichever font is used. */
+   The app mark is a white "PM" on a black tile, the same tile and the same paths as public/favicon.svg. Unlike the wordmark it is drawn as
+   outlines (Geist SemiBold, 600), not text: a favicon is shown without the web font, and a fallback font's letters had to be squeezed into the
+   tile with textLength, which distorted them. Outlines look the same wherever the mark is drawn. */
 export const LOGO = (h = 22) =>
   `<span class="logo" role="img" aria-label="PM Space" style="height:${h}px;line-height:${h}px;font-size:${Math.max(10, Math.round(h * 7.5) / 10)}px">PM Space</span>`;
 export const MARK = (px = 22) =>
-  `<svg width="${px}" height="${px}" viewBox="0 0 332 332" aria-hidden="true"><rect width="332" height="332" fill="#000"/><text x="166" y="166" text-anchor="middle" dominant-baseline="central" textLength="240" lengthAdjust="spacingAndGlyphs" font-size="160" font-weight="600" fill="#fff">PM</text></svg>`;
+  `<svg width="${px}" height="${px}" viewBox="0 0 332 332" aria-hidden="true"><rect width="332" height="332" fill="#000"/><path fill="#fff" d="M55.1 222.8V109.2H99.1Q119 109.2 130.2 118.8Q141.5 128.4 141.5 145.4Q141.5 162.5 130.2 172.2Q119 181.8 99.1 181.8H75.9V222.8ZM75.9 163.8H98.2Q108.7 163.8 114.4 159.1Q120.1 154.5 120.1 145.4Q120.1 136.4 114.4 131.8Q108.7 127.3 98.2 127.3H75.9ZM158.2 222.8V109.2H186.2L217.5 197.2L248.9 109.2H276.9V222.8H256.1V144.4L227.4 222.6H207.6L179 144.4V222.8Z"/></svg>`;
 export function wsLogo(w, px = 22) {
   return w && w.brand
     ? `<span class="ws-logo brand" style="width:${px}px;height:${px}px">${MARK(px)}</span>`
