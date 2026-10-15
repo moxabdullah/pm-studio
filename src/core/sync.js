@@ -241,6 +241,9 @@ const ownDelete = (key, id, b) => wasDeleted(key, id) || (!!b && (wasDeleted('ta
 /* ---------- payloads ---------- */
 /* The canonical payload of a server record, comparable with what toRecords() makes of the app's own objects. */
 const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, order: rec.order });
+/* The largest |order| the server accepts when an update changes it (server/pb_hooks/project_order.pb.js has the same 1e12: sync.js
+   cannot import server code, so change both together). */
+const ORDER_LIMIT = 1e12;
 /* The `order` to write for each project, as Map(id -> value). D().projOrder ranks only the projects this user can see, but the
    server's column ranks all of them (a member does not see a private project), so the position in that list cannot be the value:
    it would collide with the hidden ones. The server's own values are kept and handed out in the local order, so moving a project
@@ -249,7 +252,15 @@ const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, ord
    projects, hidden ones included) and ignores the one sent. The placeholder is what the create carries; the answer brings the real
    value, which becomes the baseline and from then on the value handed out here, so the new project is not written again. (Without
    that hook the placeholder is stored, and it can equal a hidden project's: ties are settled by id, so the visible order does not
-   change, and it is only if that project is ever shown that it lands next to the new one.) */
+   change, and it is only if that project is ever shown that it lands next to the new one.)
+   The server refuses a changed value beyond ORDER_LIMIT (an unchanged one passes), and a superuser or a migration can leave a project
+   beyond it. Handing that value to a neighbour would be refused, so while a known project would be given a value that is both new
+   and beyond the limit, the projects whose far values were handed away are taken as unplaced and the hand-out is worked out again:
+   they get values between their neighbours and the others keep theirs, so a far project left where it is is not written. Each round
+   unplaces one more, so it ends. When there is none to unplace (a far value is still beside an unplaced project that has to be put
+   next to it) every far project is unplaced, the last resort. Beyond the ends the values go one apart, unless that would leave the
+   range: then they are spread over what is left of it (up to a neighbour at exactly the limit, that is a tie, settled by id). A project
+   that is new here does not count: the server ignores the value of a create, and a placeholder beside a far project can itself be far. */
 function projectOrders() {
   const known = base.get('projects');
   const have = new Set(D().projects.map(p => p.id));
@@ -259,29 +270,45 @@ function projectOrders() {
       .projects.map(p => p.id)
       .filter(id => !D().projOrder.includes(id)),
   ];
-  const sorted = ids
-    .filter(id => known.has(id))
-    .map(id => known.get(id).p.order)
-    .sort((a, b) => a - b);
-  const out = new Map();
-  let k = 0;
-  for (const id of ids) if (known.has(id)) out.set(id, sorted[k++]);
-  for (let i = 0; i < ids.length;) {
-    if (out.has(ids[i])) {
-      i++;
-      continue;
+  const far = o => Math.abs(o) > ORDER_LIMIT;
+  // `placed` says which ids take part in the hand-out of the server's values; the others are put between them.
+  const place = placed => {
+    const sorted = ids
+      .filter(placed)
+      .map(id => known.get(id).p.order)
+      .sort((a, b) => a - b);
+    const out = new Map();
+    let k = 0;
+    for (const id of ids) if (placed(id)) out.set(id, sorted[k++]);
+    for (let i = 0; i < ids.length;) {
+      if (out.has(ids[i])) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < ids.length && !out.has(ids[j])) j++;
+      const lo = i > 0 ? out.get(ids[i - 1]) : undefined;
+      const hi = j < ids.length ? out.get(ids[j]) : undefined;
+      const n = j - i;
+      const squeeze = lo === undefined ? hi !== undefined && !far(hi) && hi - n < -ORDER_LIMIT : hi === undefined && !far(lo) && lo + n > ORDER_LIMIT;
+      for (let x = 0; x < n; x++) {
+        if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : squeeze ? -ORDER_LIMIT + ((hi + ORDER_LIMIT) * x) / n : hi - n + x);
+        else if (hi === undefined) out.set(ids[i + x], squeeze ? lo + ((ORDER_LIMIT - lo) * (x + 1)) / n : lo + x + 1);
+        else out.set(ids[i + x], lo + ((hi - lo) * (x + 1)) / (n + 1));
+      }
+      i = j;
     }
-    let j = i;
-    while (j < ids.length && !out.has(ids[j])) j++;
-    const lo = i > 0 ? out.get(ids[i - 1]) : undefined;
-    const hi = j < ids.length ? out.get(ids[j]) : undefined;
-    for (let x = 0; x < j - i; x++) {
-      if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : hi - (j - i) + x);
-      else out.set(ids[i + x], hi === undefined ? lo + x + 1 : lo + ((hi - lo) * (x + 1)) / (j - i + 1));
-    }
-    i = j;
+    return out;
+  };
+  const unplaced = new Set();
+  for (;;) {
+    const out = place(id => known.has(id) && !unplaced.has(id));
+    const changed = id => known.has(id) && out.get(id) !== known.get(id).p.order;
+    if (!ids.some(id => changed(id) && far(out.get(id)))) return out;
+    const handed = ids.filter(id => changed(id) && !unplaced.has(id) && far(known.get(id).p.order));
+    if (!handed.length) return place(id => known.has(id) && !far(known.get(id).p.order));
+    for (const id of handed) unplaced.add(id);
   }
-  return out;
 }
 /* The payload of one live app object. */
 function payloadOf(key, obj) {
@@ -1388,9 +1415,12 @@ function goOffline(kind = 'network') {
   setOffline(true);
   hooks.toast("Your changes couldn't be saved. You're offline.", { kind: 'err', action: 'Try again', onAction: retryNow, ms: 8000, key: 'offline' });
 }
-/* One recovery or reload at a time. */
+/* One recovery or reload at a time: a second caller joins the one that runs. busyTold is what toldRefusals was when that one started,
+   so that retryNow() can tell, when it joins, what the try has said already (before the click, not only after it). */
+let busyTold = 0;
 function exclusive(fn) {
   if (!st.busy) {
+    busyTold = toldRefusals;
     const run = fn().finally(() => {
       if (st.busy === run) st.busy = null; // not the one of a newer session, if teardown() cleared this one meanwhile
     });
@@ -1508,7 +1538,7 @@ export async function retryNow() {
   }
   if (!st.offline) return flush();
   const gen = st.gen;
-  const told = toldRefusals;
+  const told = st.busy ? busyTold : toldRefusals; // a click that joins a try that runs counts what it said before the click too
   const ok = await recover();
   // A try that refused or gave up on a change has said so already (refuse()): a second red toast about the same try would bury it.
   if (gen === st.gen && !ok && st.offline && toldRefusals === told) {
