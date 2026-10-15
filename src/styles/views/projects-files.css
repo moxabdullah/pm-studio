@@ -79,8 +79,10 @@
   border-radius: 5px;
   border: 1px solid var(--border);
   white-space: nowrap;
+  max-width: 100%;
 }
 .pstatus i {
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 50%;

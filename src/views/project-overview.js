@@ -1,9 +1,9 @@
 /* ---------- OVERVIEW ---------- */
 import { TODAY, dayBucket, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { STATUSES } from '../core/constants.js';
-import { D, TM, isOver, mem, pColor, progressOf, task, tasksOf } from '../core/store.js';
-import { av, avStack, empty, pStatus, stIcon } from '../ui/helpers.js';
+import { STAGE_COLORS, STATUSES } from '../core/constants.js';
+import { D, TM, isOver, mem, pColor, progressOf, setOf, stageOf, task, tasksOf } from '../core/store.js';
+import { av, avStack, empty, pHealth, pStage, stIcon } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
 
@@ -34,13 +34,15 @@ export function projOverview(p) {
       </div>
       <div class="stack">
         <section class="panel"><div class="panel-h"><h2>Details</h2></div><div class="panel-b"><dl class="kv">
-          <dt>${ic('circle-dot', 14)}Status</dt><dd><button class="pillbtn" data-a="pop" data-pop="pstatus" data-id="${esc(p.id)}">${pStatus(p.status)}</button></dd>
+          <dt>${ic('circle-dot', 14)}Stage</dt><dd><button class="pillbtn" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}">${pStage(p)}${ic('chevron-down', 12)}</button></dd>
+          <dt>${ic('activity', 14)}Health</dt><dd><button class="pillbtn" data-a="pop" data-pop="phealth" data-id="${esc(p.id)}">${pHealth(p) || '<span class="faint">On track</span>'}${ic('chevron-down', 12)}</button></dd>
           <dt>${ic('user', 14)}Lead</dt><dd><span class="pillbtn">${av(p.lead, 'sm', false)}${esc(mem(p.lead)?.name)}</span></dd>
           <dt>${ic('users', 14)}Team</dt><dd><button class="pillbtn" data-a="go" data-r="team" data-id="${esc(p.team)}">${ic(TM[p.team].icon, 13)}${esc(TM[p.team].name)}</button></dd>
           <dt>${ic('calendar', 14)}Start</dt><dd><span class="pillbtn num">${fmtDate(p.start, true)}</span></dd>
           <dt>${ic('flag', 14)}Due</dt><dd><span class="pillbtn num">${fmtDate(p.due, true)}</span></dd>
           <dt>${ic('user-plus', 14)}Members</dt><dd><button class="pillbtn" data-a="share" data-id="${esc(p.id)}">${avStack(p.members, 6)}<span class="faint">${p.members.length}</span></button></dd>
         </dl></div></section>
+        <section class="panel"><div class="panel-h"><h2>Stage history</h2></div><div class="panel-b">${stageHistory(p)}</div></section>
         <section class="panel"><div class="panel-h"><h2>Milestones</h2></div><div class="panel-b">${
           (p.milestones || [])
             .map(m => {
@@ -53,6 +55,21 @@ export function projOverview(p) {
       </div>
     </div>
   </div>`;
+}
+/* The stages of the project's set in order, the current one marked, each with the day the project last entered it (history of a stage
+   that is no longer in the set is not shown). */
+function stageHistory(p) {
+  const now = stageOf(p).id;
+  const at = {};
+  for (const h of p.stageHistory || []) at[h.stage] = h.at;
+  const stages = setOf(p).stages;
+  if (!stages.length) return '<span class="faint">No stages</span>';
+  return stages
+    .map(s => {
+      const d = Object.hasOwn(at, s.id) ? fmtDate(new Date(at[s.id]), true) : '';
+      return `<div class="row" style="height:30px;font-size:13px;gap:8px"><span class="pdot" style="--c:${STAGE_COLORS[s.color]};border-radius:50%;width:8px;height:8px;flex-shrink:0"></span><span class="grow trunc ${s.id === now ? '' : 'muted'}" style="${s.id === now ? 'font-weight:600' : ''}">${esc(s.name)}</span>${s.id === now ? `<span class="faint" style="font-size:11.5px">current</span>` : ''}<span class="num ${d ? 'muted' : 'faint'}" style="font-size:12px">${d || '\u2014'}</span></div>`;
+    })
+    .join('');
 }
 export function projActivity(p) {
   const as = D().activity.filter(a => a.project === p.id);

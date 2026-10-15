@@ -2,7 +2,7 @@
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS, TEMPLATE_DESC_MAX, TEMPLATE_NAME_MAX } from '../core/constants.js';
-import { D, S, canManageTemplates, mem, pColor, proj, task, teamsList, templatesOf } from '../core/store.js';
+import { D, S, canManageTemplates, mem, pColor, proj, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lbl, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -139,9 +139,18 @@ export function projectModal(m, H) {
         .join('')}</select></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}"></div>
     </div>
+    ${m.edit ? '' : stageSetPicker(f)}
     ${m.edit ? '' : templatePicker(f)}
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
+}
+/* Which stage set a new project is in; asked only when the workspace has more than one (a project of the only set needs no choice). */
+function stageSetPicker(f) {
+  const sets = stageSetsOf(D().ws.id);
+  if (sets.length < 2) return '';
+  return `<div class="field"><label class="label" for="p-stageset">Stage set</label><select class="select" id="p-stageset" data-in="pform" data-f="stageSet">${sets
+    .map(s => `<option value="${esc(s.id)}" ${f.stageSet === s.id ? 'selected' : ''}>${esc(s.name)}</option>`)
+    .join('')}</select></div>`;
 }
 /* Edit a template's name and description (Settings > Templates). The tasks it carries are not edited here: save the project again to replace them. */
 export function templateModal(m, H) {

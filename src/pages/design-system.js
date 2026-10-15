@@ -3,7 +3,7 @@ import { dOff, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { LABELS, PCOLORS, PRIOS, STATUSES } from '../core/constants.js';
 import { S, allTasks, task } from '../core/store.js';
-import { av, avStack, empty, lbl, pStatus, prPill, progBar, stPill } from '../ui/helpers.js';
+import { av, avStack, empty, lbl, pHealth, pStage, prPill, progBar, stPill } from '../ui/helpers.js';
 import { sItem } from '../shell/layout.js';
 import { sk, skRows } from '../shell/skeletons.js';
 import { miniRow } from '../components/task-list.js';
@@ -129,7 +129,7 @@ export function pageSystem() {
     <div class="ds-sec"><h2>Data display</h2><div class="grid2" style="grid-template-columns:300px 1fr">
       <div style="background:var(--sunken);padding:10px;border-radius:var(--r-lg)">${demo ? kcard(demo) : empty('list-checks', 'No tasks yet', 'Task cards show up here.', '', 'sm')}</div>
       <div class="col" style="gap:12px"><div class="ds-row"><span class="lab">Avatar</span>${['m1', 'm2', 'm3'].map(i => av(i, 'sm')).join('')}${av('m4')}${av('m5', 'md')}${av('m6', 'lg')}${av(null)}${avStack(['m1', 'm2', 'm3', 'm4', 'm5', 'm6'], 4, 'md')}</div>
-      <div class="ds-row"><span class="lab">Badge</span><span class="badge">Default</span><span class="badge accent">Accent</span><span class="badge green"><span class="dot"></span>Active</span><span class="badge amber"><span class="dot"></span>Invited</span><span class="badge red">3 overdue</span>${pStatus('active')}${pStatus('risk')}</div>
+      <div class="ds-row"><span class="lab">Badge</span><span class="badge">Default</span><span class="badge accent">Accent</span><span class="badge green"><span class="dot"></span>Active</span><span class="badge amber"><span class="dot"></span>Invited</span><span class="badge red">3 overdue</span>${pStage({ stage: 'design' })}${pStage({ stage: 'fat' })}${pHealth({ health: 'risk' })}</div>
       <div class="ds-row"><span class="lab">Progress</span><span style="width:200px;display:flex">${progBar(64)}</span><span style="width:120px;display:flex">${progBar(100, 'green')}</span><span style="width:120px;display:flex">${progBar(30, 'red')}</span></div>
       <div class="panel" style="overflow:hidden">${allTasks()
         .slice(0, 2)

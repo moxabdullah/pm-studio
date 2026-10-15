@@ -1,9 +1,9 @@
 /* ---------- shell ---------- */
 import { MOD, TODAY, diffD, esc, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { PSTAT } from '../core/constants.js';
+import { STAGE_COLORS } from '../core/constants.js';
 import { lookup } from '../core/safe.js';
-import { D, S, allTasks, inWs, me, mem, pColor, proj, team, teamsList, visibleProjects, wsArchivedTasks } from '../core/store.js';
+import { D, S, allTasks, inWs, isFinished, me, mem, pColor, proj, stageOf, team, teamsList, visibleProjects, wsArchivedTasks } from '../core/store.js';
 import { av, safely } from '../ui/helpers.js';
 import { ROUTE_NAMES } from './render.js';
 import { skeleton } from './skeletons.js';
@@ -83,7 +83,7 @@ export function renderSidebar() {
   const unreadInbox = d.notifs.filter(n => !n.read && n.type !== 'update').length;
   const unreadAll = d.notifs.filter(n => !n.read).length;
   const myOpen = allTasks().filter(t => t.assignee === d.me && t.status !== 'done' && t.due && diffD(parse(t.due), TODAY) <= 0).length;
-  const projs = visibleProjects().filter(p => p.status !== 'complete');
+  const projs = visibleProjects().filter(p => !isFinished(p));
   const inProj = u.route === 'project' ? u.params.id : null;
   return `<nav class="side" aria-label="Main">
     <div class="side-top">
@@ -125,7 +125,7 @@ export function renderSidebar() {
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
-              <span class="sdot" style="background:${PSTAT[p.status].c}" title="${esc(PSTAT[p.status].name)}"></span>
+              <span class="sdot" style="background:${STAGE_COLORS[stageOf(p).color]}" title="${esc(stageOf(p).name)}"></span>
               <span class="hov"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Project options">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Expand">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
             </div>
             <div class="sub ${open && !u.collapsed ? 'open' : ''}">

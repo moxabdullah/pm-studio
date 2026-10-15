@@ -2,7 +2,7 @@
 import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ST } from '../core/constants.js';
-import { D, canManageTemplates, isAdmin, mem, proj, task, visibleProjects } from '../core/store.js';
+import { D, canManageTemplates, isAdmin, isFinished, mem, proj, task, visibleProjects } from '../core/store.js';
 
 export function ctxMenu(p) {
   const I = (act, icon, label, extra = '', r = '') =>
@@ -44,7 +44,7 @@ export function ctxMenu(p) {
       (visibleProjects().indexOf(pr) > 0 ? I('projUp', 'arrow-up', 'Move up in sidebar') : '') +
       (visibleProjects().indexOf(pr) < visibleProjects().length - 1 ? I('projDown', 'arrow-down', 'Move down in sidebar') : '') +
       sep +
-      I('archiveProject', 'archive', pr.status === 'complete' ? 'Archive' : 'Archive project') +
+      I('archiveProject', 'archive', isFinished(pr) ? 'Archive' : 'Archive project') +
       I('delProject', 'trash-2', 'Delete project', 'danger')
     );
   }
