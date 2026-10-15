@@ -7,7 +7,7 @@ import { effectiveDark } from '../core/theme.js';
 export function authShell(inner) {
   return `<div class="auth"><div class="auth-top"><span class="brand">${LOGO(22)}</span><div class="row"><button class="ibtn" data-a="toggleDark" data-tip="Toggle theme" aria-label="Toggle theme">${ic(effectiveDark() ? 'sun' : 'moon', 16)}</button></div></div>
     <div class="auth-c">${inner}</div>
-    <div class="auth-foot" style="padding:18px;font-size:12px" ><span class="faint">© 2026 Gr8r Studio · Terms · Privacy</span></div></div>`;
+    <div class="auth-foot" style="padding:18px;font-size:12px" ><span class="faint">© 2026 PM Space · Terms · Privacy</span></div></div>`;
 }
 export const ferr = k => (S.ui.errors[k] ? `<span class="err" id="${k}-err">${ic('circle-alert', 12)}${esc(S.ui.errors[k])}</span>` : '');
 export const icls = k => (S.ui.errors[k] ? 'is-error' : '');

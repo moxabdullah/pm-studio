@@ -1,6 +1,8 @@
-# Deploying Gr8r Studio
+# Deploying PM Space
 
-This guide takes a fresh Linux or Windows server to a running Gr8r Studio: install, run as a service, HTTPS, accounts, nightly backups, restore and upgrades. It assumes you can administer a server. It does not assume you know PocketBase or Node.js.
+This guide takes a fresh Linux or Windows server to a running PM Space: install, run as a service, HTTPS, accounts, nightly backups, restore and upgrades. It assumes you can administer a server. It does not assume you know PocketBase or Node.js.
+
+An install set up with an earlier version of this guide keeps its own names: the install folder, the service, the user, and the files named after them (unit file, WinSW files, proxy config, cron file, scheduled task). Use yours wherever a command here says `pm-space` or `pmspace`. On Linux, `grep -l 'pocketbase serve' /etc/systemd/system/*.service` finds your unit file, and its `User=` and `WorkingDirectory=` lines give the user and the folder. Section 10.1 says what the update to PM Space changes on such a server.
 
 > **How this guide was checked.** PocketBase's own commands and flags, the superuser and first-start flow, scheduled backups, both restore methods, the Caddy and nginx configs and the Microsoft 365 behaviour were run against the official PocketBase v0.40.5 binary on Ubuntu 24.04. A dry run in a clean copy of the repository (download script, `npm ci`, `npm run build:server`, start with the flags of section 3.3, create the superuser and the first admin, the `401` check, the live-update stream) worked on Linux. The systemd unit was syntax-checked with `systemd-analyze verify` but not started under a live systemd. The Windows steps follow the WinSW v2.12.0 documentation and were not run on a Windows machine. Anything that was not run anywhere is marked _untested_.
 
@@ -68,33 +70,33 @@ Never expose 8090. With PocketBase's built-in Let's Encrypt mode (section 5.2) P
 | Disk     | About 120 MB for the code, `node_modules` (about 75 MB) and the 32 MB PocketBase program. `pb_data` grows with uploads. Each backup zip is about the size of `pb_data`, and PocketBase wants free space of about 2× `pb_data` while it makes one (`core/backup_create.go:33-34`).                                                                                               |
 | DNS, TLS | A DNS name for the server (this guide uses `studio.example.com`) and, for section 5.1, a certificate for that name from your internal CA that staff browsers already trust.                                                                                                                                                                                                     |
 
-If the server cannot reach the npm registry, build on another machine and copy the result across: `rsync -a --delete server/pb_public/ admin@server:/opt/gr8r-studio/server/pb_public/` (_untested_).
+If the server cannot reach the npm registry, build on another machine and copy the result across: `rsync -a --delete server/pb_public/ admin@server:/opt/pm-space/server/pb_public/` (_untested_).
 
 ## 3. Install
 
 Replace these placeholders everywhere they appear:
 
-| Placeholder            | Meaning                                               |
-| ---------------------- | ----------------------------------------------------- |
-| `REPO_URL`             | the git URL of this repository                        |
-| `/opt/gr8r-studio`     | install folder on Linux (`C:\gr8r-studio` on Windows) |
-| `studio.example.com`   | the name staff will type                              |
-| `it-admin@example.com` | the email of the IT superuser                         |
+| Placeholder            | Meaning                                            |
+| ---------------------- | -------------------------------------------------- |
+| `REPO_URL`             | the git URL of this repository                     |
+| `/opt/pm-space`        | install folder on Linux (`C:\pm-space` on Windows) |
+| `studio.example.com`   | the name staff will type                           |
+| `it-admin@example.com` | the email of the IT superuser                      |
 
 ### 3.1 Linux
 
-Your own account owns the code. The `gr8r` service account can read it and can write only to `server/pb_data`, so a bug in the service cannot change the program.
+Your own account owns the code. The `pmspace` service account can read it and can write only to `server/pb_data`, so a bug in the service cannot change the program.
 
 ```bash
 # a service account with no login
-sudo useradd --system --home-dir /opt/gr8r-studio --shell /usr/sbin/nologin gr8r
+sudo useradd --system --home-dir /opt/pm-space --shell /usr/sbin/nologin pmspace
 
 # get the code
 umask 022                                  # make sure the service account can read what you create
-sudo mkdir -p /opt/gr8r-studio
-sudo chown "$USER": /opt/gr8r-studio
-git clone REPO_URL /opt/gr8r-studio
-cd /opt/gr8r-studio
+sudo mkdir -p /opt/pm-space
+sudo chown "$USER": /opt/pm-space
+git clone REPO_URL /opt/pm-space
+cd /opt/pm-space
 
 # PocketBase (the version pinned in the script): downloaded from GitHub, SHA-256 checked, extracted to server/pocketbase
 scripts/get-pocketbase.sh
@@ -105,7 +107,7 @@ npm run build:server
 
 # the only folder the service account may write to
 mkdir server/pb_data
-sudo chown gr8r:gr8r server/pb_data
+sudo chown pmspace:pmspace server/pb_data
 ```
 
 ### 3.2 Windows
@@ -113,8 +115,8 @@ sudo chown gr8r:gr8r server/pb_data
 In an elevated PowerShell, with [Git for Windows](https://git-scm.com/download/win) and [Node.js 22](https://nodejs.org) installed (_untested_):
 
 ```powershell
-git clone REPO_URL C:\gr8r-studio
-cd C:\gr8r-studio
+git clone REPO_URL C:\pm-space
+cd C:\pm-space
 powershell -ExecutionPolicy Bypass -File scripts\get-pocketbase.ps1   # downloads and checks server\pocketbase.exe
 npm ci
 npm run build:server
@@ -125,12 +127,12 @@ npm run build:server
 Run the server once in a terminal to check it works. These are the same flags the service will use (section 4.3 explains them). On Linux:
 
 ```bash
-sudo -u gr8r /opt/gr8r-studio/server/pocketbase serve \
+sudo -u pmspace /opt/pm-space/server/pocketbase serve \
   --http=127.0.0.1:8090 \
-  --dir=/opt/gr8r-studio/server/pb_data \
-  --migrationsDir=/opt/gr8r-studio/server/pb_migrations \
-  --hooksDir=/opt/gr8r-studio/server/pb_hooks \
-  --publicDir=/opt/gr8r-studio/server/pb_public \
+  --dir=/opt/pm-space/server/pb_data \
+  --migrationsDir=/opt/pm-space/server/pb_migrations \
+  --hooksDir=/opt/pm-space/server/pb_hooks \
+  --publicDir=/opt/pm-space/server/pb_public \
   --dev=false --automigrate=false --hooksWatch=false
 ```
 
@@ -154,21 +156,21 @@ Never run `npm run seed:dev` on this server. It fills an empty database with dem
 Create the unit file:
 
 ```bash
-sudo tee /etc/systemd/system/gr8r-studio.service >/dev/null <<'EOF'
+sudo tee /etc/systemd/system/pm-space.service >/dev/null <<'EOF'
 [Unit]
-Description=Gr8r Studio (PocketBase)
+Description=PM Space (PocketBase)
 After=network.target
 
 [Service]
-User=gr8r
-Group=gr8r
-WorkingDirectory=/opt/gr8r-studio
-ExecStart=/opt/gr8r-studio/server/pocketbase serve \
+User=pmspace
+Group=pmspace
+WorkingDirectory=/opt/pm-space
+ExecStart=/opt/pm-space/server/pocketbase serve \
   --http=127.0.0.1:8090 \
-  --dir=/opt/gr8r-studio/server/pb_data \
-  --migrationsDir=/opt/gr8r-studio/server/pb_migrations \
-  --hooksDir=/opt/gr8r-studio/server/pb_hooks \
-  --publicDir=/opt/gr8r-studio/server/pb_public \
+  --dir=/opt/pm-space/server/pb_data \
+  --migrationsDir=/opt/pm-space/server/pb_migrations \
+  --hooksDir=/opt/pm-space/server/pb_hooks \
+  --publicDir=/opt/pm-space/server/pb_public \
   --dev=false \
   --automigrate=false \
   --hooksWatch=false
@@ -182,50 +184,50 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now gr8r-studio
-systemctl status gr8r-studio --no-pager
+sudo systemctl enable --now pm-space
+systemctl status pm-space --no-pager
 curl -s http://127.0.0.1:8090/api/health
 ```
 
 Day to day:
 
 ```bash
-sudo systemctl restart gr8r-studio       # also: stop, start
-sudo journalctl -u gr8r-studio -f        # live output (start-up errors appear here)
-sudo journalctl -u gr8r-studio -n 100 --no-pager
+sudo systemctl restart pm-space       # also: stop, start
+sudo journalctl -u pm-space -f        # live output (start-up errors appear here)
+sudo journalctl -u pm-space -n 100 --no-pager
 ```
 
 With `--dev=false` the journal only has the start-up banner and fatal errors. Requests and errors are kept in the database for 5 days (default) and are in the dashboard under **Logs**.
 
 | Setting                 | Why                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `User=gr8r`             | runs without privileges; it only needs to write `server/pb_data`                                              |
+| `User=pmspace`          | runs without privileges; it only needs to write `server/pb_data`                                              |
 | `--http=127.0.0.1:8090` | listen on this machine only; the reverse proxy is the public face                                             |
 | `Restart=always`        | start again after a crash or a failed start-up (it retries every 5 seconds)                                   |
 | `LimitNOFILE=4096`      | more open files than the systemd default of 1024: each live-update connection and each database file uses one |
 | `NoNewPrivileges=true`  | the process can never gain more privileges                                                                    |
 
-If SELinux is enforcing (RHEL family) and systemd reports `status=203/EXEC`, the program needs an executable label (_untested_): `sudo semanage fcontext -a -t bin_t '/opt/gr8r-studio/server/pocketbase' && sudo restorecon -v /opt/gr8r-studio/server/pocketbase`.
+If SELinux is enforcing (RHEL family) and systemd reports `status=203/EXEC`, the program needs an executable label (_untested_): `sudo semanage fcontext -a -t bin_t '/opt/pm-space/server/pocketbase' && sudo restorecon -v /opt/pm-space/server/pocketbase`.
 
 ### 4.2 Windows service (WinSW)
 
 PocketBase is not a native Windows service, so wrap it with [WinSW](https://github.com/winsw/winsw), a small program that runs any executable as a service. WinSW sends the program Ctrl+C when the service stops, waits for `<stoptimeout>`, and only then kills it; PocketBase shuts down cleanly on Ctrl+C. This section was written from the WinSW v2.12.0 documentation and is _untested_ on a real Windows server.
 
-1. Download `WinSW-x64.exe` from <https://github.com/winsw/winsw/releases/tag/v2.12.0> (it needs no .NET install) and save it as `C:\gr8r-studio\service\gr8r-studio.exe`.
-2. Save this as `C:\gr8r-studio\service\gr8r-studio.xml`. The XML file must have the same name as the renamed `.exe`, in the same folder.
+1. Download `WinSW-x64.exe` from <https://github.com/winsw/winsw/releases/tag/v2.12.0> (it needs no .NET install) and save it as `C:\pm-space\service\pm-space.exe`.
+2. Save this as `C:\pm-space\service\pm-space.xml`. The XML file must have the same name as the renamed `.exe`, in the same folder.
 
 ```xml
 <service>
-  <id>Gr8rStudio</id>
-  <name>Gr8r Studio</name>
-  <description>Gr8r Studio (PocketBase)</description>
-  <executable>C:\gr8r-studio\server\pocketbase.exe</executable>
-  <arguments>serve --http=127.0.0.1:8090 --dir=C:\gr8r-studio\server\pb_data --migrationsDir=C:\gr8r-studio\server\pb_migrations --hooksDir=C:\gr8r-studio\server\pb_hooks --publicDir=C:\gr8r-studio\server\pb_public --dev=false --automigrate=false</arguments>
-  <workingdirectory>C:\gr8r-studio</workingdirectory>
+  <id>PMSpace</id>
+  <name>PM Space</name>
+  <description>PM Space (PocketBase)</description>
+  <executable>C:\pm-space\server\pocketbase.exe</executable>
+  <arguments>serve --http=127.0.0.1:8090 --dir=C:\pm-space\server\pb_data --migrationsDir=C:\pm-space\server\pb_migrations --hooksDir=C:\pm-space\server\pb_hooks --publicDir=C:\pm-space\server\pb_public --dev=false --automigrate=false</arguments>
+  <workingdirectory>C:\pm-space</workingdirectory>
   <startmode>Automatic</startmode>
   <onfailure action="restart" delay="10 sec" />
   <stoptimeout>30 sec</stoptimeout>
-  <logpath>C:\gr8r-studio\logs</logpath>
+  <logpath>C:\pm-space\logs</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>8</keepFiles>
@@ -240,18 +242,18 @@ PocketBase is not a native Windows service, so wrap it with [WinSW](https://gith
 3. Let the service account write to the data and log folders, then install and start it (elevated PowerShell):
 
 ```powershell
-New-Item -ItemType Directory -Force C:\gr8r-studio\server\pb_data, C:\gr8r-studio\logs | Out-Null
-icacls C:\gr8r-studio\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
-icacls C:\gr8r-studio\logs /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
+New-Item -ItemType Directory -Force C:\pm-space\server\pb_data, C:\pm-space\logs | Out-Null
+icacls C:\pm-space\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
+icacls C:\pm-space\logs /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
 
-cd C:\gr8r-studio\service
-.\gr8r-studio.exe install
-.\gr8r-studio.exe start
-.\gr8r-studio.exe status          # prints Started
+cd C:\pm-space\service
+.\pm-space.exe install
+.\pm-space.exe start
+.\pm-space.exe status          # prints Started
 Invoke-RestMethod http://127.0.0.1:8090/api/health
 ```
 
-Other WinSW commands: `stopwait` (stop and wait until it has stopped), `restart`, `uninstall`. `stop` alone does not wait. To change the XML: `stopwait`, `uninstall`, edit, `install`, `start`. Output and WinSW's own messages go to `C:\gr8r-studio\logs` and the Windows Event Log. If the service will not start, look there first; as a last resort delete the `<serviceaccount>` block so it runs as LocalSystem, the WinSW default.
+Other WinSW commands: `stopwait` (stop and wait until it has stopped), `restart`, `uninstall`. `stop` alone does not wait. To change the XML: `stopwait`, `uninstall`, edit, `install`, `start`. Output and WinSW's own messages go to `C:\pm-space\logs` and the Windows Event Log. If the service will not start, look there first; as a last resort delete the `<serviceaccount>` block so it runs as LocalSystem, the WinSW default.
 
 ### 4.3 Why these flags
 
@@ -310,7 +312,7 @@ sudo systemctl reload caddy
 
 Caddy redirects port 80 to HTTPS by itself (_untested_ here, because the test used non-standard ports).
 
-**Option B: nginx** (1.24 tested). Put this in `/etc/nginx/conf.d/gr8r-studio.conf`:
+**Option B: nginx** (1.24 tested). Put this in `/etc/nginx/conf.d/pm-space.conf`:
 
 ```nginx
 server {
@@ -384,11 +386,11 @@ Only valid if the server is reachable from the public internet on ports 80 and 4
 Start PocketBase with the domain instead of `--http`. In the unit file of section 4.1 only the `ExecStart` line changes:
 
 ```
-ExecStart=/opt/gr8r-studio/server/pocketbase serve studio.example.com \
-  --dir=/opt/gr8r-studio/server/pb_data \
-  --migrationsDir=/opt/gr8r-studio/server/pb_migrations \
-  --hooksDir=/opt/gr8r-studio/server/pb_hooks \
-  --publicDir=/opt/gr8r-studio/server/pb_public \
+ExecStart=/opt/pm-space/server/pocketbase serve studio.example.com \
+  --dir=/opt/pm-space/server/pb_data \
+  --migrationsDir=/opt/pm-space/server/pb_migrations \
+  --hooksDir=/opt/pm-space/server/pb_hooks \
+  --publicDir=/opt/pm-space/server/pb_public \
   --dev=false \
   --automigrate=false \
   --hooksWatch=false
@@ -396,7 +398,7 @@ ExecStart=/opt/gr8r-studio/server/pocketbase serve studio.example.com \
 
 With a domain argument PocketBase listens on `0.0.0.0:80` and `0.0.0.0:443`, answers plain HTTP with a redirect to HTTPS, and gets and renews its certificate by itself, keeping it in `pb_data/.autocert_cache` (`cmd/serve.go:25-36`, `apis/serve.go:134-138,296-304`). Checked here: the start-up banner shows `https://studio.example.com` and a plain HTTP request gets `302` to `https://studio.example.com/`. Not checked: actually obtaining a certificate, which needs real DNS and internet access.
 
-Binding to ports below 1024 as the `gr8r` user needs one extra line in the `[Service]` section (syntax-checked with `systemd-analyze verify`):
+Binding to ports below 1024 as the `pmspace` user needs one extra line in the `[Service]` section (syntax-checked with `systemd-analyze verify`):
 
 ```
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -428,7 +430,7 @@ Checked: with that rule the eleventh wrong password within a minute is answered 
 The dashboard at `/_/`, and the superuser API behind it, is reachable wherever the app is. The superuser password protects it; to also limit it to IT's own machines, give PocketBase an allow-list of addresses or subnets (after 5.3, so it sees real addresses):
 
 ```bash
-sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser ips 10.0.5.0/24 --dir=/opt/gr8r-studio/server/pb_data --dev=false
+sudo -u pmspace /opt/pm-space/server/pocketbase superuser ips 10.0.5.0/24 --dir=/opt/pm-space/server/pb_data --dev=false
 ```
 
 Every superuser request from anywhere else is then refused with `403`. Running the command with no addresses clears the list (section 11).
@@ -440,13 +442,13 @@ You need two things: a PocketBase superuser for yourself, then the first app use
 **Step 1: create the superuser.** The command works before the first start, and also while the service runs. Passwords need at least 8 characters.
 
 ```bash
-sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser upsert it-admin@example.com 'a-long-password' \
-  --dir=/opt/gr8r-studio/server/pb_data --dev=false
+sudo -u pmspace /opt/pm-space/server/pocketbase superuser upsert it-admin@example.com 'a-long-password' \
+  --dir=/opt/pm-space/server/pb_data --dev=false
 ```
 
-On Windows (_untested_) run `.\server\pocketbase.exe superuser upsert it-admin@example.com "a-long-password" --dir=C:\gr8r-studio\server\pb_data --dev=false` from `C:\gr8r-studio`.
+On Windows (_untested_) run `.\server\pocketbase.exe superuser upsert it-admin@example.com "a-long-password" --dir=C:\pm-space\server\pb_data --dev=false` from `C:\pm-space`.
 
-Use `sudo -u gr8r` so the files PocketBase touches stay owned by the service account. The command creates the superuser, or changes the password if that email already exists, so it is also the cure for a forgotten superuser password. The password lands in your shell history; clear it or change the password in the dashboard afterwards.
+Use `sudo -u pmspace` so the files PocketBase touches stay owned by the service account. The command creates the superuser, or changes the password if that email already exists, so it is also the cure for a forgotten superuser password. The password lands in your shell history; clear it or change the password in the dashboard afterwards.
 
 Alternative without a command line: if no superuser exists, every start prints a one-time link to the log:
 
@@ -455,7 +457,7 @@ Alternative without a command line: if no superuser exists, every start prints a
 http://127.0.0.1:8090/_/#/pbinstall/<long token>
 ```
 
-Find it with `sudo journalctl -u gr8r-studio | grep pbinstall`. Replace `http://127.0.0.1:8090` with `https://studio.example.com` when you open it. It is valid for 30 minutes (restart the service for a fresh one: `apis/installer.go:31,46-69`). The same page can also set the server up from an uploaded backup file instead (Linux only, section 9).
+Find it with `sudo journalctl -u pm-space | grep pbinstall`. Replace `http://127.0.0.1:8090` with `https://studio.example.com` when you open it. It is valid for 30 minutes (restart the service for a fresh one: `apis/installer.go:31,46-69`). The same page can also set the server up from an uploaded backup file instead (Linux only, section 9).
 
 **Step 2: create the first app user.** Open `https://studio.example.com/_/` and sign in as the superuser. Open the `users` collection, press **New record**, and fill in the form as in section 7 with `role` set to `admin`. Only a superuser can do this the first time, because the rule for creating users is "admins only" and nobody is an admin yet. Then open `https://studio.example.com/` and sign in with that account.
 
@@ -509,11 +511,11 @@ Dashboard > **Settings > Backups > Backup options**:
 3. **Max @auto backups to keep**: for example `14`.
 4. **Save changes.**
 
-Optionally set **Settings > Application > Application name** first (for example `Gr8r Studio`): it becomes part of the file name.
+The **Settings > Application > Application name** (`PM Space` unless you change it) becomes part of the file name.
 
 What you get, in `server/pb_data/backups/` (`core/backup_create.go`, `core/backup.go`):
 
-- A zip named `@auto_pb_backup_gr8r_studio_20261013010000.zip` (UTC timestamp). Backups you start yourself ("Initialize new backup") are named `pb_backup_<app name>_<timestamp>.zip`.
+- A zip named `@auto_pb_backup_pm_space_20261013010000.zip` (UTC timestamp). Backups you start yourself ("Initialize new backup") are named `pb_backup_<app name>_<timestamp>.zip`.
 - Inside: `data.db` (a consistent copy, made while the server runs), `auxiliary.db` (logs) and `storage/` (**every uploaded file**), plus `types.d.ts`. Left out: the `backups/` folder itself and temporary folders. So one zip holds everything that matters in `pb_data`.
 - Retention: after each run PocketBase deletes the oldest `@auto_pb_backup_*` zips beyond the number you set. Zips you made by hand or copied in are never deleted by it. (Checked with an every-minute schedule and a limit of 2: exactly the 2 newest `@auto_` files survived and the hand-made ones stayed.)
 - A zip appears under its final name only when it is complete; it is written as `<name>.zip.<random>.tmp` first. A copy job that takes only `*.zip` therefore never copies half a backup.
@@ -522,29 +524,29 @@ What you get, in `server/pb_data/backups/` (`core/backup_create.go`, `core/backu
 Try it now instead of waiting for tonight: **Settings > Crons**, press **Run** next to `__pbAutoBackup__`, then:
 
 ```bash
-ls -l /opt/gr8r-studio/server/pb_data/backups/
+ls -l /opt/pm-space/server/pb_data/backups/
 ```
 
 Check from a monitoring job that a backup is recent (prints a warning when no automatic backup is younger than two days):
 
 ```bash
-find /opt/gr8r-studio/server/pb_data/backups -name '@auto_pb_backup_*.zip' -mtime -2 | grep -q . || echo "NO RECENT BACKUP"
+find /opt/pm-space/server/pb_data/backups -name '@auto_pb_backup_*.zip' -mtime -2 | grep -q . || echo "NO RECENT BACKUP"
 ```
 
 ### 8.2 Copy the zips off the machine
 
 A backup on the same disk does not survive a dead disk or a stolen server. Copy the zips elsewhere every night.
 
-**Linux (cron and rsync).** This copies only the `.zip` files and only what is new. It also copes with the UTC-versus-local-time difference, because it simply runs every hour. Put it in `/etc/cron.d/gr8r-studio-backup-copy` (this assumes a `backup` user on `backuphost` and an SSH key for root, or run it as a user that has one). The rsync options were tested as a local copy; the SSH part depends on your environment.
+**Linux (cron and rsync).** This copies only the `.zip` files and only what is new. It also copes with the UTC-versus-local-time difference, because it simply runs every hour. Put it in `/etc/cron.d/pm-space-backup-copy` (this assumes a `backup` user on `backuphost` and an SSH key for root, or run it as a user that has one). The rsync options were tested as a local copy; the SSH part depends on your environment.
 
 ```
-17 * * * * root rsync -a --include='*.zip' --exclude='*' /opt/gr8r-studio/server/pb_data/backups/ backup@backuphost:/srv/backups/gr8r-studio/
+17 * * * * root rsync -a --include='*.zip' --exclude='*' /opt/pm-space/server/pb_data/backups/ backup@backuphost:/srv/backups/pm-space/
 ```
 
 The destination keeps every zip, so prune it there, for example 60 days:
 
 ```bash
-find /srv/backups/gr8r-studio -name '*.zip' -mtime +60 -delete
+find /srv/backups/pm-space -name '*.zip' -mtime +60 -delete
 ```
 
 You can use any other mechanism your company already has (a file share, object storage). PocketBase can also write its backups straight to S3-compatible storage (**Store backups in S3 storage** on the same Backups page; _untested_).
@@ -552,7 +554,7 @@ You can use any other mechanism your company already has (a file share, object s
 **Windows (robocopy and Task Scheduler)** (_untested_). `robocopy` returns 1 when it copied something; anything below 8 means success.
 
 ```powershell
-schtasks /Create /TN "Gr8r Studio backup copy" /SC DAILY /ST 03:30 /RU SYSTEM /TR "robocopy C:\gr8r-studio\server\pb_data\backups D:\backup-copy\gr8r-studio *.zip /R:2 /W:5"
+schtasks /Create /TN "PM Space backup copy" /SC DAILY /ST 03:30 /RU SYSTEM /TR "robocopy C:\pm-space\server\pb_data\backups D:\backup-copy\pm-space *.zip /R:2 /W:5"
 ```
 
 Choose a time after the PocketBase backup (remember it runs in UTC), and a destination the task's account can write to. A file server share needs `/RU` set to an account with access to it.
@@ -565,7 +567,7 @@ If the backup is older than the code you now run, nothing special is needed: the
 
 ### 9.1 From the dashboard (Linux only)
 
-**Settings > Backups**. If the zip is not in the list, copy it into `server/pb_data/backups/` (owned by `gr8r`) or use the **Upload backup** button. Press **Restore** on its row and type the file name to confirm. PocketBase unpacks it, swaps `pb_data` and restarts itself. Under systemd the service keeps running (it re-executes in place), and the page reloads when it is back. Checked on Linux.
+**Settings > Backups**. If the zip is not in the list, copy it into `server/pb_data/backups/` (owned by `pmspace`) or use the **Upload backup** button. Press **Restore** on its row and type the file name to confirm. PocketBase unpacks it, swaps `pb_data` and restarts itself. Under systemd the service keeps running (it re-executes in place), and the page reloads when it is back. Checked on Linux.
 
 PocketBase marks this feature experimental and it **does not work on Windows** (`core/backup_restore.go:21,66-68`). Use the manual path there.
 
@@ -576,27 +578,29 @@ On a brand-new server (Linux) you can also upload the zip on the first-start ins
 Checked end to end on Linux: a record and an uploaded file were created, a backup was taken, a later record was added, `pb_data` was moved aside, the zip was unpacked into a new `pb_data`, and after the start the first record and the file were back and the later record was gone.
 
 ```bash
-sudo systemctl stop gr8r-studio
-cd /opt/gr8r-studio/server
-mv pb_data pb_data.old                         # keep it until you are happy
-mkdir pb_data
-unzip -q /path/to/@auto_pb_backup_gr8r_studio_20261013010000.zip -d pb_data
-sudo chown -R gr8r:gr8r pb_data
-sudo systemctl start gr8r-studio
-sudo journalctl -u gr8r-studio -n 20 --no-pager
+sudo systemctl stop pm-space &&
+cd /opt/pm-space/server &&
+mv pb_data pb_data.old &&                      # keep it until you are happy
+mkdir pb_data &&
+unzip -q /path/to/@auto_pb_backup_pm_space_20261013010000.zip -d pb_data &&
+sudo chown -R pmspace:pmspace pb_data &&
+sudo systemctl start pm-space
+sudo journalctl -u pm-space -n 20 --no-pager
 ```
+
+The steps are joined with `&&`, so the block stops at the first one that fails, for example a service or folder name that is different on your install. Moving `pb_data` while the server still runs would lose its last writes.
 
 Then sign in and look at recent data. Delete `pb_data.old` when you are satisfied. A fresh `pb_data` has no `backups/` folder; PocketBase creates it when it next needs it, so copy your zips back in if you want them listed in the dashboard.
 
 Windows (_untested_), in an elevated PowerShell:
 
 ```powershell
-cd C:\gr8r-studio\service
-.\gr8r-studio.exe stopwait
-Rename-Item C:\gr8r-studio\server\pb_data pb_data.old
-Expand-Archive -LiteralPath D:\backup-copy\gr8r-studio\your-backup.zip -DestinationPath C:\gr8r-studio\server\pb_data
-icacls C:\gr8r-studio\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
-.\gr8r-studio.exe start
+cd C:\pm-space\service
+.\pm-space.exe stopwait
+Rename-Item C:\pm-space\server\pb_data pb_data.old
+Expand-Archive -LiteralPath D:\backup-copy\pm-space\your-backup.zip -DestinationPath C:\pm-space\server\pb_data
+icacls C:\pm-space\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
+.\pm-space.exe start
 ```
 
 ## 10. Upgrading
@@ -604,16 +608,20 @@ icacls C:\gr8r-studio\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M
 ### 10.1 App updates
 
 ```bash
-cd /opt/gr8r-studio
+cd /opt/pm-space
 git pull
 npm ci
 npm run build:server
-sudo systemctl restart gr8r-studio
-sudo journalctl -u gr8r-studio -n 20 --no-pager      # expect the "Server started" banner and no errors
+sudo systemctl restart pm-space
+sudo journalctl -u pm-space -n 20 --no-pager      # expect the "Server started" banner and no errors
 curl -s http://127.0.0.1:8090/api/health
 ```
 
-On Windows: `git pull`, `npm ci`, `npm run build:server`, then `C:\gr8r-studio\service\gr8r-studio.exe restart` (_untested_).
+On Windows: `git pull`, `npm ci`, `npm run build:server`, then `C:\pm-space\service\pm-space.exe restart` (_untested_).
+
+On an install from an earlier version of this guide, use its own folder and service names here (see the top of this guide). With the new names the restart fails with `Unit pm-space.service not found` and the old server keeps running, so the health check still answers. That server already serves the rebuilt app, because app files need no restart, but it still runs the old migrations and hooks. Restart it under its own name before anyone uses the app.
+
+The update that renames the product to PM Space signs everyone out once: the app keeps the sign-in under a new name. Its migration also sets **Settings > Application > Application name** to `PM Space`, replacing a name you chose. New backup zips are named `@auto_pb_backup_pm_space_…` from then on; older zips keep their names and still count toward **Max @auto backups to keep**.
 
 Take a backup first (**Settings > Crons > Run** `__pbAutoBackup__`, or **Initialize new backup**): migrations only go forward.
 
@@ -636,8 +644,8 @@ Each build renames the app's script files, so a browser that reused an old copy 
 To undo only the last migration instead, and only if it has a working `down` function: stop the service and, **before** you check out the old commit, run the following and answer `y` (checked). Then check out the old commit, rebuild and start the service. The order matters: once the new migration file is gone, `migrate down 1` reverts an older migration instead (checked), and if the server starts first the migration is simply applied again.
 
 ```bash
-sudo -u gr8r /opt/gr8r-studio/server/pocketbase migrate down 1 \
-  --dir=/opt/gr8r-studio/server/pb_data --migrationsDir=/opt/gr8r-studio/server/pb_migrations
+sudo -u pmspace /opt/pm-space/server/pocketbase migrate down 1 \
+  --dir=/opt/pm-space/server/pb_data --migrationsDir=/opt/pm-space/server/pb_migrations
 ```
 
 ### 10.2 PocketBase upgrades
@@ -649,21 +657,21 @@ PocketBase is pre-1.0 and minor versions can contain breaking changes, so upgrad
 3. **Test on a copy** before touching the live server. On the server or a test VM:
 
    ```bash
-   git clone /opt/gr8r-studio ~/gr8r-studio-test          # a throw-away copy of the code
-   cd ~/gr8r-studio-test
+   git clone /opt/pm-space ~/pm-space-test          # a throw-away copy of the code
+   cd ~/pm-space-test
    # change PB_VERSION and the checksums in scripts/get-pocketbase.sh (step 4 below), then:
    scripts/get-pocketbase.sh
    mkdir server/pb_data && unzip -q /path/to/latest-backup.zip -d server/pb_data
    server/pocketbase serve --http=127.0.0.1:8091 \
      --dir=server/pb_data --migrationsDir=server/pb_migrations --hooksDir=server/pb_hooks \
-     --publicDir=/opt/gr8r-studio/server/pb_public --dev=false --automigrate=false --hooksWatch=false
+     --publicDir=/opt/pm-space/server/pb_public --dev=false --automigrate=false --hooksWatch=false
    ```
 
-   Look at the output for errors, then open the app through an SSH tunnel (`ssh -L 8091:127.0.0.1:8091 your-server`, then <http://localhost:8091>) and click around. Delete `~/gr8r-studio-test` afterwards.
+   Look at the output for errors, then open the app through an SSH tunnel (`ssh -L 8091:127.0.0.1:8091 your-server`, then <http://localhost:8091>) and click around. Delete `~/pm-space-test` afterwards.
 
 4. **Bump the version and the checksums in both scripts.** The checksums are in `checksums.txt` on the release page: `https://github.com/pocketbase/pocketbase/releases/download/v<NEW VERSION>/checksums.txt`. For each platform a script lists, replace the old checksum with the matching line (the `.sh` has Linux and macOS, the `.ps1` has Windows). Commit the change.
 5. **On the live server:** `git pull`, then run the script again (`scripts/get-pocketbase.sh`, or the `.ps1` on Windows; on Windows stop the service first, because the program file is locked while it runs), then restart the service.
-6. **Check the logs** straight away: `sudo journalctl -u gr8r-studio -n 50 --no-pager`. Look for the banner and for errors from the system migrations that PocketBase runs on its own data. Sign in, open a project, create a task. If anything is wrong, stop the service, restore the backup (section 9) and put the old version back in the scripts.
+6. **Check the logs** straight away: `sudo journalctl -u pm-space -n 50 --no-pager`. Look for the banner and for errors from the system migrations that PocketBase runs on its own data. Sign in, open a project, create a task. If anything is wrong, stop the service, restore the backup (section 9) and put the old version back in the scripts.
 
 ## 11. Troubleshooting
 
@@ -676,7 +684,7 @@ sudo ss -ltnp 'sport = :8090'
 
 On Windows: `netstat -ano | findstr :8090` (_untested_). Alternatively move PocketBase to another port in the unit and in the proxy config.
 
-**The service keeps restarting: a migration failed.** The log says `failed to apply migration 1800000000_something.js: ...` and the process exits with status 1. With `Restart=always` it tries again every 5 seconds, so run `sudo systemctl stop gr8r-studio` while you fix it. The failed start changed nothing: all pending migrations run in one transaction, and a deliberately broken test migration (one that changed a collection and then threw) left the database exactly as it was. Fix or remove the named file in `server/pb_migrations/` (`git log -p -- server/pb_migrations` shows what changed), or go back to the previous commit, then start the service. No backup restore is needed for this.
+**The service keeps restarting: a migration failed.** The log says `failed to apply migration 1800000000_something.js: ...` and the process exits with status 1. With `Restart=always` it tries again every 5 seconds, so run `sudo systemctl stop pm-space` while you fix it. The failed start changed nothing: all pending migrations run in one transaction, and a deliberately broken test migration (one that changed a collection and then threw) left the database exactly as it was. Fix or remove the named file in `server/pb_migrations/` (`git log -p -- server/pb_migrations` shows what changed), or go back to the previous commit, then start the service. No backup restore is needed for this.
 
 **Live updates do not arrive: changes show only after a reload.** Run the `curl -sN --max-time 5 .../api/realtime` check from section 5.1, once on the server against `http://127.0.0.1:8090` and once from a staff PC against the real name. If the server answers instantly and the staff PC prints nothing, the proxy (or a corporate web proxy or SSL-inspection device in between) is buffering or cutting the stream. For nginx check `proxy_buffering off;` and `proxy_read_timeout 360s;` on `/api/realtime`. A timeout that is too short shows up as a stream that is cut at the same interval every time (60 seconds with nginx's default); run the `curl` check without `--max-time` and see how long it lasts.
 
@@ -686,8 +694,8 @@ On Windows: `netstat -ano | findstr :8090` (_untested_). Alternatively move Pock
 
 **Locked out of the dashboard.**
 
-- _Forgot the superuser password:_ `sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser upsert it-admin@example.com 'new-password' --dir=/opt/gr8r-studio/server/pb_data --dev=false` (works while the service runs).
-- _Restricted the Superuser IPs setting and your address is not on the list:_ every superuser request is refused with `403`. Clear the list from the server: `sudo -u gr8r /opt/gr8r-studio/server/pocketbase superuser ips --dir=/opt/gr8r-studio/server/pb_data` (checked: it works while the service runs).
+- _Forgot the superuser password:_ `sudo -u pmspace /opt/pm-space/server/pocketbase superuser upsert it-admin@example.com 'new-password' --dir=/opt/pm-space/server/pb_data --dev=false` (works while the service runs).
+- _Restricted the Superuser IPs setting and your address is not on the list:_ every superuser request is refused with `403`. Clear the list from the server: `sudo -u pmspace /opt/pm-space/server/pocketbase superuser ips --dir=/opt/pm-space/server/pb_data` (checked: it works while the service runs).
 - _No app admin is left:_ sign in to the dashboard as superuser and set `role` to `admin` on a `users` record.
 
 **Backups stopped appearing.** Check the free disk space (a backup needs about 2× the size of `pb_data`), then **Logs** in the dashboard for "Autobackup failure", then run the job by hand from **Settings > Crons**.
@@ -696,7 +704,7 @@ On Windows: `netstat -ano | findstr :8090` (_untested_). Alternatively move Pock
 
 Findings only. Nothing here is built into the app yet. The question: can staff sign in with their Microsoft 365 account, and what must IT set up in Microsoft Entra ID (formerly Azure AD)?
 
-**Answer: yes.** PocketBase v0.40.5 ships a Microsoft provider. The app needs a "Sign in with Microsoft" button; IT needs an app registration in Entra and one provider entry in the PocketBase dashboard. Only people who already have an account in Gr8r Studio can sign in, as long as the `users` collection's create rule stays admin-only (section 12.2): Microsoft sign-in then never creates accounts.
+**Answer: yes.** PocketBase v0.40.5 ships a Microsoft provider. The app needs a "Sign in with Microsoft" button; IT needs an app registration in Entra and one provider entry in the PocketBase dashboard. Only people who already have an account in PM Space can sign in, as long as the `users` collection's create rule stays admin-only (section 12.2): Microsoft sign-in then never creates accounts.
 
 How this was checked: PocketBase source at tag v0.40.5 (paths and lines below), and the sign-in behaviour against a local stand-in for Microsoft's three endpoints (token, Graph `/me`), pointed at through the provider's URL settings. The Entra portal steps come from Microsoft's published documentation (the `MicrosoftDocs/entra-docs` repository on GitHub, whose text backs `learn.microsoft.com`) and were not tried against a real tenant.
 
@@ -740,12 +748,12 @@ So the two rules that keep it closed are: the `users` create rule stays admin-on
 
 Sign in to the [Microsoft Entra admin center](https://entra.microsoft.com) with an account that may register applications (at least _Application Developer_) and, for the consent step, may grant consent (_Cloud Application Administrator_ or _Application Administrator_).
 
-1. **App registration.** **Entra ID > App registrations > New registration**. Name: `Gr8r Studio`. **Supported account types: "Single tenant only"** (the portal adds your tenant's name to it), the option Microsoft recommends for most apps. Press **Register**. (`entra-docs/docs/identity-platform/quickstart-register-app.md`)
+1. **App registration.** **Entra ID > App registrations > New registration**. Name: `PM Space`. **Supported account types: "Single tenant only"** (the portal adds your tenant's name to it), the option Microsoft recommends for most apps. Press **Register**. (`entra-docs/docs/identity-platform/quickstart-register-app.md`)
 2. **Redirect URI.** Open the app, **Manage > Authentication > Add Redirect URI**, choose the platform **Web** (server-side apps that exchange the code with a secret use Web, not Single-page application), and enter `https://studio.example.com/api/oauth2-redirect`. Redirect URIs must be `https` (only localhost is exempt), and the path is case-sensitive. (`how-to-add-redirect-uri.md`, `reply-url.md`)
 3. **Copy two ids** from the app's **Overview** page: **Application (client) ID** and **Directory (tenant) ID**.
 4. **Client secret.** **Certificates & secrets > Client secrets > New client secret**. A secret can last at most 24 months and Microsoft recommends under 12. **Copy the secret "Value" immediately; it is never shown again** (the "Secret ID" column is not what you need). PocketBase only supports a client secret here, not a certificate (`core/collection_model_auth_options.go:546-551`). Put the expiry date in a calendar: when it passes, Microsoft sign-in fails with `AADSTS7000222 ... client secret keys are expired`, while password sign-in keeps working. To rotate, create a second secret, paste it into PocketBase, then delete the old one. (`how-to-add-credentials.md`, `reference-error-codes.md:411`)
 5. **API permissions.** Nothing to add. **Microsoft Graph > User.Read (delegated), "Sign in and read user profile"**, is added automatically at registration and is the only permission PocketBase asks for. Press **Grant admin consent for** your tenant on that page anyway, so no one sees a consent prompt and nothing breaks if your tenant restricts user consent. (`quickstart-register-app.md`, `howto-convert-app-to-be-multi-tenant.md:119`, `grant-admin-consent.md`)
-6. **Optional: limit who may try.** **Entra ID > Enterprise apps > Gr8r Studio > Properties > Assignment required = Yes**, then assign people or groups. Admin consent (step 5) is then required. (`application-properties.md`, `configure-user-consent.md`)
+6. **Optional: limit who may try.** **Entra ID > Enterprise apps > PM Space > Properties > Assignment required = Yes**, then assign people or groups. Admin consent (step 5) is then required. (`application-properties.md`, `configure-user-consent.md`)
 
 ### 12.4 What goes back into PocketBase
 
@@ -767,7 +775,7 @@ The exact URLs are also listed in Entra under the app registration's **Endpoints
 ### 12.5 App work left for a later phase
 
 - A **"Sign in with Microsoft" button** on the login page (`src/pages/auth.js`) that calls `pb.collection('users').authWithOAuth2({ provider: 'microsoft' })` on the existing PocketBase client, then continues exactly like a password sign-in (load the data, start the sync). It must run directly from the click, because it opens a popup.
-- A clear message for the refusal case (`400 Failed to create record.`): "There is no Gr8r Studio account for this Microsoft account. Ask an admin to add you."
+- A clear message for the refusal case (`400 Failed to create record.`): "There is no PM Space account for this Microsoft account. Ask an admin to add you."
 - Keep password sign-in for IT and for emergencies (an Entra outage must not lock everyone out). Decide later whether to switch it off for ordinary users.
 - Already done in Phase 1: the `users` email index is `COLLATE NOCASE` and the create rule is admin-only. Keep both.
 - Test the popup in the browsers staff use. PocketBase v0.40 sends `Cross-Origin-Opener-Policy: same-origin` on every response (`apis/middlewares.go:296`, CHANGELOG v0.40.0), which can stop the app page from controlling a popup that has moved on to Microsoft. The flow does not depend on that (the result arrives over the live-update connection, and PocketBase's own completion page closes the popup itself: `ui/src/auth/pageOAuth2RedirectSuccess.js`), so it is expected to work, but it was not tried in a browser.

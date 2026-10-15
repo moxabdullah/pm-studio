@@ -1,4 +1,4 @@
-# Gr8r Studio
+# PM Space
 
 A calm, structured project management workspace: home dashboard, inbox, my tasks, projects with
 board / list / table / calendar / timeline / files views, members, teams, activity and settings.
@@ -7,7 +7,7 @@ Built with plain JavaScript ES modules and CSS, bundled by [Vite](https://vite.d
 UI framework. The one runtime dependency is the [PocketBase](https://pocketbase.io) JS SDK: the app
 keeps its data on a PocketBase server, which also serves the built app.
 
-![Gr8r Studio home dashboard](docs/preview.png)
+![PM Space home dashboard](docs/preview.png)
 
 ## Getting started
 

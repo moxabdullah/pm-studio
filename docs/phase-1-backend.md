@@ -1,6 +1,6 @@
 # Phase 1: PocketBase backend
 
-Turn Gr8r Studio from a single-browser demo into a shared app that about 20 Sam Engineering staff use from one company server.
+Turn PM Space from a single-browser demo into a shared app that about 20 Sam Engineering staff use from one company server.
 
 ## Goal
 
