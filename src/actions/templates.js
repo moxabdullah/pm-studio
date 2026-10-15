@@ -115,6 +115,8 @@ function saveTemplate(pid, name) {
 function writeTemplate(pid, name, replaceId) {
   let saved = null; // the template as written
   let why = ''; // when nothing was written, the reason
+  // No `still`: "Try again" runs all of this again, which says so when the project is gone and makes a new template when the one to be
+  // replaced is gone.
   mutate(
     () => {
       saved = null;
@@ -128,7 +130,7 @@ function writeTemplate(pid, name, replaceId) {
       // being replaced was deleted and another took its name) is not replaced without asking: the save stops and says so, and "Save
       // again" asks.
       const clash = templatesOf(p.workspace).find(t => t.id !== replaceId && sameName(t.name, name));
-      const old = replaceId ? tmpl(replaceId) : null; // gone (deleted while the question was open): a new template is made instead
+      const old = replaceId ? tmpl(replaceId) : null; // gone (deleted while the question was open, or while a refused save waited for "Try again"): a new template is made instead
       // (the project's tasks may have changed since the name was checked)
       why = clash ? `A template called ‘${clash.name}’ was saved meanwhile. Save again to replace it.` : tasksError(p, old?.desc);
       if (why) return;
@@ -140,7 +142,6 @@ function writeTemplate(pid, name, replaceId) {
       if (!saved) toast(why, { kind: 'err' });
       else toast(`Saved template ‘${saved.name}’ (${tasksText(saved.tasks.length)})`, { action: 'View', onAction: () => go('settings', { sec: 'templates' }) });
     },
-    () => !!proj(pid) && (!replaceId || !!tmpl(replaceId)),
   );
 }
 
