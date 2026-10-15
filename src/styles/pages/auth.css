@@ -37,8 +37,9 @@
   flex-direction: column;
   gap: 16px;
 }
+/* Smaller than the wordmark above it, so the two do not compete at the same weight. */
 .auth-card h1 {
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-xl);
   font-weight: 600;
   letter-spacing: -0.022em;
   margin: 0;

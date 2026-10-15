@@ -779,6 +779,10 @@
   gap: 5px;
   align-items: center;
 }
+/* The wordmark's -0.02em tracking suits its larger sizes; at the 10px it gets here the letters crowd. */
+.pal-f .logo {
+  letter-spacing: 0.02em;
+}
 
 #toasts {
   position: fixed;
