@@ -19,8 +19,10 @@
      fixed point, or the record would differ from its baseline for ever and be sent again and again (sync.js has a guard for that,
      stuck(), which must never be needed for ordinary data). So each coercer keeps the forms the app uses for "nothing":
        null    a task's due and start dates (cleared), estimate, recur, completedAt, archivedAt; a subtask's assignee and due date;
-               a template task's estimate and its startOff and dueOff (whole days, 0 included)
-       ''      a project's due date, when its date field is emptied in the project settings (days: see day())
+               a template task's estimate and its startOff and dueOff (whole days, 0 included); a project's stageSet (the
+               workspace's default set)
+       ''      a project's due date, when its date field is emptied in the project settings (days: see day()); a project's stage
+               (the first stage of its set)
        []/{}   labels, deps, subtasks, attachments, milestones, perms, a comment's reactions (also one emoji's list once everybody
                took theirs back)
      and passes on, untouched, what no coercer names (task.prevStatus ...). Changing a coercer means checking it against what the app
@@ -100,21 +102,75 @@ const TEMPLATE_TASKS_MAX = 300;
 const TEMPLATE_SUBTASKS_MAX = 50;
 const first = (n, fn) => v => fn(arr(v).filter(isObj).slice(0, n));
 
+/* Project stages. The caps are copies of STAGES_MAX, STAGE_NAME_MAX, STAGE_SET_NAME_MAX and STAGE_HISTORY_MAX in constants.js (the
+   workspace's limit on stage sets is not here: it is on how many records there are, not on a record), and the colour keys of
+   STAGE_COLORS and the keys of HEALTH: change both together, or a record is cut on reading and stays pending for ever. A Set, not
+   an object, so that "__proto__" and "constructor" are not colours. */
+const STAGES_MAX = 30;
+const STAGE_NAME_MAX = 40;
+const STAGE_SET_NAME_MAX = 80;
+const STAGE_HISTORY_MAX = 200;
+const STAGE_ID_MAX = 32;
+const STAGE_COLOR_KEYS = new Set(['gray', 'blue', 'violet', 'teal', 'amber', 'rose', 'red', 'green', 'orange']);
+const HEALTH_KEYS = new Set(['ok', 'risk', 'hold']);
+/* Cut first, then trimmed: the other way round could leave a space at the cut, and normalizing the result again would trim it. */
+const capped = n => v => str(v).slice(0, n).trim();
+const stageId = v => typeof v === 'string' && v.length > 0 && v.length <= STAGE_ID_MAX;
+/* A set's stages in order. A stage without an id (or with an id of one before it) is dropped, since projects point at stages by id;
+   one without a name stays, as "Untitled", so the projects in it do not lose their stage. */
+const stagesOf = v => {
+  const seen = new Set();
+  const out = [];
+  for (const s of arr(v)) {
+    if (out.length >= STAGES_MAX) break;
+    if (!isObj(s) || !stageId(s.id) || seen.has(s.id)) continue;
+    seen.add(s.id);
+    out.push({
+      id: s.id,
+      name: capped(STAGE_NAME_MAX)(s.name) || 'Untitled',
+      color: STAGE_COLOR_KEYS.has(s.color) ? s.color : 'gray',
+      finished: s.finished === true,
+    });
+  }
+  return out;
+};
+/* The dates are kept as written (new Date().toISOString()): turning them into dates and back would not be a fixed point. */
+const ISO_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+const historyOf = v =>
+  arr(v)
+    .filter(e => isObj(e) && stageId(e.stage) && typeof e.at === 'string' && ISO_AT.test(e.at) && !Number.isNaN(Date.parse(e.at)))
+    .map(e => ({ stage: e.stage, at: e.at }))
+    .slice(-STAGE_HISTORY_MAX);
+/* What a project's old `status` becomes: [stage id, health]. A record from before stages has no `stage` and keeps its status. */
+const OLD_STATUS = { planning: ['tender', 'ok'], active: ['design', 'ok'], complete: ['closed', 'ok'], risk: ['design', 'risk'], hold: ['design', 'hold'] };
+
+const projectShape = shape(
+  {
+    id: str, key: str, name: str, icon: str, color: str, team: str, desc: str, members: strs,
+    milestones: list(shape({ name: str, date: day }), m => m.date),
+    stageSet: ref, stage: str, health: v => (HEALTH_KEYS.has(v) ? v : 'ok'), stageHistory: historyOf,
+  },
+  {
+    workspace: str, lead: ref, due: day, start: day, last: num, seq: num, fav: bool, private: bool, archived: bool, archivedAt: numOrNull,
+    perms: strMap(str), access: withDefault(str, 'workspace'),
+  },
+); // prettier-ignore
+/* A project from before stages has `status` and no `stage`: that is mapped (OLD_STATUS; an unknown status gives the first stage), and the
+   health it names is taken unless the record has a health of its own. `status` is not kept. It is decided here, on the record as it
+   came, since shape() adds the stage; a record with a stage (even '') is not looked at for its status. */
+function projectOf(r) {
+  const old = r.stage === undefined && typeof r.status === 'string' ? (own(OLD_STATUS, r.status) ? OLD_STATUS[r.status] : ['', 'ok']) : null;
+  const out = projectShape(old ? { ...r, stage: old[0], health: HEALTH_KEYS.has(r.health) ? r.health : old[1] } : r);
+  delete out.status;
+  return out;
+}
+
 const KINDS = {
   member: shape({
     id: str, name: withDefault(str, MD.name), email: str, role: withDefault(str, MD.role), team: withDefault(str, MD.team), title: withDefault(str, MD.title),
     c: withDefault(str, MD.c), status: withDefault(str, MD.status), tz: withDefault(str, MD.tz), last: numOrNull,
   }),
-  project: shape(
-    {
-      id: str, key: str, name: str, icon: str, color: str, status: withDefault(str, 'planning'), team: str, desc: str, members: strs,
-      milestones: list(shape({ name: str, date: day }), m => m.date),
-    },
-    {
-      workspace: str, lead: ref, due: day, start: day, last: num, seq: num, fav: bool, private: bool, archived: bool, archivedAt: numOrNull,
-      perms: strMap(str), access: withDefault(str, 'workspace'),
-    },
-  ),
+  project: projectOf,
   task: shape(
     {
       id: str, key: str, project: str, title: str, status: withDefault(str, 'todo'), priority: withDefault(str, 'none'), labels: strs, deps: strs, desc: str,
@@ -149,17 +205,18 @@ const KINDS = {
     },
     { workspace: str, updated: num },
   ),
+  stageSet: shape({ id: str, name: capped(STAGE_SET_NAME_MAX), stages: stagesOf }, { workspace: str, created: str }),
   workspace: shape({ id: str, name: str, c: str }, { url: str, brand: bool }),
 }; // prettier-ignore
 
 /* The keys of S.data (and so of sync-map's COLLECTIONS) name the same kinds in the plural. */
 const KIND_OF = {
   members: 'member', projects: 'project', tasks: 'task', comments: 'comment', activity: 'activity', notifs: 'notif', files: 'file',
-  events: 'event', savedViews: 'savedView', teams: 'team', templates: 'template', workspaces: 'workspace',
+  events: 'event', savedViews: 'savedView', teams: 'team', templates: 'template', stageSets: 'stageSet', workspaces: 'workspace',
 }; // prettier-ignore
 
-/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team, template or workspace, or the
-   S.data key of that list (members, projects, tasks, ..., savedViews, teams, templates, workspaces), so a caller that knows the
+/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team, template, stageSet or workspace, or the
+   S.data key of that list (members, projects, tasks, ..., savedViews, teams, templates, stageSets, workspaces), so a caller that knows the
    collection can pass keyOf(coll). Returns a new object; the argument is not touched. Throws on any other kind. */
 export function normalizeRecord(kind, rec) {
   const name = own(KIND_OF, kind) ? KIND_OF[kind] : kind;
@@ -187,6 +244,7 @@ export function normalizeData(d) {
   each('workspaces', 'workspace');
   if (d.teams !== undefined) each('teams', 'team');
   if (d.templates !== undefined) each('templates', 'template');
+  if (d.stageSets !== undefined) each('stageSets', 'stageSet');
   d.projOrder = strs(d.projOrder);
   d.recentSearches = strs(d.recentSearches);
   d.me = str(d.me);
