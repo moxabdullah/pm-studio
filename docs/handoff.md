@@ -14,8 +14,8 @@ Work through the follow-ups left after PRs #1–#3, one PR per theme, each branc
 
 Progress:
 
-- Branch `feat/workspace-templates` (worktree `wt/templates` in the 14ce156e scratchpad), commits 376f875 (feature), 4be72ad (review fixes), 136c514 (byte-size check, `aria-describedby`), plus this handoff. PR opened for review, **not merged** (the user hasn't said to merge): `gh pr list --head feat/workspace-templates`. PR body: `pr-templates.md` in the 14ce156e scratchpad.
-- Checks: lint/format/build; server rules on scratch PocketBase (member writes refused, workspace move 404, name 81 chars 400, doc over 2 MB 400, cascade, migrate down/up); sync round trip a fixed point at 300×50; logic/UI/security reviews (all P2s fixed, P3s tracked in the PR body); browser QA 15/15 on 376f875 and 12/12 on 4be72ad (`qa-templates/`, `qa-templates/r2/` in the 14ce156e scratchpad). 136c514 is not browser-tested. cubic not yet checked.
+- Branch `feat/workspace-templates` (worktree `wt/templates` in the 14ce156e scratchpad), commits 376f875 (feature), 4be72ad (review fixes), 136c514 (byte-size check, `aria-describedby`), df80fac (handoff), e70fb78 (cubic fixes), plus this handoff. PR opened for review, **not merged** (the user hasn't said to merge): `gh pr list --head feat/workspace-templates`. PR body: `pr-templates.md` in the 14ce156e scratchpad.
+- Checks: lint/format/build; server rules on scratch PocketBase (member writes refused, workspace move 404, name 81 chars 400, doc over 2 MB 400, cascade, migrate down/up); sync round trip a fixed point at 300×50; logic/UI/security reviews (all P2s fixed, P3s tracked in the PR body); browser QA 15/15 on 376f875 and 12/12 on 4be72ad (`qa-templates/`, `qa-templates/r2/` in the 14ce156e scratchpad). cubic round 1 (11 threads on df80fac): 10 fixed in e70fb78; the `handoff.md` migration thread was invalid (the branch's only push already had the edited migration) and was answered and resolved. Browser QA on e70fb78: old checks 1-14 plus 9 new ones all pass (`qa/RESULTS.md` in the 29d28e68 scratchpad), including the offline same-name clash, the size check with a kept description, and a client against a server without 1791849606.
 - After merge: back up `pb_data`, `npm run build:server`, restart :8090 (applies 1791849606).
 
 **Session of 2026-10-14 (afternoon): the user asked to complete ALL of Next 1–8.** Their answers (binding):
@@ -85,7 +85,8 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
    - (PR #15) From PR #3: a refused project reorder is not put back, although the toast says "discarded"; a refused file delete reappears only on the next reload; a force-applied put-back isn't journaled, so Undo within about 60 s could re-send the refused value.
    - From PR #12 (cubic P2, tracked): a project whose `order` a superuser or migration left outside ±1e12 blocks a member's reorder around it: `projectOrders()` hands that value to another project, and the update guard refuses it (400).
    - (PR #11, merged) From PR #5: show the lost change in the reconnect toast when the reload was also refused (`recover()`, the `if (refused) … else if (refusals…)` order), and the two red toasts if "Try again" is clicked on the give-up try.
-   - (Templates PR, P3s in its body) Offline "Try again" after the project/template went away does nothing silently (`templates.js` `still`); an offline retry can replace a same-name template saved meanwhile without asking; a hand-picked icon equal to a template's counts as template-set (`pickIcon`); `loadAll` is one `Promise.all`, so a new client against a server without 1791849606 fails its first load.
+   - (Templates PR, P3 in its body) Offline "Try again" after the project/template went away does nothing silently (`templates.js` `still`). (The same-name replace on an offline retry, the `pickIcon` equality and the first load against a server without 1791849606 were fixed in e70fb78.)
+   - (Templates PR) The `optional` read of `templates` in `loadAll()` (`sync-map.js`) is a rollout shim: drop it once every server has 1791849606.
 9. **Rest of Phase 3: custom stages, fields and labels** (`docs/phase-1-backend.md:14`). Statuses are a fixed list used by the board, timeline, filters and `sync-map.js` view validation; labels are the `LABELS` constant (`core/constants.js`), not data. A multi-PR theme: ask the user how Sam Engineering's stages differ before designing.
 
 ## Decisions (still binding)
@@ -117,7 +118,7 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
 - Force-pushing is refused by the auto-mode classifier. To bring a PR branch up to date, merge `main` into it in a separate worktree and push that as a fast-forward (`git push origin <local>:<pr-branch>`).
 
 - `npm run seed:dev -- --dev-database`: the flag is required, and so is the `--`. In a worktree it looks for `server/pocketbase` inside the worktree: symlink the main checkout's binary (git-ignored) and remove it afterwards.
-- Migration 1791849606 was edited in place before the first push. A scratch database migrated from 376f875 keeps the old rule and caps; QA templates on a fresh database.
+- Migration 1791849606 was edited in place before the branch's only push (df80fac already carried the edited file), so no shared database ever ran the earlier version; the real `server/pb_data` has not applied 1791849606 at all. Only a local scratch database migrated from 376f875 keeps the old rule and caps: QA templates on a fresh database.
 - Scratch PocketBase servers go on 8095 and up; :8090 is the real server.
 - `docs/handoff.md` is tracked, and CI runs `npm run format:check` on it: run `npx prettier --write docs/handoff.md` before committing it.
 - `git push` over HTTPS: `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
