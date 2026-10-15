@@ -2,7 +2,7 @@
 import { ago, esc, fmtDate, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, TM, canSee, isFinished, mem, progressOf, setOf, stageOf, stageSetsOf, tasksOf, visibleProjects } from '../core/store.js';
-import { av, avStack, empty, pHealth, pIcon, pStage, progBar, progClass } from '../ui/helpers.js';
+import { av, avStack, empty, pIcon, pStatuses, progBar, progClass } from '../ui/helpers.js';
 
 export function projectCard(p) {
   const ts = tasksOf(p.id);
@@ -10,7 +10,7 @@ export function projectCard(p) {
   const open = ts.filter(t => t.status !== 'done').length;
   const locked = !canSee(p);
   return `<div class="pcard" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" aria-label="${esc(p.name)}">
-    <div class="row">${pIcon(p)}<div class="grow" style="min-width:5em"><div class="row" style="gap:6px"><b class="trunc" style="font-weight:600;font-size:14px">${esc(p.name)}</b>${p.fav ? `<span style="color:var(--amber)">${ic('star', 12)}</span>` : ''}${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</div></div>${pStage(p)}${pHealth(p)}</div>
+    <div class="row">${pIcon(p)}<div class="grow" style="min-width:7em"><div class="row" style="gap:6px"><b class="trunc" style="font-weight:600;font-size:14px">${esc(p.name)}</b>${p.fav ? `<span style="color:var(--amber)">${ic('star', 12)}</span>` : ''}${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</div></div>${pStatuses(p)}</div>
     <div class="desc">${esc(p.desc)}</div>
     ${locked ? `<div class="row faint" style="font-size:12px">${ic('lock', 12)}Restricted — request access to see tasks</div>` : `<div class="row" style="gap:10px">${progBar(pr, progClass(p))}<span class="num" style="font-size:12px;font-weight:500">${pr}%</span></div>`}
     <div class="foot"><span class="row" style="gap:4px">${ic('circle-check', 12)}${locked ? '—' : `${ts.length - open}/${ts.length}`}</span><span class="row" style="gap:4px">${ic('calendar', 12)}${fmtDate(p.due)}</span><span class="row hide-m" style="gap:4px">${ic('clock', 12)}${ago(minsAgo(p.last))}</span><span class="sp"></span>${avStack(p.members, 3)}</div>
@@ -86,7 +86,7 @@ export function pageProjects() {
     body = `<div class="panel" style="overflow:hidden">${ps
       .map(p => {
         const pr = progressOf(p.id);
-        return `<div class="mini" style="min-height:52px;gap:12px" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project">${pIcon(p)}<div class="grow" style="min-width:0"><div class="row" style="gap:6px"><b style="font-weight:500">${esc(p.name)}</b>${p.private ? ic('lock', 12) : ''}</div><div class="trunc faint" style="font-size:12px">${esc(p.desc)}</div></div><span class="hide-m">${pStage(p)}${pHealth(p)}</span><span class="row hide-m" style="width:140px">${progBar(pr)}<span class="num faint" style="font-size:11.5px">${pr}%</span></span><span class="num muted hide-m" style="width:70px;font-size:12px">${fmtDate(p.due)}</span>${avStack(p.members, 3)}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`;
+        return `<div class="mini" style="min-height:52px;gap:12px" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project">${pIcon(p)}<div class="grow" style="min-width:0"><div class="row" style="gap:6px"><b style="font-weight:500">${esc(p.name)}</b>${p.private ? ic('lock', 12) : ''}</div><div class="trunc faint" style="font-size:12px">${esc(p.desc)}</div></div><span class="hide-m">${pStatuses(p)}</span><span class="row hide-m" style="width:140px">${progBar(pr)}<span class="num faint" style="font-size:11.5px">${pr}%</span></span><span class="num muted hide-m" style="width:70px;font-size:12px">${fmtDate(p.due)}</span>${avStack(p.members, 3)}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`;
       })
       .join('')}</div>`;
   else
@@ -95,7 +95,7 @@ export function pageProjects() {
       .map(p => {
         const ts = tasksOf(p.id);
         const pr = progressOf(p.id);
-        return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td><td style="text-align:left">${pStage(p)}${pHealth(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr)}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
+        return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td><td style="text-align:left">${pStatuses(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr)}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
       })
       .join('')}
     </tbody></table></div>`;

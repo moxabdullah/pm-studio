@@ -3,7 +3,7 @@ import { TODAY, diffD, esc, fmtDate, parse, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { STATUSES } from '../core/constants.js';
 import { D, allTasks, canSee, isFinished, isOver, mem, pColor, progressOf, tasksOf, visibleProjects } from '../core/store.js';
-import { av, pHealth, pIcon, pStage, progBar, progClass, stIcon } from '../ui/helpers.js';
+import { av, pIcon, pStatuses, progBar, progClass, stIcon } from '../ui/helpers.js';
 
 export function pageOverview() {
   const ps = visibleProjects().filter(canSee);
@@ -36,7 +36,7 @@ export function pageOverview() {
             const ts = tasksOf(p.id);
             const pr = progressOf(p.id);
             const ov = ts.filter(isOver).length;
-            return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="overview"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span class="trunc" style="font-weight:500">${esc(p.name)}</span></span></td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}<span class="muted trunc">${esc(mem(p.lead)?.name.split(' ')[0])}</span></span></td><td style="text-align:left">${pStage(p)}${pHealth(p)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px;width:30px">${pr}%</span></span></td><td class="num">${ts.filter(t => t.status !== 'done').length}</td><td class="num" style="${ov ? 'color:var(--red)' : 'color:var(--text-3)'}">${ov}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td></tr>`;
+            return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="overview"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span class="trunc" style="font-weight:500">${esc(p.name)}</span></span></td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}<span class="muted trunc">${esc(mem(p.lead)?.name.split(' ')[0])}</span></span></td><td style="text-align:left">${pStatuses(p)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px;width:30px">${pr}%</span></span></td><td class="num">${ts.filter(t => t.status !== 'done').length}</td><td class="num" style="${ov ? 'color:var(--red)' : 'color:var(--text-3)'}">${ov}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td></tr>`;
           })
           .join('')}
         </tbody></table></div>
