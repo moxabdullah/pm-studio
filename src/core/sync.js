@@ -70,7 +70,8 @@
                401 -> sign-in page. Any other 4xx -> one toast, and the server's version of the record replaces the local one (so a
                rejected change is never sent again). Should that version not be readable right now (the server fails or cannot be
                reached: the page goes offline), a refused update of a record goes back at once to the copy the baseline holds (see
-               putBack()), so the field snaps back where it was edited; any other refusal takes the local one as the baseline instead.
+               putBack()), so the field snaps back where it was edited (a project to its place in the server's order, the rest of the
+               order staying as it is), and so does a refused delete of a file; any other refusal takes the local one as the baseline instead.
                Either way the change is never sent again, and the reload that recovery makes brings the server's version in; flush
                resolves false then. Should it be unreadable for another reason (a 4xx on the read-back, a cancelled request), the local
                one is the baseline as well and a quiet reload follows once no recovery or reload is running, so the refused value does
@@ -220,8 +221,13 @@ function describe(err) {
 
 /* ---------- the baseline: what the server is known to hold ---------- */
 let base = new Map();
+/* The stored file name (`file`) of each file the page holds, by id. A payload leaves it out, and a delete takes the object away before
+   the sync sees it (it finds deletes by what is missing), so a refused delete of a file could not be put back without this: see
+   putBack(). Set where a file comes in (install(), applyRecord()), dropped when it is gone. */
+const fileNames = new Map();
 function resetBase() {
   base = new Map([...COLLECTIONS.map(c => c.key), USER_PREFS].map(k => [k, new Map()]));
+  fileNames.clear();
 }
 resetBase();
 /* Records we are deleting or deleted a moment ago. An older update of one that is still on its way over the live stream must not
@@ -449,6 +455,35 @@ function reorderProjects(before) {
   if (mine.length === was.length && mine.every((id, i) => id === was[i])) D().projOrder = after;
   else D().projOrder = [...mine, ...after.filter(id => !mine.includes(id))];
 }
+/* The whole page order goes back to the server's, which is what restoreState() (Undo) needs once it has replayed the changes made
+   since. A refused change does not use it, as a re-order made after the refused one, which is not sent yet, would be lost with it:
+   takeServerPlace(). reorderProjects() cannot do it: a page order that differs from the server's looks like the user's own unsent
+   re-order to it, and is kept. A project the server does not know yet (an unsent create) stays, last. */
+function takeServerOrder() {
+  const have = new Set(D().projects.map(p => p.id));
+  const server = serverOrder().filter(id => have.has(id));
+  D().projOrder = [...server, ...D().projOrder.filter(id => have.has(id) && !server.includes(id))];
+}
+/* Projects go back to their places in the server's order, for changes to them that the server refused (a re-order, or a delete: a
+   project put back goes last, where reorderProjects() leaves it). reorderProjects() cannot do it, see takeServerOrder(), and
+   takeServerOrder() would put the others back too, losing a re-order the user made since that is not sent yet. The rest of the page
+   order stays as the user left it, and each project is put among them so that as many projects the server knows come before it as do
+   in the server's order: projectOrders() gives the k-th of those the k-th smallest value of the baseline, which is the project's own,
+   so nothing is sent for it again, and the moves of the others go out. They go in together, lowest first: placed one at a time, a
+   later one moved off its refused place changes how many come before an earlier one (see refuse()). A project the server does not
+   know yet (an unsent create) keeps its place, ahead of one that goes in before the same project. */
+function takeServerPlace(ids) {
+  const have = new Set(D().projects.map(p => p.id));
+  const server = serverOrder().filter(x => have.has(x));
+  const back = server.filter(x => ids.includes(x)); // lowest first
+  const known = base.get('projects');
+  const rest = D().projOrder.filter(x => have.has(x) && !back.includes(x));
+  for (const id of back) {
+    const next = rest.filter(x => known.has(x))[server.indexOf(id)]; // the one it comes before, if any
+    rest.splice(next === undefined ? rest.length : rest.indexOf(next), 0, id);
+  }
+  D().projOrder = rest;
+}
 function insertObject(key, obj) {
   const list = D()[key];
   if (FRONT.has(key)) list.unshift(obj);
@@ -491,8 +526,10 @@ function forgetUi(key, id) {
 }
 
 /* Applies one server record (a live update, a reload, or the answer to one of our own requests). Returns true when S.data changed.
-   `force` takes the server's version even over unsent local edits (used after the server rejected ours). */
-function applyRecord(key, rec, force = false) {
+   `force` takes the server's version even over unsent local edits (used after the server rejected ours). `journal` says whether an
+   update goes into the undo journal (see restoreState()): it does unless it is forced, and the refused change that is taken back is
+   journaled too, or an Undo of something done meanwhile would restore the refused value and replay would not take it back again. */
+function applyRecord(key, rec, force = false, journal = !force) {
   if (key === USER_PREFS) return applyPrefsRecord(rec, force);
   const known = base.get(key);
   const b = known.get(rec.id);
@@ -508,6 +545,7 @@ function applyRecord(key, rec, force = false) {
   const before = key === 'projects' ? serverOrder() : null;
   const mine = obj ? payloadOf(key, obj) : null; // before the baseline moves on
   known.set(rec.id, entryOf(theirs, rec.updated));
+  if (key === 'files') fileNames.set(rec.id, rec.file);
   let changed = false;
   if (!obj) {
     // Unknown here: new, or it just became visible. (With a base entry but no object, the user deleted it and the delete is
@@ -523,7 +561,7 @@ function applyRecord(key, rec, force = false) {
     changed = !same(merged, mine);
     if (changed) {
       patchObject(key, obj, merged, rec, mine);
-      if (!force) journalAdd({ key, id: rec.id, action: 'update', before: mine, after: merged, rec });
+      if (journal) journalAdd({ key, id: rec.id, action: 'update', before: mine, after: merged, rec });
     }
     if (!same(merged, theirs)) save(); // unsent local edits remain: make sure they go out
   }
@@ -563,6 +601,7 @@ function removeRecord(key, id, local = false) {
   const b = known.get(id);
   const before = key === 'projects' ? serverOrder() : null;
   if (!known.delete(id) && !local) return false; // not something the server told us about: an unsent create of ours, or already gone
+  if (key === 'files') fileNames.delete(id);
   const list = D()[key];
   const i = list.findIndex(x => x.id === id);
   if (i >= 0) list.splice(i, 1);
@@ -648,6 +687,7 @@ function install(all) {
     data[key] = all[key].map(rec => {
       const obj = fromRecord(key, rec);
       known.set(rec.id, entryOf(toRecord(key, obj, { me: st.me, order: rec.order }), rec.updated));
+      if (key === 'files') fileNames.set(rec.id, rec.file);
       return obj;
     });
   }
@@ -971,6 +1011,7 @@ function settle(op, rec) {
     const mark = `${op.key}/${op.id}`;
     if (op.type === 'delete') {
       base.get(op.key).delete(op.id);
+      if (op.key === 'files') fileNames.delete(op.id);
       deleted.set(mark, Date.now());
       return false;
     }
@@ -1140,6 +1181,8 @@ async function refuse(list, gen) {
   }
   toldRefusals += loud.length;
   const left = await Promise.all(list.map(r => adoptServerTruth(r.op, gen)));
+  // Each project above went back with the others of this refusal still on their refused places: together they all land on their own.
+  if (gen === st.gen) takeServerPlace(list.filter(r => movesProject(r.op)).map(r => r.op.id));
   refusals += loud.length; // after the above: a refusal that puts the page offline is lost when it is back (see setOffline())
   if (gen === st.gen) hooks.render();
   if (left.includes('stale')) reloadSoon(gen);
@@ -1163,6 +1206,9 @@ function reloadSoon(gen) {
    answers 200 with no items, for a record that does not exist and for one the user may not see alike (list and view have the same rule
    on every collection: see `all()` in server/pb_migrations/1791849600_init_schema.js). No items is what the 404 meant: gone, or not
    ours to see. A list read of a collection that exists has no 404 to answer. */
+// A refused change that leaves a project's place on the page wrong: reorderProjects() kept the refused order, or put a project whose
+// delete was refused last (every one after it would be sent a new order). takeServerPlace() puts it right.
+const movesProject = ({ type, key, fields }) => key === 'projects' && (type === 'delete' || (type === 'update' && 'order' in fields));
 async function adoptServerTruth(op, gen) {
   const { type, key, coll, id } = op;
   try {
@@ -1183,8 +1229,11 @@ async function adoptServerTruth(op, gen) {
     } else {
       const { items } = await pb.collection(coll).getList(1, 1, { filter: pb.filter('id = {:id}', { id }), skipTotal: true });
       if (gen !== st.gen) return '';
-      if (items[0]) applyRecord(key, items[0], true);
-      else removeRecord(key, id, true); // gone, or not ours to see
+      if (items[0]) {
+        applyRecord(key, items[0], true, true); // journaled: an Undo of something done since must not bring the refused value back
+        if (movesProject(op)) takeServerPlace([id]);
+        if (key === 'files') D().files.sort(byAtDesc); // it comes in first: back where its date puts it
+      } else removeRecord(key, id, true); // gone, or not ours to see
     }
     return '';
   } catch (err) {
@@ -1213,11 +1262,17 @@ async function adoptServerTruth(op, gen) {
    back. A baseline entry is a payload, which has the columns of a record, so it stands for one; what a payload leaves out (a member's
    email, a file's stored name) is read from the object. The baseline ends as that copy, so the refused change is not sent again, and
    the reload that recovery makes merges cleanly (and brings in whatever changed on the server meanwhile). A change to a project's
-   order is put back whole (reorderProjects() would read the order from the stand-in), and where part of what was refused would still
-   be sent (that order, which is kept in a list the entry does not cover) the change is baselined as before: a change must never be
-   sent again.
+   order is put back whole, forced and journaled (the baseline never held the refused order, so there is no stand-in to merge from),
+   and that project goes back to its place in the server's order (takeServerPlace()), the others staying as the user left them:
+   reorderProjects() would keep the refused place as the user's own unsent re-order, the diff would then find nothing to send only
+   because the check below baselines it, and the page and the baseline would hold an order the server never had; and putting the
+   whole order back would lose a re-order made since that is not sent yet. Where part of what was refused would still be sent after
+   all (any other field kept in a list the entry does not cover) the change is baselined as before: a change must never be sent again.
    Everything else is baselined, as it was before, and settled by the reload that recovery makes:
    - a delete is not put back: a project put back goes last, and projectOrders() would send an `order` for every project after it.
+     The exception is a file's (putBackFile()): it is in no order list and nothing hangs off it, so it goes back where its date puts
+     it and nothing else moves. It is built from the baseline entry and the stored name kept for it (a payload has none), and only
+     while its project is on the page: a file of a project that was deleted with it stays baselined, like the project.
    - a create is not removed: what was made with it and is not sent yet would be left without it (the palette and the search read
      `proj(t.project).name` unguarded).
    - the settings are not put back: the server's copy can hold what the page cannot rebuild (a workspace id it does not load:
@@ -1227,11 +1282,14 @@ function putBack(op) {
   const known = base.get(key);
   const old = known.get(id);
   const obj = key === USER_PREFS ? null : find(key, id);
+  if (type === 'delete' && key === 'files' && old && !obj) return putBackFile(id, old);
   if (type !== 'update' || !old || !obj) return baseline(key, id);
   try {
     const rec = { ...obj, ...old.p, updated: old.u };
-    if ('order' in op.fields) applyRecord(key, rec, true);
-    else {
+    if ('order' in op.fields) {
+      applyRecord(key, rec, true, true); // forced, as the stand-in below cannot hold the order; journaled all the same
+      takeServerPlace([id]); // its refused place is still on the page: reorderProjects() takes it for an unsent re-order
+    } else {
       known.set(id, entryOf(withFields(old.p, op.fields), old.u)); // the stand-in: the server's copy, had it taken the change
       applyRecord(key, rec);
     }
@@ -1239,6 +1297,20 @@ function putBack(op) {
   } catch (err) {
     console.error('sync: could not put back the refused change', key, id, err);
     baseline(key, id);
+  }
+}
+/* A refused delete of a file, when the server's version cannot be read: the file comes back at once, from the baseline and the stored
+   name kept when it came in (fileNames), as a record the server sent: a live create would insert it the same way, and the journal
+   has it. Back where its date puts it, not first. The baseline keeps its entry, so nothing is left to send. A file whose project is
+   gone from the page (the project's delete was given up on too, and is baselined) stays gone with it: the lists read the project. */
+function putBackFile(id, old) {
+  try {
+    if (!fileNames.has(id) || !find('projects', old.p.project)) return baseline('files', id);
+    applyRecord('files', { ...old.p, file: fileNames.get(id), updated: old.u }, true, true);
+    D().files.sort(byAtDesc);
+  } catch (err) {
+    console.error('sync: could not put back the refused delete', id, err);
+    baseline('files', id);
   }
 }
 /* Payload `was` with update `fields` applied, as the server would store it. */
@@ -1256,8 +1328,8 @@ function withFields(was, fields) {
    merge3() takes theirs; a refused create is missing from the reload and goes (confirmGone); a refused delete (no object, no
    baseline) comes back as a record new to this browser. The baseline's `updated` is empty, so no answer is dropped as older. (A capped list,
    activity or notifs, is not checked for what is missing, so a refused create there stays until the page is reloaded.)
-   This is for a refusal whose server copy cannot be read (see adoptServerTruth()), except for an update of a record while the server
-   fails or cannot be reached: that is put back (putBack(), which falls back to this). */
+   This is for a refusal whose server copy cannot be read (see adoptServerTruth()), except for an update of a record, and the delete of
+   a file, while the server fails or cannot be reached: those are put back (putBack(), which falls back to this). */
 function baseline(key, id) {
   const known = base.get(key);
   if (key === USER_PREFS) {
@@ -1702,11 +1774,7 @@ export function restoreState(token) {
     replay(e);
     touched.add(e.key);
   }
-  if (touched.has('projects')) {
-    const have = new Set(D().projects.map(p => p.id));
-    const server = serverOrder().filter(id => have.has(id));
-    D().projOrder = [...server, ...D().projOrder.filter(id => have.has(id) && !server.includes(id))];
-  }
+  if (touched.has('projects')) takeServerOrder();
   if (touched.has('workspaces')) refreshWs();
   return true;
 }
