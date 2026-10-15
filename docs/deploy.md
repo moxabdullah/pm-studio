@@ -619,7 +619,7 @@ curl -s http://127.0.0.1:8090/api/health
 
 On Windows: `git pull`, `npm ci`, `npm run build:server`, then `C:\pm-space\service\pm-space.exe restart` (_untested_).
 
-On an install from an earlier version of this guide, use its own folder and service names here (see the top of this guide). With the new names the restart fails with `Unit pm-space.service not found` while the old server keeps running, so the health check still answers but the update is not loaded.
+On an install from an earlier version of this guide, use its own folder and service names here (see the top of this guide). With the new names the restart fails with `Unit pm-space.service not found` and the old server keeps running, so the health check still answers. That server already serves the rebuilt app, because app files need no restart, but it still runs the old migrations and hooks. Restart it under its own name before anyone uses the app.
 
 The update that renames the product to PM Space signs everyone out once: the app keeps the sign-in under a new name. Its migration also sets **Settings > Application > Application name** to `PM Space`, replacing a name you chose. New backup zips are named `@auto_pb_backup_pm_space_…` from then on; older zips keep their names and still count toward **Max @auto backups to keep**.
 
