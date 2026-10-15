@@ -111,17 +111,24 @@ sudo chown pmspace:pmspace server/pb_data
 sudo chmod 700 server/pb_data              # without this the database and uploads are readable by every local user
 ```
 
+Check that the folder is closed: `sudo -u nobody ls /opt/pm-space/server/pb_data` must fail with "Permission denied".
+
 ### 3.2 Windows
 
 In an elevated PowerShell, with [Git for Windows](https://git-scm.com/download/win) and [Node.js 22](https://nodejs.org) installed (_untested_):
 
 ```powershell
 git clone REPO_URL C:\pm-space
+icacls C:\pm-space /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-19:(OI)(CI)RX"
 cd C:\pm-space
 powershell -ExecutionPolicy Bypass -File scripts\get-pocketbase.ps1   # downloads and checks server\pocketbase.exe
 npm ci
 npm run build:server
 ```
+
+The `icacls` line comes first, before anything is built or started, because a folder created directly under `C:\` inherits "Authenticated Users: Modify", so any local user could replace the server program or its hooks, which run as LocalService. After it only administrators (`*S-1-5-32-544`), the system (`*S-1-5-18`) and the service account (`*S-1-5-19`, LocalService) can open the folder. icacls accepts SIDs on any Windows language, while account names such as `BUILTIN\Administrators` can fail on a localized one, and `/grant:r` replaces earlier grants for them, so running the line again is safe. Use an elevated PowerShell for upgrades too. LocalService is shared by several built-in Windows services, so this keeps out local users, not other LocalService processes; a dedicated virtual service account for PM Space would close that gap (this guide does not set one up).
+
+Check that the folder is closed: `icacls C:\pm-space` lists only those three accounts, with no `Authenticated Users` or `Users` entry.
 
 ### 3.3 First start
 
@@ -242,13 +249,12 @@ PocketBase is not a native Windows service, so wrap it with [WinSW](https://gith
 </service>
 ```
 
-3. Close the install folder to other users, let the service account write to the data and log folders, then install and start it (elevated PowerShell):
+3. Let the service account write to the data and log folders, then install and start it (elevated PowerShell). The install folder was closed to other users in section 3.2; if you got it there some other way, run that `icacls` line first.
 
 ```powershell
 New-Item -ItemType Directory -Force C:\pm-space\server\pb_data, C:\pm-space\logs | Out-Null
-icacls C:\pm-space /inheritance:r /grant "BUILTIN\Administrators:(OI)(CI)F" "NT AUTHORITY\SYSTEM:(OI)(CI)F" "NT AUTHORITY\LocalService:(OI)(CI)RX"
-icacls C:\pm-space\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
-icacls C:\pm-space\logs /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
+icacls C:\pm-space\server\pb_data /grant "*S-1-5-19:(OI)(CI)M"
+icacls C:\pm-space\logs /grant "*S-1-5-19:(OI)(CI)M"
 
 cd C:\pm-space\service
 .\pm-space.exe install
@@ -256,8 +262,6 @@ cd C:\pm-space\service
 .\pm-space.exe status          # prints Started
 Invoke-RestMethod http://127.0.0.1:8090/api/health
 ```
-
-The first `icacls` line is there because a folder created directly under `C:\` inherits "Authenticated Users: Modify", so any local user could replace the server program or its hooks, which run as LocalService; after it only administrators (use an elevated PowerShell for upgrades too), the system and the service account can open the folder.
 
 Other WinSW commands: `stopwait` (stop and wait until it has stopped), `restart`, `uninstall`. `stop` alone does not wait. To change the XML: `stopwait`, `uninstall`, edit, `install`, `start`. Output and WinSW's own messages go to `C:\pm-space\logs` and the Windows Event Log. If the service will not start, look there first; as a last resort delete the `<serviceaccount>` block so it runs as LocalSystem, the WinSW default.
 
@@ -533,7 +537,7 @@ Try it now instead of waiting for tonight: **Settings > Crons**, press **Run** n
 sudo ls -l /opt/pm-space/server/pb_data/backups/
 ```
 
-Check from a monitoring job (run it as root, since `pb_data` is closed to other users) that a backup is recent (prints a warning when no automatic backup is younger than two days):
+Check from a monitoring job that a backup is recent (prints a warning when no automatic backup is younger than two days). `pb_data` is closed to other users, so the job must run as root or as `pmspace`; from any other account put `sudo -u pmspace` in front of `find`:
 
 ```bash
 find /opt/pm-space/server/pb_data/backups -name '@auto_pb_backup_*.zip' -mtime -2 | grep -q . || echo "NO RECENT BACKUP"
@@ -543,11 +547,13 @@ find /opt/pm-space/server/pb_data/backups -name '@auto_pb_backup_*.zip' -mtime -
 
 A backup on the same disk does not survive a dead disk or a stolen server. Copy the zips elsewhere every night. Each zip holds the whole database and every upload, so the copy needs the same care as `pb_data`: readable only by the account that looks after backups.
 
-**Linux (cron and rsync).** This copies only the `.zip` files and only what is new. It also copes with the UTC-versus-local-time difference, because it simply runs every hour. Put it in `/etc/cron.d/pm-space-backup-copy` (this assumes a `backup` user on `backuphost` and an SSH key for root, or run it as a user that has one). The rsync options were tested as a local copy; the SSH part depends on your environment.
+**Linux (cron and rsync).** This copies only the `.zip` files and only what is new. It also copes with the UTC-versus-local-time difference, because it simply runs every hour. Put it in `/etc/cron.d/pm-space-backup-copy` (this assumes a `backup` user on `backuphost` and an SSH key for root: the job has to run as root, because `pb_data` is closed to every other account). The rsync options were tested as a local copy; the SSH part depends on your environment.
 
 ```
-17 * * * * root rsync -a --include='*.zip' --exclude='*' /opt/pm-space/server/pb_data/backups/ backup@backuphost:/srv/backups/pm-space/
+17 * * * * root rsync -a --chmod=D700,F600 --include='*.zip' --exclude='*' /opt/pm-space/server/pb_data/backups/ backup@backuphost:/srv/backups/pm-space/
 ```
+
+`--chmod=D700,F600` keeps the copies private on the other side. Close the destination folder too (`ssh backup@backuphost chmod 700 /srv/backups/pm-space`).
 
 The destination keeps every zip, so prune it there, for example 60 days:
 
@@ -563,17 +569,22 @@ You can use any other mechanism your company already has (a file share, object s
 schtasks /Create /TN "PM Space backup copy" /SC DAILY /ST 03:30 /RU SYSTEM /TR "robocopy C:\pm-space\server\pb_data\backups D:\backup-copy\pm-space *.zip /R:2 /W:5"
 ```
 
-Choose a time after the PocketBase backup (remember it runs in UTC), and a destination the task's account can write to. A file server share needs `/RU` set to an account with access to it.
+Choose a time after the PocketBase backup (remember it runs in UTC), and a destination the task's account can write to. A file server share needs `/RU` set to an account with access to it. The destination folder must not inherit its permissions from a drive root, which gives "Authenticated Users: Modify": close it the way section 3.2 closes the install folder (the task runs as SYSTEM, so this is enough):
+
+```powershell
+New-Item -ItemType Directory -Force D:\backup-copy | Out-Null
+icacls D:\backup-copy /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F"
+```
 
 ## 9. Restoring from backup
 
-A restore replaces **everything** in `pb_data` with the backup: users, superusers, settings, the Microsoft client secret, uploads. Anything saved after the backup is gone. Before you start, copy the current `pb_data` aside if it is still readable.
+A restore replaces **everything** in `pb_data` with the backup: users, superusers, settings, the Microsoft client secret, uploads. Anything saved after the backup is gone. Before you start, copy the current `pb_data` aside if it is still readable (on Linux with `sudo cp -a`, which keeps the owner and the closed permissions; the manual restore below keeps it as `pb_data.old` anyway).
 
 If the backup is older than the code you now run, nothing special is needed: the server applies any migration the backup does not have when it starts (checked by restoring a backup made before a migration existed).
 
 ### 9.1 From the dashboard (Linux only)
 
-**Settings > Backups**. If the zip is not in the list, copy it into `server/pb_data/backups/` (owned by `pmspace` and closed to other users, so use `sudo`) or use the **Upload backup** button. Press **Restore** on its row and type the file name to confirm. PocketBase unpacks it, swaps `pb_data` and restarts itself. Under systemd the service keeps running (it re-executes in place), and the page reloads when it is back. Checked on Linux.
+**Settings > Backups**. If the zip is not in the list, copy it into `server/pb_data/backups/` (owned by `pmspace` and closed to other users) with `sudo install -o pmspace -g pmspace -m 600 /path/to/backup.zip /opt/pm-space/server/pb_data/backups/`, or use the **Upload backup** button. Press **Restore** on its row and type the file name to confirm. PocketBase unpacks it, swaps `pb_data` and restarts itself. Under systemd the service keeps running (it re-executes in place), and the page reloads when it is back. Checked on Linux.
 
 PocketBase marks this feature experimental and it **does not work on Windows** (`core/backup_restore.go:21,66-68`). Use the manual path there.
 
@@ -581,23 +592,22 @@ On a brand-new server (Linux) you can also upload the zip on the first-start ins
 
 ### 9.2 Manual restore (Linux and Windows)
 
-Checked end to end on Linux: a record and an uploaded file were created, a backup was taken, a later record was added, `pb_data` was moved aside, the zip was unpacked into a new `pb_data`, and after the start the first record and the file were back and the later record was gone.
+Checked end to end on Linux before `pb_data` was closed to other users: a record and an uploaded file were created, a backup was taken, a later record was added, `pb_data` was moved aside, the zip was unpacked into a new `pb_data`, and after the start the first record and the file were back and the later record was gone. The `sudo` and mode-700 steps below were added after that and were not run through a second full restore.
 
 ```bash
 sudo systemctl stop pm-space &&
 cd /opt/pm-space/server &&
-mv pb_data pb_data.old &&                      # keep it until you are happy
-mkdir pb_data &&
-unzip -q /path/to/@auto_pb_backup_pm_space_20261013010000.zip -d pb_data &&
+sudo mv pb_data pb_data.old &&                 # keep it until you are happy
+sudo mkdir -m 700 pb_data &&
+sudo unzip -q /path/to/@auto_pb_backup_pm_space_20261013010000.zip -d pb_data &&
 sudo chown -R pmspace:pmspace pb_data &&
-sudo chmod 700 pb_data &&
 sudo systemctl start pm-space
 sudo journalctl -u pm-space -n 20 --no-pager
 ```
 
-The steps are joined with `&&`, so the block stops at the first one that fails, for example a service or folder name that is different on your install. Moving `pb_data` while the server still runs would lose its last writes.
+The steps are joined with `&&`, so the block stops at the first one that fails, for example a service or folder name that is different on your install. Moving `pb_data` while the server still runs would lose its last writes. The file steps use `sudo` because `pb_data` and its old copy are closed to other users; `sudo unzip` also reads a zip from your home folder, which `pmspace` could not.
 
-Then sign in and look at recent data. Delete `pb_data.old` when you are satisfied. A fresh `pb_data` has no `backups/` folder; PocketBase creates it when it next needs it, so copy your zips back in if you want them listed in the dashboard.
+Then sign in and look at recent data. Delete `pb_data.old` (`sudo rm -r`) when you are satisfied. A fresh `pb_data` has no `backups/` folder; PocketBase creates it when it next needs it, so copy your zips back in (with the `sudo install` line of section 9.1) if you want them listed in the dashboard.
 
 Windows (_untested_), in an elevated PowerShell:
 
@@ -606,7 +616,7 @@ cd C:\pm-space\service
 .\pm-space.exe stopwait
 Rename-Item C:\pm-space\server\pb_data pb_data.old
 Expand-Archive -LiteralPath D:\backup-copy\pm-space\your-backup.zip -DestinationPath C:\pm-space\server\pb_data
-icacls C:\pm-space\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
+icacls C:\pm-space\server\pb_data /grant "*S-1-5-19:(OI)(CI)M"
 .\pm-space.exe start
 ```
 
@@ -624,13 +634,23 @@ sudo journalctl -u pm-space -n 20 --no-pager      # expect the "Server started" 
 curl -s http://127.0.0.1:8090/api/health
 ```
 
-On Windows: `git pull`, `npm ci`, `npm run build:server`, then `C:\pm-space\service\pm-space.exe restart` (_untested_).
+On Windows, in an elevated PowerShell (only administrators can open the folder): `git pull`, `npm ci`, `npm run build:server`, then `C:\pm-space\service\pm-space.exe restart` (_untested_).
 
 On an install from an earlier version of this guide, use its own folder and service names here (see the top of this guide). With the new names the restart fails with `Unit pm-space.service not found` and the old server keeps running, so the health check still answers. That server already serves the rebuilt app, because app files need no restart, but it still runs the old migrations and hooks. Restart it under its own name before anyone uses the app.
 
 The update that renames the product to PM Space signs everyone out once: the app keeps the sign-in under a new name. Its migration also sets **Settings > Application > Application name** to `PM Space`, replacing a name you chose. New backup zips are named `@auto_pb_backup_pm_space_…` from then on; older zips keep their names and still count toward **Max @auto backups to keep**.
 
 The update that adds project templates (migration `1791849606_templates.js`) creates a `templates` collection: a restart applies it, and there is nothing else to do. Only admins and managers may write to it.
+
+The update that closes the data folder (`chmod 700` on `pb_data`, `UMask=0077` in the unit, and on Windows a lock-down of `C:\pm-space`) does not change an existing install by itself. On Linux:
+
+```bash
+sudo chmod 700 /opt/pm-space/server/pb_data
+# add the line UMask=0077 to the [Service] section of /etc/systemd/system/pm-space.service, then:
+sudo systemctl daemon-reload && sudo systemctl restart pm-space
+```
+
+Also close what this guide's own steps left behind: `sudo chmod 700 /opt/pm-space/server/pb_data.old` (section 9.2), the `~/pm-space-test` copy (delete it, section 10.2), and the zips already copied off-machine (`chmod -R go-rwx` on their folder, section 8.2). On Windows, run the `icacls` line of section 3.2 from an elevated PowerShell (it assumes `C:\pm-space`) and close a backup copy folder the same way. Then run the check at the end of section 3.1 or 3.2. If untrusted local users could reach the server before, closing it does not undo that: sign everyone out (in the dashboard, edit the `users` and `_superusers` collections and use **Invalidate all previously issued tokens**), change the superuser password and the Microsoft client secret if one is set, delete `server/pocketbase` (`server\pocketbase.exe` on Windows) and run the `get-pocketbase` script again (it keeps a binary that already reports the pinned version), and check `git status` for changed files in `server/pb_hooks` and `server/pb_migrations`.
 
 Take a backup first (**Settings > Crons > Run** `__pbAutoBackup__`, or **Initialize new backup**): migrations only go forward.
 
@@ -670,13 +690,15 @@ PocketBase is pre-1.0 and minor versions can contain breaking changes, so upgrad
    cd ~/pm-space-test
    # change PB_VERSION and the checksums in scripts/get-pocketbase.sh (step 4 below), then:
    scripts/get-pocketbase.sh
-   mkdir -m 700 server/pb_data && unzip -q /path/to/latest-backup.zip -d server/pb_data
+   # the zips are in the closed pb_data: take one out as yourself
+   sudo install -o "$USER" -m 600 /opt/pm-space/server/pb_data/backups/@auto_pb_backup_pm_space_20261013010000.zip ~/latest-backup.zip
+   mkdir -m 700 server/pb_data && unzip -q ~/latest-backup.zip -d server/pb_data
    server/pocketbase serve --http=127.0.0.1:8091 \
      --dir=server/pb_data --migrationsDir=server/pb_migrations --hooksDir=server/pb_hooks \
      --publicDir=/opt/pm-space/server/pb_public --dev=false --automigrate=false --hooksWatch=false
    ```
 
-   Look at the output for errors, then open the app through an SSH tunnel (`ssh -L 8091:127.0.0.1:8091 your-server`, then <http://localhost:8091>) and click around. Delete `~/pm-space-test` afterwards.
+   Look at the output for errors, then open the app through an SSH tunnel (`ssh -L 8091:127.0.0.1:8091 your-server`, then <http://localhost:8091>) and click around. Delete `~/pm-space-test` and `~/latest-backup.zip` afterwards. (On a test VM, copy the zip over from your off-machine copy instead of using the `sudo install` line.)
 
 4. **Bump the version and the checksums in both scripts.** The checksums are in `checksums.txt` on the release page: `https://github.com/pocketbase/pocketbase/releases/download/v<NEW VERSION>/checksums.txt`. For each platform a script lists, replace the old checksum with the matching line (the `.sh` has Linux and macOS, the `.ps1` has Windows). Commit the change.
 5. **On the live server:** `git pull`, then run the script again (`scripts/get-pocketbase.sh`, or the `.ps1` on Windows; on Windows stop the service first, because the program file is locked while it runs), then restart the service.
