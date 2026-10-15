@@ -27,9 +27,14 @@ function inFilter(p, st) {
   const [, setId, ...rest] = st.split(':');
   return setOf(p).id === setId && stageOf(p).id === rest.join(':');
 }
+/* The sets the workspace's projects are in: its own, or the built-in one when it has none. */
+const setsShown = () => {
+  const sets = stageSetsOf(D().ws.id);
+  return sets.length ? sets : [setOf(null)];
+};
 /* The filter's options after Active, Finished and All: the two health flags, then the stages (a group per set when there is more than one). */
 function filterOptions(st) {
-  const sets = stageSetsOf(D().ws.id);
+  const sets = setsShown();
   const opt = (v, n) => `<option value="${esc(v)}" ${st === v ? 'selected' : ''}>${esc(n)}</option>`;
   const stages = set => set.stages.map(s => opt(`stage:${set.id}:${s.id}`, s.name)).join('');
   return (
@@ -41,13 +46,29 @@ function filterOptions(st) {
       ['health:hold', 'On hold'],
     ]
       .map(([v, n]) => opt(v, n))
-      .join('') + (sets.length > 1 ? sets.map(set => `<optgroup label="${esc(set.name)}">${stages(set)}</optgroup>`).join('') : stages(sets[0] || setOf(null)))
+      .join('') + (sets.length > 1 ? sets.map(set => `<optgroup label="${esc(set.name)}">${stages(set)}</optgroup>`).join('') : stages(sets[0]))
   );
+}
+/* What the filter holds, or 'active' when it names a stage (or a health) that is not in this workspace any more (a set deleted live, another
+   workspace's), which is also written back so that the select shows what is applied. */
+function filterNow() {
+  const u = S.ui;
+  const st = u.projStatus || 'active';
+  const [kind, setId, ...rest] = st.split(':');
+  const ok =
+    ['active', 'finished', 'all'].includes(st) ||
+    (kind === 'health' && ['risk', 'hold'].includes(setId) && !rest.length) ||
+    (kind === 'stage' &&
+      !!setsShown()
+        .find(s => s.id === setId)
+        ?.stages.some(x => x.id === rest.join(':')));
+  if (!ok) u.projStatus = 'active';
+  return ok ? st : 'active';
 }
 export function pageProjects() {
   const u = S.ui;
   const q = (u.projQ || '').toLowerCase();
-  const st = u.projStatus || 'active';
+  const st = filterNow();
   const sort = u.projSort || 'recent';
   let ps = visibleProjects().filter(p => inFilter(p, st) && (!q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)));
   const sorter = { recent: p => p.last, name: p => p.name, due: p => p.due, progress: p => -progressOf(p.id) }[sort];
@@ -56,6 +77,8 @@ export function pageProjects() {
   let body;
   if (!visibleProjects().length)
     body = `<div class="panel">${empty('folder-kanban', 'No projects yet', 'Create your first project to start organizing your work.', `<button class="btn btn-primary btn-sm" data-a="newProject">${ic('plus', 14)}Create project</button>`)}</div>`;
+  else if (!ps.length && st === 'active' && !q)
+    body = `<div class="panel">${empty('folder-kanban', 'No active projects', `${visibleProjects().filter(isFinished).length} finished.`, `<button class="btn btn-secondary btn-sm" data-a="set" data-k="projStatus" data-v="all">Show all</button>`)}</div>`;
   else if (!ps.length)
     body = `<div class="panel">${empty('search-x', 'No results found', 'No projects match your search or filters. Try a different term.', `<button class="btn btn-secondary btn-sm" data-a="clearProjFilters">Clear filters</button>`)}</div>`;
   else if (view === 'grid') body = `<div class="pgrid">${ps.map(projectCard).join('')}</div>`;

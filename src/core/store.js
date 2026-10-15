@@ -173,8 +173,11 @@ export function stageOf(p) {
   return set.stages.find(s => s.id === p.stage) || { id: p.stage, name: 'Unknown', color: 'gray', finished: false };
 }
 export const isFinished = p => stageOf(p).finished;
-/* The projects (archived ones too) that are in a set, and with `stageId` in that stage of it. */
-export const projectsUsing = (setId, stageId) => D().projects.filter(p => setOf(p).id === setId && (stageId === undefined || stageOf(p).id === stageId));
+/* The projects of the workspace shown (archived ones too: removing a stage they are in would leave them in an Unknown one when they
+   come back) that are in a set, and with `stageId` in that stage of it. The built-in set is every set-less workspace's own, hence the
+   workspace. */
+export const projectsUsing = (setId, stageId) =>
+  D().projects.filter(p => inWs(p) && setOf(p).id === setId && (stageId === undefined || stageOf(p).id === stageId));
 export const allTasks = () =>
   D().tasks.filter(t => {
     const p = proj(t.project);

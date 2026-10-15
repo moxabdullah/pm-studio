@@ -1,10 +1,10 @@
 /* ---------- shell ---------- */
 import { MOD, TODAY, diffD, esc, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { STAGE_COLORS } from '../core/constants.js';
+import { HEALTH } from '../core/constants.js';
 import { lookup } from '../core/safe.js';
 import { D, S, allTasks, inWs, isFinished, me, mem, pColor, proj, stageOf, team, teamsList, visibleProjects, wsArchivedTasks } from '../core/store.js';
-import { av, safely } from '../ui/helpers.js';
+import { av, pDot, safely } from '../ui/helpers.js';
 import { ROUTE_NAMES } from './render.js';
 import { skeleton } from './skeletons.js';
 import { pageHome } from '../pages/home.js';
@@ -125,7 +125,7 @@ export function renderSidebar() {
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
-              <span class="sdot" style="background:${STAGE_COLORS[stageOf(p).color]}" title="${esc(stageOf(p).name)}"></span>
+              <span class="sdot" style="background:${pDot(p)}" title="${esc(stageOf(p).name)}${p.health && p.health !== 'ok' ? ' · ' + HEALTH[p.health].name : ''}"></span>
               <span class="hov"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Project options">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Expand">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
             </div>
             <div class="sub ${open && !u.collapsed ? 'open' : ''}">

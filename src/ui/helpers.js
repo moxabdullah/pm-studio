@@ -71,6 +71,8 @@ export const pIcon = (p, cls = '', s = 15) => `<span class="picon ${cls}" style=
    when it is not "On track". */
 export const stagePill = s => `<span class="pstatus" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span></span>`;
 export const pStage = p => stagePill(stageOf(p));
+/* The dot beside a project in the sidebar: red or amber when it is at risk or on hold (as the status dot was), else its stage's colour. */
+export const pDot = p => (p.health && p.health !== 'ok' ? HEALTH[p.health].c : STAGE_COLORS[stageOf(p).color]);
 export const pHealth = p =>
   p.health && p.health !== 'ok' ? `<span class="pstatus" style="--c:${HEALTH[p.health].c}"><i></i>${HEALTH[p.health].name}</span>` : '';
 /* The colour of a project's progress bar: green once it is in a finished stage, red when it is at risk. */

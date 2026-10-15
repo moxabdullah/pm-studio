@@ -155,12 +155,13 @@ const projectShape = shape(
     perms: strMap(str), access: withDefault(str, 'workspace'),
   },
 ); // prettier-ignore
-/* A project from before stages has `status` and no `stage`: that is mapped (OLD_STATUS; an unknown status gives the first stage), and the
-   health it names is taken unless the record has a health of its own. `status` is not kept. It is decided here, on the record as it
-   came, since shape() adds the stage; a record with a stage (even '') is not looked at for its status. */
+/* A project from before stages has `status` and no `stage`: the stage is mapped (OLD_STATUS; an unknown status gives the first stage) only
+   then, since shape() adds the stage and a record with a stage (even '') has chosen it. The health the status names is taken whenever
+   the record has no health of its own, stage or not: the app writes only the keys that changed, so the first move of an old "On hold"
+   project leaves `status` on the server beside the new `stage`, and the project must stay on hold. `status` is not kept. */
 function projectOf(r) {
-  const old = r.stage === undefined && typeof r.status === 'string' ? (own(OLD_STATUS, r.status) ? OLD_STATUS[r.status] : ['', 'ok']) : null;
-  const out = projectShape(old ? { ...r, stage: old[0], health: HEALTH_KEYS.has(r.health) ? r.health : old[1] } : r);
+  const old = typeof r.status === 'string' ? (own(OLD_STATUS, r.status) ? OLD_STATUS[r.status] : ['', 'ok']) : null;
+  const out = projectShape(old ? { ...r, stage: r.stage === undefined ? old[0] : r.stage, health: HEALTH_KEYS.has(r.health) ? r.health : old[1] } : r);
   delete out.status;
   return out;
 }

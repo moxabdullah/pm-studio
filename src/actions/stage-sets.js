@@ -12,6 +12,11 @@ import { A, IN, confirmDlg, isTop, needWorkspace } from './actions.js';
 
 const COLORS = Object.keys(STAGE_COLORS);
 const projectsText = n => `${n} project${n === 1 ? '' : 's'}`;
+/* "3 projects", or "3 projects (1 archived)": archived projects count, since they come back in the stage they were in. */
+const countText = list => {
+  const a = list.filter(p => p.archived).length;
+  return projectsText(list.length) + (a ? ` (${a} archived)` : '');
+};
 /* A stage as normalize.js yields it (exactly these four keys): the editor's form and every record made here hold copies. */
 const stageCopy = s => ({ id: s.id, name: s.name, color: COLORS.includes(s.color) ? s.color : 'gray', finished: s.finished === true });
 const stagesCopy = stages => stages.map(stageCopy);
@@ -25,8 +30,9 @@ function mayManage() {
 /* Projects in a stage of a set, as the sentence that refuses removing the stage, or ''. A project with no stage, or no set, counts for
    the first stage of the first set (store.js projectsUsing). */
 function inStageError(setId, stage) {
-  const n = projectsUsing(setId, stage.id).length;
-  return n ? `${projectsText(n)} ${n === 1 ? 'is' : 'are'} in ${stage.name}. Move them to another stage first.` : '';
+  const list = projectsUsing(setId, stage.id);
+  const n = list.length;
+  return n ? `${countText(list)} ${n === 1 ? 'is' : 'are'} in ${stage.name}. Move ${n === 1 ? 'it' : 'them'} to another stage first.` : '';
 }
 /* Why the stages the saved set has and `keep` (a Set of ids) does not cannot go, or ''. Checked when Remove is clicked and again when
    the set is saved (a project may have been moved in meanwhile). */
@@ -34,7 +40,8 @@ function removedError(set, keep) {
   for (const s of set.stages) if (!keep.has(s.id)) return inStageError(set.id, s);
   return '';
 }
-const usedError = (set, n) => `${projectsText(n)} ${n === 1 ? 'uses' : 'use'} ${set.name}. Move ${n === 1 ? 'it' : 'them'} to another stage set first.`;
+const usedError = (set, list) =>
+  `${countText(list)} ${list.length === 1 ? 'uses' : 'use'} ${set.name}. Move ${list.length === 1 ? 'it' : 'them'} to another stage set first.`;
 
 /* ---------- make: Customise (the built-in set becomes a record) and New ---------- */
 /* Customise copies the built-in set with the same stage ids, so the projects that name no set keep their stage. */
@@ -54,9 +61,14 @@ A.customiseStages = () => {
     () => (why ? toast(why, { kind: 'err' }) : toast(`Made ‘${DEFAULT_STAGE_SET.name}’ a stage set you can edit`)),
   );
 };
-/* New starts as a copy of the built-in stages, in the editor: nothing is made until it is saved. */
+/* New starts as a copy of the built-in stages, in the editor: nothing is made until it is saved. A workspace with no set of its own
+   starts with Customize instead, since a first set made here would take the built-in one's place and its projects with it. */
 A.newStageSet = () => {
   if (!mayManage() || needWorkspace()) return;
+  if (!stageSetsOf(D().ws.id).length) {
+    toast('Customize the built-in set to add more stage sets.', { kind: 'err' });
+    return;
+  }
   if (stageSetsOf(D().ws.id).length >= STAGE_SETS_MAX) {
     toast(`A workspace can have up to ${STAGE_SETS_MAX} stage sets.`, { kind: 'err' });
     return;
@@ -181,6 +193,11 @@ A.submitStageSet = () => {
           why = `A workspace can have up to ${STAGE_SETS_MAX} stage sets.`;
           return;
         }
+        // (a delete by another admin since the dialog opened) with no set saved, this one becomes the first and takes the built-in one's projects
+        if (!stageSetsOf(ws).length) {
+          why = removedError(DEFAULT_STAGE_SET, new Set(v.stages.map(x => x.id)));
+          if (why) return;
+        }
         (D().stageSets ||= []).push({ id: uid(), workspace: ws, name: v.name, stages: stagesCopy(v.stages) });
       }
     },
@@ -204,9 +221,9 @@ A.delStageSet = el => {
   const s = findStageSet(el.dataset.id);
   if (!s || !mayManage()) return;
   const { id, name } = s;
-  const n = projectsUsing(id).length;
-  if (n) {
-    toast(usedError(s, n), { kind: 'err' });
+  const using = projectsUsing(id);
+  if (using.length) {
+    toast(usedError(s, using), { kind: 'err' });
     return;
   }
   const last = stageSetsOf(s.workspace).length === 1;
@@ -222,8 +239,8 @@ A.delStageSet = el => {
         () => {
           why = '';
           const set = findStageSet(id); // by id: sync can replace the set while a refused delete waits for "Try again"
-          const left = set ? projectsUsing(id).length : 0; // a project may have been put in it while the question was open
-          if (left) {
+          const left = set ? projectsUsing(id) : []; // a project may have been put in it while the question was open
+          if (left.length) {
             why = usedError(set, left);
             return;
           }

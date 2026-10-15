@@ -244,9 +244,11 @@ export function settingsBody(sec, title) {
       return (
         H(`Stages for ${esc(d.ws.name)}. Each project sits in one stage of a set.`) +
         `<div class="sblock" style="margin-top:0">${(list.length ? list : [DEFAULT_STAGE_SET]).map(s => stageSetRow(s, manage, !list.length)).join('')}</div>` +
-        (manage
-          ? `<div class="row" style="margin-top:12px"><button class="btn btn-secondary" data-a="newStageSet">${ic('plus', 14)}New stage set</button></div>`
-          : '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change stage sets.</p>')
+        (!manage
+          ? '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change stage sets.</p>'
+          : list.length
+            ? `<div class="row" style="margin-top:12px"><button class="btn btn-secondary" data-a="newStageSet">${ic('plus', 14)}New stage set</button></div>`
+            : '<p class="faint" style="font-size:12px;margin-top:12px">Customize the built-in set to add more stage sets.</p>')
       );
     }
     case 'permissions':
@@ -377,8 +379,9 @@ function templateRow(t, manage) {
    The built-in set (no records yet) cannot be edited: Customise makes a copy of it that can. */
 function stageSetRow(set, manage, builtin) {
   const n = set.stages.length;
-  const used = projectsUsing(set.id).length;
-  const meta = `${n} stage${n === 1 ? '' : 's'} · ${used} project${used === 1 ? '' : 's'}`;
+  const using = projectsUsing(set.id);
+  const arch = using.filter(x => x.archived).length;
+  const meta = `${n} stage${n === 1 ? '' : 's'} · ${using.length} project${using.length === 1 ? '' : 's'}${arch ? ` (${arch} archived)` : ''}`;
   const btns = !manage
     ? ''
     : builtin

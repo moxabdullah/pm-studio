@@ -374,7 +374,12 @@ A.popPick = el => {
     const { id, set } = p;
     S.ui.pop = null;
     if (p.type === 'phealth') setHealth(id, v);
-    else moveProject(id, v, set && set !== setOf(proj(id))?.id ? set : undefined);
+    else {
+      // the set the picker showed: the one chosen under "Change stage set…" unless it is gone since (live), when it showed the project's own
+      const pr = proj(id);
+      const shown = pr && ((set && stageSetsOf(pr.workspace).find(s => s.id === set)) || setOf(pr));
+      if (shown) moveProject(id, v, shown.id !== setOf(pr).id ? shown.id : undefined);
+    }
     render();
     return;
   }
@@ -2143,6 +2148,7 @@ export function setWorkspace(w) {
 A.switchWs = el => {
   const w = D().workspaces.find(x => x.id === el.dataset.v);
   S.ui.pop = null;
+  S.ui.projStatus = 'active'; // (a stage of the other workspace's sets means nothing here)
   setWorkspace(w);
   go('home');
   toast(`Switched to ${w.name}`);

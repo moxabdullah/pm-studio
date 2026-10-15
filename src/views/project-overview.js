@@ -60,13 +60,13 @@ export function projOverview(p) {
    that is no longer in the set is not shown). */
 function stageHistory(p) {
   const now = stageOf(p).id;
-  const at = {};
-  for (const h of p.stageHistory || []) at[h.stage] = h.at;
+  const at = new Map(); // (not {}: a stage id comes from the server, and "__proto__" is one)
+  for (const h of p.stageHistory || []) at.set(h.stage, h.at);
   const stages = setOf(p).stages;
   if (!stages.length) return '<span class="faint">No stages</span>';
   return stages
     .map(s => {
-      const d = Object.hasOwn(at, s.id) ? fmtDate(new Date(at[s.id]), true) : '';
+      const d = at.has(s.id) ? fmtDate(new Date(at.get(s.id)), true) : '';
       return `<div class="row" style="height:30px;font-size:13px;gap:8px"><span class="pdot" style="--c:${STAGE_COLORS[s.color]};border-radius:50%;width:8px;height:8px;flex-shrink:0"></span><span class="grow trunc ${s.id === now ? '' : 'muted'}" style="${s.id === now ? 'font-weight:600' : ''}">${esc(s.name)}</span>${s.id === now ? `<span class="faint" style="font-size:11.5px">current</span>` : ''}<span class="num ${d ? 'muted' : 'faint'}" style="font-size:12px">${d || '\u2014'}</span></div>`;
     })
     .join('');
