@@ -1403,9 +1403,12 @@ function goOffline(kind = 'network') {
   setOffline(true);
   hooks.toast("Your changes couldn't be saved. You're offline.", { kind: 'err', action: 'Try again', onAction: retryNow, ms: 8000, key: 'offline' });
 }
-/* One recovery or reload at a time. */
+/* One recovery or reload at a time: a second caller joins the one that runs. busyTold is what toldRefusals was when that one started,
+   so that retryNow() can tell, when it joins, what the try has said already (before the click, not only after it). */
+let busyTold = 0;
 function exclusive(fn) {
   if (!st.busy) {
+    busyTold = toldRefusals;
     const run = fn().finally(() => {
       if (st.busy === run) st.busy = null; // not the one of a newer session, if teardown() cleared this one meanwhile
     });
@@ -1523,7 +1526,7 @@ export async function retryNow() {
   }
   if (!st.offline) return flush();
   const gen = st.gen;
-  const told = toldRefusals;
+  const told = st.busy ? busyTold : toldRefusals; // a click that joins a try that runs counts what it said before the click too
   const ok = await recover();
   // A try that refused or gave up on a change has said so already (refuse()): a second red toast about the same try would bury it.
   if (gen === st.gen && !ok && st.offline && toldRefusals === told) {
