@@ -2,7 +2,7 @@
 
 This guide takes a fresh Linux or Windows server to a running PM Space: install, run as a service, HTTPS, accounts, nightly backups, restore and upgrades. It assumes you can administer a server. It does not assume you know PocketBase or Node.js.
 
-An install set up with an earlier version of this guide keeps its own folder, service and user names, so substitute those in the commands.
+An install set up with an earlier version of this guide keeps its own names: the install folder, the service, the user, and the files named after them (unit file, WinSW files, proxy config, cron file, scheduled task). Use yours wherever a command here says `pm-space` or `pmspace`. On Linux, `grep -l 'pocketbase serve' /etc/systemd/system/*.service` finds your unit file, and its `User=` and `WorkingDirectory=` lines give the user and the folder. Section 10.1 says what the update to PM Space changes on such a server.
 
 > **How this guide was checked.** PocketBase's own commands and flags, the superuser and first-start flow, scheduled backups, both restore methods, the Caddy and nginx configs and the Microsoft 365 behaviour were run against the official PocketBase v0.40.5 binary on Ubuntu 24.04. A dry run in a clean copy of the repository (download script, `npm ci`, `npm run build:server`, start with the flags of section 3.3, create the superuser and the first admin, the `401` check, the live-update stream) worked on Linux. The systemd unit was syntax-checked with `systemd-analyze verify` but not started under a live systemd. The Windows steps follow the WinSW v2.12.0 documentation and were not run on a Windows machine. Anything that was not run anywhere is marked _untested_.
 
@@ -511,7 +511,7 @@ Dashboard > **Settings > Backups > Backup options**:
 3. **Max @auto backups to keep**: for example `14`.
 4. **Save changes.**
 
-Optionally set **Settings > Application > Application name** first (for example `PM Space`): it becomes part of the file name.
+The **Settings > Application > Application name** (`PM Space` unless you change it) becomes part of the file name.
 
 What you get, in `server/pb_data/backups/` (`core/backup_create.go`, `core/backup.go`):
 
@@ -578,15 +578,17 @@ On a brand-new server (Linux) you can also upload the zip on the first-start ins
 Checked end to end on Linux: a record and an uploaded file were created, a backup was taken, a later record was added, `pb_data` was moved aside, the zip was unpacked into a new `pb_data`, and after the start the first record and the file were back and the later record was gone.
 
 ```bash
-sudo systemctl stop pm-space
-cd /opt/pm-space/server
-mv pb_data pb_data.old                         # keep it until you are happy
-mkdir pb_data
-unzip -q /path/to/@auto_pb_backup_pm_space_20261013010000.zip -d pb_data
-sudo chown -R pmspace:pmspace pb_data
+sudo systemctl stop pm-space &&
+cd /opt/pm-space/server &&
+mv pb_data pb_data.old &&                      # keep it until you are happy
+mkdir pb_data &&
+unzip -q /path/to/@auto_pb_backup_pm_space_20261013010000.zip -d pb_data &&
+sudo chown -R pmspace:pmspace pb_data &&
 sudo systemctl start pm-space
 sudo journalctl -u pm-space -n 20 --no-pager
 ```
+
+The steps are joined with `&&`, so the block stops at the first one that fails, for example a service or folder name that is different on your install. Moving `pb_data` while the server still runs would lose its last writes.
 
 Then sign in and look at recent data. Delete `pb_data.old` when you are satisfied. A fresh `pb_data` has no `backups/` folder; PocketBase creates it when it next needs it, so copy your zips back in if you want them listed in the dashboard.
 
@@ -616,6 +618,10 @@ curl -s http://127.0.0.1:8090/api/health
 ```
 
 On Windows: `git pull`, `npm ci`, `npm run build:server`, then `C:\pm-space\service\pm-space.exe restart` (_untested_).
+
+On an install from an earlier version of this guide, use its own folder and service names here (see the top of this guide). With the new names the restart fails with `Unit pm-space.service not found` while the old server keeps running, so the health check still answers but the update is not loaded.
+
+The update that renames the product to PM Space signs everyone out once: the app keeps the sign-in under a new name. Its migration also sets **Settings > Application > Application name** to `PM Space`, replacing a name you chose. New backup zips are named `@auto_pb_backup_pm_space_…` from then on; older zips keep their names and still count toward **Max @auto backups to keep**.
 
 Take a backup first (**Settings > Crons > Run** `__pbAutoBackup__`, or **Initialize new backup**): migrations only go forward.
 
