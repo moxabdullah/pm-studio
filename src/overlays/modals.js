@@ -40,9 +40,10 @@ export function modalHtml(m) {
     case 'confirm':
       return wrap('sm', confirmModal(m, H));
     case 'prompt':
+      // m.validate(value) -> an error, when it has one, is shown under the input (m.error, set by A.promptSubmit) and the dialog stays open
       return wrap(
         'sm',
-        `${H(m.title, m.sub ? esc(m.sub) : '')}<form class="modal-b" data-submit="promptSubmit"><div class="field"><label class="label" for="prompt-in">${esc(m.label)}</label><input class="input" id="prompt-in" value="${esc(m.value || '')}"${m.max ? ` maxlength="${Number(m.max)}"` : ''} autofocus></div></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="promptSubmit">${esc(m.ok || 'Save')}</button></div>`,
+        `${H(esc(m.title), m.sub ? esc(m.sub) : '')}<form class="modal-b" data-submit="promptSubmit"><div class="field"><label class="label" for="prompt-in">${esc(m.label)}</label><input class="input ${m.error ? 'is-error' : ''}" id="prompt-in" data-in="promptIn" value="${esc(m.value || '')}"${m.max ? ` maxlength="${Number(m.max)}"` : ''} autofocus aria-invalid="${!!m.error}" aria-describedby="prompt-err">${m.error ? `<span class="err" id="prompt-err" role="alert">${ic('circle-alert', 12)}${esc(m.error)}</span>` : ''}</div></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="promptSubmit">${esc(m.ok || 'Save')}</button></div>`,
       );
     case 'shortcuts':
       return wrap('lg', shortcutsModal(H));
@@ -93,21 +94,25 @@ export function taskModal(m, H) {
     <button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTask" id="f-submit">${m.edit ? 'Save changes' : 'Create task'}</button></div>`;
 }
 /* The Template field of the New project form: "Blank project", then the current workspace's templates. A template that went away since
-   the form opened is not offered, and the form reads as blank (createProject() does the same). */
+   the form opened is not offered, and the form reads as blank (createProject() does the same). A card shows the description, when
+   the template has one, as a second line cut to the width of the card (the whole text is its tooltip), else the number of tasks. */
 function templatePicker(f) {
   const list = templatesOf(D().ws.id);
   const on = list.some(t => t.id === f.tmpl) ? f.tmpl : 'blank';
-  const opt = (id, icon, name, sub) =>
-    `<button type="button" role="radio" aria-checked="${on === id}" class="opt ${on === id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${esc(id)}" style="padding:10px">${ic(icon, 16)}<b style="font-size:12.5px">${esc(name)}</b><span>${esc(sub)}</span></button>`;
-  return `<div class="field"><span class="label">Template</span><div class="tmpls" role="radiogroup" aria-label="Template">${opt('blank', 'file', 'Blank project', 'Start from scratch')}${list.map(t => opt(t.id, t.icon, t.name, `${t.tasks.length} task${t.tasks.length === 1 ? '' : 's'}`)).join('')}</div>${
+  const opt = (id, icon, name, sub, tip = '') =>
+    `<button type="button" role="radio" aria-checked="${on === id}" class="opt ${on === id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${esc(id)}" style="padding:10px"${tip ? ` title="${esc(tip)}"` : ''}>${ic(icon, 16)}<b style="font-size:12.5px;overflow-wrap:anywhere">${esc(name)}</b><span class="trunc">${esc(sub)}</span></button>`;
+  const tasks = t => `${t.tasks.length} task${t.tasks.length === 1 ? '' : 's'}`;
+  // data-keep: the list scrolls (max-height in auth.css), and a click re-renders the dialog
+  return `<div class="field"><span class="label">Template</span><div class="tmpls" data-keep="tmpls" role="radiogroup" aria-label="Template">${opt('blank', 'file', 'Blank project', 'Start from scratch')}${list.map(t => opt(t.id, t.icon, t.name, t.desc || tasks(t), t.desc)).join('')}</div>${
     list.length || !canManageTemplates() ? '' : '<div class="hint">Save a project as a template from its ••• menu.</div>'
   }</div>`;
 }
 export function projectModal(m, H) {
   const f = S.ui.pform;
   const err = S.ui.errors.pname;
+  // data-keep: the body scrolls (the dialog is capped at 80vh), and picking a template, an icon or a colour re-renders it
   return `${H(m.edit ? 'Project settings' : 'New project', m.edit ? '' : 'Projects hold tasks, files, and conversations for one body of work.')}
-  <form class="modal-b" data-submit="submitProject">
+  <form class="modal-b" data-submit="submitProject" data-keep="modal-project:${m.edit ? esc(m.edit) : 'new'}">
     <div class="row" style="gap:10px;align-items:flex-start">
       <button type="button" class="picon lg" style="--c:${PCOLORS[f.color]};cursor:default;flex-shrink:0;margin-top:22px" aria-hidden="true" tabindex="-1">${ic(f.icon, 18)}</button>
       <div class="field grow"><label class="label" for="p-name">Project name</label><input class="input ${err ? 'is-error' : ''}" id="p-name" data-in="pform" data-f="name" value="${esc(f.name)}" placeholder="e.g. Website Redesign" autofocus aria-invalid="${!!err}">${err ? `<span class="err">${ic('circle-alert', 12)}${esc(err)}</span>` : ''}</div>

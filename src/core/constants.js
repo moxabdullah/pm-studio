@@ -70,6 +70,11 @@ export const PICONS = [
 ];
 /* The longest name a project template can have: the Save as template prompt and the edit dialog stop typing there. */
 export const TEMPLATE_NAME_MAX = 80;
+/* How much a template holds: tasks in all, and subtasks in each task. Saving refuses a bigger project (subtasks beyond the limit are
+   left out); normalize.js cuts what the server holds to the same numbers (a copy of them: it imports nothing from the app) and
+   createProject() applies them again when it copies a template, so a template written through the API cannot make a huge project. */
+export const TEMPLATE_TASKS_MAX = 300;
+export const TEMPLATE_SUBTASKS_MAX = 50;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },

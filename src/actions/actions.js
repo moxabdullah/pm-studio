@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, clamp, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { LB, PCOLORS, PICONS, PR, PRIOS, PSTAT, ST } from '../core/constants.js';
+import { LB, PCOLORS, PICONS, PR, PRIOS, PSTAT, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { lookup, sanitizeHtml } from '../core/safe.js';
 import {
   D,
@@ -1579,15 +1579,31 @@ A.clearProjFilters = () => {
   render();
 };
 /* `el.dataset.tmpl`, when there is one (Settings > Templates), is the template the form starts with. */
+const DEFAULT_ICON = 'folder';
+const DEFAULT_COLOR = 'indigo';
 A.newProject = el => {
   if (needWorkspace(A.newProject)) return;
   const teams = teamsList();
   const team = (teams.find(t => t.id === me().team) || teams[0])?.id || '';
-  S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', team, lead: D().me, due: dOff(30), tmpl: 'blank' };
+  // pickIcon and pickColor: what the template pick (at first, the defaults) put in icon and color; see pickTemplate()
+  S.ui.pform = {
+    name: '',
+    desc: '',
+    icon: DEFAULT_ICON,
+    color: DEFAULT_COLOR,
+    pickIcon: DEFAULT_ICON,
+    pickColor: DEFAULT_COLOR,
+    team,
+    lead: D().me,
+    due: dOff(30),
+    tmpl: 'blank',
+  };
   pickTemplate(S.ui.pform, el?.dataset?.tmpl);
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'project' });
+  // Opened with a template chosen: the list may be longer than what it shows, so bring the chosen one into view (after the dialog has focused its first field)
+  if (S.ui.pform.tmpl !== 'blank') setTimeout(() => $('.tmpls .opt.on')?.scrollIntoView({ block: 'nearest' }), 40);
 };
 A.editProject = el => {
   const p = proj(el.dataset.id);
@@ -1603,14 +1619,18 @@ IN.pform = el => {
     render();
   }
 };
-/* Picks a template in the New project form (an id of the current workspace's, else 'blank'). A template sets the icon and colour of the
-   form to its own, as far as they are ones the form offers (they came from the server); a blank project leaves them as they are. */
+/* Picks a template in the New project form (an id of the current workspace's, else 'blank'). The form takes the template's icon and
+   colour (as far as they are ones the form offers: they came from the server), Blank the defaults, but only while the form still shows
+   what the last pick (or the defaults) put there: pickIcon and pickColor remember that. An icon or colour chosen by hand is kept. */
 function pickTemplate(f, id) {
   const t = templatesOf(D().ws.id).find(x => x.id === id);
   f.tmpl = t ? t.id : 'blank';
-  if (!t) return;
-  if (PICONS.includes(t.icon)) f.icon = t.icon;
-  if (Object.hasOwn(PCOLORS, t.color)) f.color = t.color;
+  const icon = t && PICONS.includes(t.icon) ? t.icon : DEFAULT_ICON;
+  const color = t && Object.hasOwn(PCOLORS, t.color) ? t.color : DEFAULT_COLOR;
+  if (f.icon === f.pickIcon) f.icon = icon;
+  if (f.color === f.pickColor) f.color = color;
+  f.pickIcon = icon;
+  f.pickColor = color;
 }
 A.pformSet = el => {
   if (el.dataset.f === 'tmpl') pickTemplate(S.ui.pform, el.dataset.v);
@@ -1660,7 +1680,7 @@ export function createProject(f, tmplId) {
   // It came from the server, so each value is checked as it is used.
   const tm = templatesOf(D().ws.id).find(t => t.id === tmplId);
   const day = n => (n == null ? null : dOff(clamp(n, -3650, 3650)));
-  (tm?.tasks || []).forEach(t =>
+  (tm?.tasks || []).slice(0, TEMPLATE_TASKS_MAX).forEach(t =>
     createTask({
       project: p.id,
       title: t.title || 'Untitled',
@@ -1725,8 +1745,9 @@ A.submitProject = () => {
     },
     () => {
       S.ui.modals.pop();
-      go('project', { id: p.id, tab: tasksOf(p.id).length ? S.prefs.defaultTab || 'board' : 'overview' }); // an empty project opens on its overview
-      toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
+      const n = tasksOf(p.id).length;
+      go('project', { id: p.id, tab: n ? S.prefs.defaultTab || 'board' : 'overview' }); // an empty project opens on its overview
+      toast(`Created ${p.name}${n ? ` with ${n} starter task${n === 1 ? '' : 's'}` : ''}`);
     },
     still,
   );
@@ -2250,12 +2271,30 @@ IN.confirmText = el => {
   const b = $('.modal:last-of-type [data-a="confirmOk"]') || $$('[data-a="confirmOk"]').pop();
   if (b) b.disabled = el.value !== m.typeName;
 };
+/* A prompt may carry validate(value) -> an error message or '': on an error the dialog stays open with the message under the input
+   and the text as typed (the markup is built from m.value). */
 A.promptSubmit = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const v = $('#prompt-in').value.trim();
+  const err = m.validate?.(v);
+  if (err) {
+    m.value = v;
+    m.error = err;
+    render();
+    $('#prompt-in')?.focus();
+    return;
+  }
   S.ui.modals.pop();
   render();
   m.run(v);
+};
+IN.promptIn = el => {
+  const m = S.ui.modals[S.ui.modals.length - 1];
+  m.value = el.value; // what a render shows after an error
+  if (m.error) {
+    m.error = '';
+    render();
+  }
 };
 IN.noop = () => {};
 

@@ -3,7 +3,7 @@
    Starting a project from one is createProject() in actions.js.
    ===================================================================== */
 import { $, TODAY, diffD, parse, uid } from '../core/utils.js';
-import { TEMPLATE_NAME_MAX as NAME_MAX } from '../core/constants.js';
+import { TEMPLATE_NAME_MAX as NAME_MAX, TEMPLATE_SUBTASKS_MAX, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { D, S, canManageTemplates, proj, tasksOf, templatesOf, tmpl } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
@@ -21,11 +21,18 @@ function mayManage() {
   return false;
 }
 const nameError = name => (!name ? 'Give the template a name' : name.length > NAME_MAX ? `Template names can be up to ${NAME_MAX} characters` : '');
+/* Why a project cannot be saved as a template, or '': it has no tasks to copy, or more than a template holds (archived tasks are not copied). */
+function tasksError(p) {
+  const n = tasksOf(p.id).length;
+  if (!n) return 'This project has no tasks to save.';
+  return n > TEMPLATE_TASKS_MAX ? `Templates can hold up to ${TEMPLATE_TASKS_MAX} tasks; this project has ${n}.` : '';
+}
 
 /* What a template keeps of a project's tasks, in the order the project's list shows them (manual order, within each group). Status:
    backlog stays, everything else becomes todo, since a new project has not started anything. Dates become whole days from the
-   project's start. Left out: assignees, dependencies, attachments, comments, recurrence. Everything is written in the form
-   normalize.js yields for it, or the template would differ from its baseline for ever and be sent again and again. */
+   project's start. Left out: assignees, dependencies, attachments, comments, recurrence; and the subtasks beyond the first
+   TEMPLATE_SUBTASKS_MAX of a task. Everything is written in the form normalize.js yields for it (it cuts a template to the same
+   limits), or the template would differ from its baseline for ever and be sent again and again. */
 export function templateTasks(p) {
   const from = parse(p.start) || TODAY; // a project without a start counts from today
   const off = d => (d ? diffD(parse(d), from) : null);
@@ -36,13 +43,17 @@ export function templateTasks(p) {
     estimate: t.estimate || null,
     desc: t.desc || '',
     labels: [...t.labels],
-    subtasks: t.subtasks.map(s => ({ title: s.title })),
+    subtasks: t.subtasks.slice(0, TEMPLATE_SUBTASKS_MAX).map(s => ({ title: s.title })),
     startOff: off(t.start),
     dueOff: off(t.due),
   }));
 }
 
 /* ---------- save a project as a template ---------- */
+const WHAT_IS_COPIED =
+  "Copies this project's tasks to start new projects. Tasks start as To do (Backlog stays Backlog); dates count from the project's start. Not copied: assignees, comments, files. Everyone can see templates.";
+/* Templates are read by every signed-in user, whoever can open the project they came from. */
+const PRIVATE_WARNING = 'This project is private. Everyone will be able to see the template, including its task titles and descriptions.';
 A.saveAsTemplate = el => {
   const id = el.dataset.id;
   S.ui.pop = null;
@@ -51,25 +62,22 @@ A.saveAsTemplate = el => {
   openModal({
     type: 'prompt',
     title: 'Save as template',
-    sub: "New projects can start from it with this project's tasks, without assignees or comments.",
+    sub: p.private ? `${PRIVATE_WARNING} ${WHAT_IS_COPIED}` : WHAT_IS_COPIED,
     label: 'Template name',
     value: p.name.slice(0, NAME_MAX),
     ok: 'Save template',
     max: NAME_MAX,
+    validate: name => nameError(name) || (proj(id) ? tasksError(proj(id)) : 'That project is gone.'),
     run: name => saveTemplate(id, name),
   });
 };
-/* `name` is trimmed by the prompt. A template of that name (any case) is replaced, after asking. */
+/* `name` is trimmed and checked by the prompt (validate above). A template of that name (any case) in the project's workspace is
+   replaced, after asking. */
 function saveTemplate(pid, name) {
   if (!mayManage()) return;
-  const err = nameError(name);
-  if (err) {
-    toast(err, { kind: 'err' });
-    return;
-  }
   const p = proj(pid);
   if (!p || needWorkspace()) return;
-  const old = templatesOf(D().ws.id).find(t => sameName(t.name, name));
+  const old = templatesOf(p.workspace).find(t => sameName(t.name, name));
   if (!old) {
     writeTemplate(pid, name, '');
     return;
@@ -77,26 +85,40 @@ function saveTemplate(pid, name) {
   const oldId = old.id;
   confirmDlg({
     title: `Replace template ‘${old.name}’?`,
-    body: `Its <b>${tasksText(old.tasks.length)}</b> will be replaced with this project's <b>${tasksText(templateTasks(p).length)}</b>.`,
+    body: `Its <b>${tasksText(old.tasks.length)}</b> will be replaced with this project's <b>${tasksText(tasksOf(p.id).length)}</b>.`,
     ok: 'Replace template',
     icon: 'layers',
-    run: () => writeTemplate(pid, name, oldId),
+    run: () => {
+      if (!proj(pid)) {
+        toast('That project is gone.', { kind: 'err' }); // deleted while the question was open
+        return;
+      }
+      writeTemplate(pid, name, oldId);
+    },
   });
 }
 function writeTemplate(pid, name, replaceId) {
-  let n = 0;
+  let saved = null; // the template as written
+  let why = ''; // when nothing was written, the reason
   mutate(
     () => {
+      saved = null;
       const p = proj(pid); // by id: sync or Undo can replace the project while a refused save waits for "Try again"
+      why = p ? tasksError(p) : 'That project is gone.'; // it may have gone, or its tasks changed, since the name was checked
+      if (why) return;
       const tasks = templateTasks(p);
-      n = tasks.length;
-      const fields = { name, icon: p.icon, color: p.color, tasks, updated: Date.now() };
-      const old = replaceId && tmpl(replaceId);
-      if (old)
-        Object.assign(old, fields); // keeps its id and description
-      else D().templates.push({ id: uid('tm'), workspace: D().ws.id, desc: '', ...fields });
+      const fields = { icon: p.icon, color: p.color, tasks, updated: Date.now() };
+      // The one being replaced, else any of that name in the project's workspace: another admin may have saved one since the name was
+      // checked, and two of a name would be a mistake. An existing template keeps its id, its description and its name (as the question
+      // named it: ‘Weekly’ stays ‘Weekly’ when the project was saved as “weekly”).
+      saved = (replaceId && tmpl(replaceId)) || templatesOf(p.workspace).find(t => sameName(t.name, name));
+      if (saved) Object.assign(saved, fields);
+      else D().templates.push((saved = { id: uid('tm'), workspace: p.workspace, name, desc: '', ...fields }));
     },
-    () => toast(`Saved template ‘${name}’ (${tasksText(n)})`, { action: 'View', onAction: () => go('settings', { sec: 'templates' }) }),
+    () => {
+      if (!saved) toast(why, { kind: 'err' });
+      else toast(`Saved template ‘${saved.name}’ (${tasksText(saved.tasks.length)})`, { action: 'View', onAction: () => go('settings', { sec: 'templates' }) });
+    },
     () => !!proj(pid) && (!replaceId || !!tmpl(replaceId)),
   );
 }
@@ -123,7 +145,8 @@ A.submitTemplate = () => {
   f.desc = ($('#tp-desc')?.value || '').trim();
   if (!mayManage()) return;
   const err =
-    nameError(f.name) || (templatesOf(D().ws.id).some(t => t.id !== m.edit && sameName(t.name, f.name)) ? `A template called “${f.name}” already exists` : '');
+    nameError(f.name) ||
+    (templatesOf(tmpl(m.edit)?.workspace).some(t => t.id !== m.edit && sameName(t.name, f.name)) ? `A template called “${f.name}” already exists` : '');
   if (err) {
     S.ui.errors.tpname = err;
     render();

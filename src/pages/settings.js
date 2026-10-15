@@ -333,11 +333,13 @@ export function settingsBody(sec, title) {
   }
   return page404();
 }
-/* One template in Settings > Templates: its name, description and size, the task titles when it is open, and what can be done with it. */
+/* One template in Settings > Templates: its name, description and size, the whole description and the task titles when it is open, and
+   what can be done with it. */
 function templateRow(t, manage) {
   const open = !!S.ui.expanded[t.id];
   const n = t.tasks.length;
   const meta = `${n} task${n === 1 ? '' : 's'}${t.updated ? ` · updated ${fmtDate(new Date(t.updated))}` : ''}`;
+  const desc = t.desc ? `<p class="muted" style="margin:0 0 8px 46px;font-size:12.5px;white-space:pre-line;overflow-wrap:anywhere">${esc(t.desc)}</p>` : '';
   const titles = t.tasks.length
     ? `<ol class="muted" style="margin:0 0 14px 46px;padding:0 0 0 18px;font-size:12.5px;line-height:1.7">${t.tasks
         .map(
@@ -352,8 +354,8 @@ function templateRow(t, manage) {
       ${pIcon(t, '', 14)}
       <div style="min-width:0"><div class="t trunc">${esc(t.name)}</div>${t.desc ? `<div class="faint trunc" style="font-size:12.5px">${esc(t.desc)}</div>` : ''}<div class="faint" style="font-size:12px;margin-top:2px">${meta}</div></div>
     </div>
-    <div class="row" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="newProject" data-tmpl="${esc(t.id)}">New project</button>${manage ? `<button class="btn btn-secondary btn-sm" data-a="editTemplate" data-id="${esc(t.id)}">Edit</button><button class="btn btn-danger-ghost btn-sm" data-a="delTemplate" data-id="${esc(t.id)}">Delete</button>` : ''}</div>
-  </div>${open ? titles : ''}</div>`;
+    <div class="row" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="newProject" data-tmpl="${esc(t.id)}" aria-label="New project from ${esc(t.name)}">New project</button>${manage ? `<button class="btn btn-secondary btn-sm" data-a="editTemplate" data-id="${esc(t.id)}" aria-label="Edit template ${esc(t.name)}">Edit</button><button class="btn btn-danger-ghost btn-sm" data-a="delTemplate" data-id="${esc(t.id)}" aria-label="Delete template ${esc(t.name)}">Delete</button>` : ''}</div>
+  </div>${open ? desc + titles : ''}</div>`;
 }
 export function strengthMeter(pw) {
   let s = 0;
