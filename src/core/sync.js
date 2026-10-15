@@ -241,6 +241,9 @@ const ownDelete = (key, id, b) => wasDeleted(key, id) || (!!b && (wasDeleted('ta
 /* ---------- payloads ---------- */
 /* The canonical payload of a server record, comparable with what toRecords() makes of the app's own objects. */
 const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, order: rec.order });
+/* The largest |order| the server accepts when an update changes it (server/pb_hooks/project_order.pb.js has the same 1e12: sync.js
+   cannot import server code, so change both together). */
+const ORDER_LIMIT = 1e12;
 /* The `order` to write for each project, as Map(id -> value). D().projOrder ranks only the projects this user can see, but the
    server's column ranks all of them (a member does not see a private project), so the position in that list cannot be the value:
    it would collide with the hidden ones. The server's own values are kept and handed out in the local order, so moving a project
@@ -249,7 +252,13 @@ const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, ord
    projects, hidden ones included) and ignores the one sent. The placeholder is what the create carries; the answer brings the real
    value, which becomes the baseline and from then on the value handed out here, so the new project is not written again. (Without
    that hook the placeholder is stored, and it can equal a hidden project's: ties are settled by id, so the visible order does not
-   change, and it is only if that project is ever shown that it lands next to the new one.) */
+   change, and it is only if that project is ever shown that it lands next to the new one.)
+   The server refuses a changed value beyond ORDER_LIMIT (an unchanged one passes), and a superuser or a migration can leave a project
+   beyond it. Handing that project's value to a neighbour would then be refused, so when a known project would be given a value that
+   is both new and beyond the limit, the hand-out is worked out again with the projects that are beyond it taken as unplaced: they
+   get values between their in-range neighbours, in the order shown, and the others keep theirs. (A project that is new here does
+   not count: the server ignores the value of a create, and a placeholder beside a far project can itself be far.) When the first
+   hand-out is fine nothing is renumbered, so a far project left where it is keeps its value and is not written. */
 function projectOrders() {
   const known = base.get('projects');
   const have = new Set(D().projects.map(p => p.id));
@@ -259,29 +268,35 @@ function projectOrders() {
       .projects.map(p => p.id)
       .filter(id => !D().projOrder.includes(id)),
   ];
-  const sorted = ids
-    .filter(id => known.has(id))
-    .map(id => known.get(id).p.order)
-    .sort((a, b) => a - b);
-  const out = new Map();
-  let k = 0;
-  for (const id of ids) if (known.has(id)) out.set(id, sorted[k++]);
-  for (let i = 0; i < ids.length;) {
-    if (out.has(ids[i])) {
-      i++;
-      continue;
+  // `placed` says which ids take part in the hand-out of the server's values; the others are put between them.
+  const place = placed => {
+    const sorted = ids
+      .filter(placed)
+      .map(id => known.get(id).p.order)
+      .sort((a, b) => a - b);
+    const out = new Map();
+    let k = 0;
+    for (const id of ids) if (placed(id)) out.set(id, sorted[k++]);
+    for (let i = 0; i < ids.length;) {
+      if (out.has(ids[i])) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < ids.length && !out.has(ids[j])) j++;
+      const lo = i > 0 ? out.get(ids[i - 1]) : undefined;
+      const hi = j < ids.length ? out.get(ids[j]) : undefined;
+      for (let x = 0; x < j - i; x++) {
+        if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : hi - (j - i) + x);
+        else out.set(ids[i + x], hi === undefined ? lo + x + 1 : lo + ((hi - lo) * (x + 1)) / (j - i + 1));
+      }
+      i = j;
     }
-    let j = i;
-    while (j < ids.length && !out.has(ids[j])) j++;
-    const lo = i > 0 ? out.get(ids[i - 1]) : undefined;
-    const hi = j < ids.length ? out.get(ids[j]) : undefined;
-    for (let x = 0; x < j - i; x++) {
-      if (lo === undefined) out.set(ids[i + x], hi === undefined ? x : hi - (j - i) + x);
-      else out.set(ids[i + x], hi === undefined ? lo + x + 1 : lo + ((hi - lo) * (x + 1)) / (j - i + 1));
-    }
-    i = j;
-  }
-  return out;
+    return out;
+  };
+  const out = place(id => known.has(id));
+  const refused = ids.some(id => known.has(id) && out.get(id) !== known.get(id).p.order && Math.abs(out.get(id)) > ORDER_LIMIT);
+  return refused ? place(id => known.has(id) && Math.abs(known.get(id).p.order) <= ORDER_LIMIT) : out;
 }
 /* The payload of one live app object. */
 function payloadOf(key, obj) {
