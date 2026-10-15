@@ -743,12 +743,17 @@
   color: var(--text-3);
   font-size: var(--fs-xs);
   margin-left: 4px;
+  /* The name gives way first; the cap keeps a long sub from taking the row. */
+  flex-shrink: 0;
+  max-width: 40%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .pi .r {
   margin-left: auto;
+  /* A key or size keeps to one line instead of breaking at its hyphen or space. */
+  flex-shrink: 0;
   display: flex;
   gap: 4px;
   align-items: center;
@@ -773,6 +778,10 @@
   display: inline-flex;
   gap: 5px;
   align-items: center;
+}
+/* The wordmark's -0.02em tracking suits its larger sizes; at the 10px it gets here the letters crowd. */
+.pal-f .logo {
+  letter-spacing: 0.02em;
 }
 
 #toasts {

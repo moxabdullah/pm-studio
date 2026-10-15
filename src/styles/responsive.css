@@ -291,6 +291,10 @@
   .palette {
     top: 8px;
   }
+  /* On a phone a 40% sub left a long name only a few letters. */
+  .pi .sub {
+    max-width: 30%;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion='full']) {
