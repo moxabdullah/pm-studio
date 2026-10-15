@@ -117,7 +117,7 @@ const KINDS = {
     { assignee: ref, due: day, start: day, estimate: text, recur: text, fav: bool, archived: bool, archivedAt: numOrNull, completedAt: numOrNull },
   ),
   comment: shape({ id: str, task: str, text: str, at: num, re: strMap(strs) }, { by: ref }),
-  activity: shape({ id: str, verb: str, at: num, extra: str }, { by: ref, task: ref, project: ref }),
+  activity: shape({ id: str, verb: str, at: num, extra: str }, { by: ref, task: ref, project: ref, workspace: ref }),
   notif: shape({ id: str, type: withDefault(str, 'update'), text: str, snippet: str, at: num, read: bool }, { by: ref, task: ref, project: ref }),
   file: shape({ id: str, project: str, name: str, type: withDefault(str, 'other'), size: str, at: num }, { by: ref, task: ref }),
   event: shape({ id: str, title: str, date: v => day(v) || '', time: str, project: str }),

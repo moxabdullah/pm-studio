@@ -20,7 +20,8 @@
    toRecord(coll, obj, ctx)     -> payload for create/update: { id, ...columns, doc }.
        ctx.me     the signed-in user's id. Fills notifs.recipient, saved_views.owner and user_prefs.user, which app objects don't carry.
                   Throws when it is missing for those collections.
-       ctx.order  index of the project in D().projOrder (the app keeps order there, not on the project). Fills projects.order.
+       ctx.order  index of the project in D().projOrder (the app keeps order there, not on the project). Fills projects.order. (On a
+                  create it is only a placeholder: the server picks the value of a project made by a signed-in user, see sync.js.)
      The payload is a fresh, JSON-safe copy (nothing aliases the app object), so it can be stored as a snapshot. Top-level key order
      is fixed. Empties are normalised: null/undefined/'' relations -> '', booleans via !!, missing lists -> []. `doc` keeps the app's
      own key order, but PocketBase hands JSON back with the keys of every object sorted, so key order never survives a round trip
@@ -29,8 +30,8 @@
      name of files (`file`; uploads travel as multipart form data), and email/password/verified of users.
    fromRecord(coll, rec)        -> app object: { id, ...columns, ...rec.doc } (columns win over doc). Also a fresh copy.
      System fields (collectionId, collectionName, created, updated, expand, ...) are ignored; the app's own created/updated/at
-     numbers live inside doc and are untouched. Empty relations come back as null for assignee, lead and activity.project/task/by,
-     comments.by and files.by, and as '' for team and workspace. Extras: members keep `email` ('' when the account hides it);
+     numbers live inside doc and are untouched. Empty relations come back as null for assignee, lead and activity.project/task/workspace/by,
+     comments.by and files.by, and as '' for team and for the workspace of a project or team. Extras: members keep `email` ('' when the account hides it);
      files get `file`, the stored file name for download URLs (see fileUrl in pb.js). Not restored: `fav` (call applyFavs / applyUserPrefs).
      Members get defaults for what a dashboard-created account leaves blank (MEMBER_DEFAULTS, one table shared with normalize.js):
      c '#6B7280', status 'active', role 'Member', title '', team '', tz '\u2014' (an em dash), last null, and name = the email's local
@@ -196,6 +197,7 @@ const SPECS = {
     cols: [
       ['project', 'project', ONE(null)],
       ['task', 'task', ONE(null)],
+      ['workspace', 'workspace', ONE(null)],
       ['by', 'by', ONE(null)],
     ],
   },
