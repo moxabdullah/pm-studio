@@ -68,13 +68,14 @@ export const prPill = p => `${prIcon(p)}<span>${PR[p || 'none'].name}</span>`;
 export const lbl = id => (LB[id] ? `<span class="lbl" style="--c:${LB[id].c}"><i></i>${LB[id].name}</span>` : '');
 export const pIcon = (p, cls = '', s = 15) => `<span class="picon ${cls}" style="--c:${pColor(p)}">${ic(p.icon, s)}</span>`;
 /* A project's stage (its name comes from whoever made the set; the colour is a key, resolved here) and its health, which shows only
-   when it is not "On track". */
-export const stagePill = s => `<span class="pstatus" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span></span>`;
-export const pStage = p => stagePill(stageOf(p));
+   when it is not "On track". `tail` is markup inside the pill after the text: the chevron of a pill that opens a picker. */
+export const stagePill = (s, tail = '') =>
+  `<span class="pstatus" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span>${tail}</span>`;
+export const pStage = (p, tail = '') => stagePill(stageOf(p), tail);
 /* The dot beside a project in the sidebar: red or amber when it is at risk or on hold (as the status dot was), else its stage's colour. */
 export const pDot = p => (p.health && p.health !== 'ok' ? HEALTH[p.health].c : STAGE_COLORS[stageOf(p).color]);
-export const pHealth = p =>
-  p.health && p.health !== 'ok' ? `<span class="pstatus" style="--c:${HEALTH[p.health].c}"><i></i>${HEALTH[p.health].name}</span>` : '';
+export const pHealth = (p, tail = '') =>
+  p.health && p.health !== 'ok' ? `<span class="pstatus" style="--c:${HEALTH[p.health].c}"><i></i>${HEALTH[p.health].name}${tail}</span>` : '';
 /* The colour of a project's progress bar: green once it is in a finished stage, red when it is at risk. */
 export const progClass = p => (isFinished(p) ? 'green' : p.health === 'risk' ? 'red' : '');
 export function dueHtml(t, withIcon = true) {

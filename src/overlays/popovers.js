@@ -213,7 +213,8 @@ export function popHtml(p) {
       if (!pr) break;
       const sets = stageSetsOf(pr.workspace);
       const cur = setOf(pr);
-      const set = (p.set && sets.find(s => s.id === p.set)) || cur;
+      const picked = p.set && sets.find(s => s.id === p.set);
+      const set = picked || cur;
       const item = s => ({
         id: s.id,
         name: s.name,
@@ -222,11 +223,15 @@ export function popHtml(p) {
       });
       const open = set.stages.filter(s => !s.finished);
       const done = set.stages.filter(s => s.finished);
+      // (a heading and a way back when the stages are those of a set picked under "Change stage set…")
       inner =
-        popList(open.map(item)) +
+        (picked
+          ? `<div class="mh">${esc(set.name)}</div><button class="mi" data-a="popStageSets">${ic('chevron-left', 15)}<span class="trunc">Back</span></button><div class="msep"></div>`
+          : '') +
+        (open.length ? popList(open.map(item)) : '') +
         (open.length && done.length ? '<div class="msep"></div>' : '') +
-        popList(done.map(item)) +
-        (sets.length > 1
+        (done.length ? popList(done.map(item)) : '') +
+        (!picked && sets.length > 1
           ? `<div class="msep"></div><button class="mi" data-a="popStageSets">${ic('layers', 15)}<span class="trunc">Change stage set…</span></button>`
           : '');
       style = 'min-width:200px';

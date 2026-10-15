@@ -79,7 +79,17 @@
   border-radius: 5px;
   border: 1px solid var(--border);
   white-space: nowrap;
-  max-width: 100%;
+  max-width: 50%;
+}
+/* A long stage name is cut by an ellipsis, not by squeezing the project's name; the pill of a picker has room of its own. */
+.pstatus .trunc {
+  min-width: 0;
+}
+.pstatus + .pstatus {
+  margin-left: 4px;
+}
+.pillbtn .pstatus {
+  max-width: 32ch;
 }
 .pstatus i {
   flex-shrink: 0;

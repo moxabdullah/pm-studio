@@ -336,12 +336,14 @@ A.ctxBtn = el => {
 };
 /* "Change stage set…" in a project's stage picker: the picker shows the sets, and a set picked shows its stages (p.set), to pick one of. */
 A.popStageSets = () => {
-  S.ui.pop = { ...S.ui.pop, type: 'pstagesets', q: '' };
+  S.ui.pop = { ...S.ui.pop, type: 'pstagesets', set: null, q: '' };
   render();
+  $('.pop.floating [data-a="popPickSet"]')?.focus({ preventScroll: true });
 };
 A.popPickSet = el => {
   S.ui.pop = { ...S.ui.pop, type: 'pstage', set: el.dataset.v, q: '' };
   render();
+  $('.pop.floating [data-a="popPick"]')?.focus({ preventScroll: true }); // the first stage, not "Back"
 };
 A.popPick = el => {
   const p = S.ui.pop;

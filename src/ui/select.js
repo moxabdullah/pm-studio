@@ -56,11 +56,15 @@ export const selectMenu = {
     menu.className = 'pop select-menu enter';
     menu.setAttribute('role', 'listbox');
     menu.setAttribute('data-pop-root', '');
+    // An <optgroup> shows as a heading (not an item: the keyboard skips it) before its first option; `data-i` stays the option's index.
+    let group = null;
     menu.innerHTML = [...sel.options]
-      .map(
-        (o, i) =>
-          `<button type="button" class="mi" role="option" data-i="${i}" aria-selected="${o.selected}"><span class="trunc grow">${esc(o.text)}</span>${o.selected ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
-      )
+      .map((o, i) => {
+        const g = o.parentElement.tagName === 'OPTGROUP' ? o.parentElement : null;
+        const head = g && g !== group ? `<div class="mh" role="presentation">${esc(g.label)}</div>` : '';
+        group = g;
+        return `${head}<button type="button" class="mi" role="option" data-i="${i}" aria-selected="${o.selected}"><span class="trunc grow">${esc(o.text)}</span>${o.selected ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`;
+      })
       .join('');
     document.body.appendChild(menu);
     const r = btn.getBoundingClientRect();
