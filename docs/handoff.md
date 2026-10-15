@@ -1,4 +1,4 @@
-# Handoff — workspace templates PR open for review; follow-ups #8–#16 merged (2026-10-15)
+# Handoff — workspace templates merged as #17, not deployed yet; follow-ups #8–#16 merged (2026-10-15)
 
 ## Goal
 
@@ -14,9 +14,9 @@ Work through the follow-ups left after PRs #1–#3, one PR per theme, each branc
 
 Progress:
 
-- Branch `feat/workspace-templates` (worktree `wt/templates` in the 14ce156e scratchpad), commits 376f875 (feature), 4be72ad (review fixes), 136c514 (byte-size check, `aria-describedby`), df80fac (handoff), e70fb78 (cubic fixes), 9971430 (handoff), plus the cubic round 2 commit (save retry, this handoff). PR opened for review, **not merged** (the user hasn't said to merge): `gh pr list --head feat/workspace-templates`. PR body: `pr-templates.md` in the 14ce156e scratchpad.
+- Branch `feat/workspace-templates` (worktree `wt/templates` in the 14ce156e scratchpad), commits 376f875 (feature), 4be72ad (review fixes), 136c514 (byte-size check, `aria-describedby`), df80fac (handoff), e70fb78 (cubic fixes), 9971430 (handoff), f4c5168 (cubic round 2: save retry). **PR #17 merged 2026-10-15 as 2db1e52** (user: "Merge the pr"; cubic's re-review of f4c5168 passed with no threads): https://github.com/moxabdullah/pm-studio/pull/17. PR body: `pr-templates.md` in the 14ce156e scratchpad.
 - Checks: lint/format/build; server rules on scratch PocketBase (member writes refused, workspace move 404, name 81 chars 400, doc over 2 MB 400, cascade, migrate down/up); sync round trip a fixed point at 300×50; logic/UI/security reviews (all P2s fixed, P3s tracked in the PR body); browser QA 15/15 on 376f875 and 12/12 on 4be72ad (`qa-templates/`, `qa-templates/r2/` in the 14ce156e scratchpad). cubic round 1 (11 threads on df80fac): 10 fixed in e70fb78; the `handoff.md` migration thread was invalid (the branch's first push already had the edited migration) and was answered and resolved. Browser QA on e70fb78: old checks 1-14 plus 9 new ones all pass (`qa/RESULTS.md` in the 29d28e68 scratchpad), including the offline same-name clash, the size check with a kept description, and a client against a server without 1791849606. cubic round 2 (2 P3 threads on 9971430), both fixed: the handoff wording, and the save's "Try again" no longer drops silently when the project or the replaced template is gone. Template smoke test (`smoke-src/` in the 29d28e68 scratchpad, `run.sh`): 30 ok; the 3 new retry checks fail on 9971430. Not browser-tested; sync.js untouched.
-- After merge: back up `pb_data`, `npm run build:server`, restart :8090 (applies 1791849606).
+- **Not deployed yet (the next step, needs the user's go):** back up `pb_data`, `npm run build:server`, restart :8090 (applies 1791849606). Until the restart, a client built from `main` still loads against :8090 (the `optional` read of `templates`), with no templates.
 
 **Session of 2026-10-14 (afternoon): the user asked to complete ALL of Next 1–8.** Their answers (binding):
 
@@ -50,6 +50,7 @@ This session's scratchpad (kits and harness copied here): `/tmp/claude-0/-root-w
 
 ## Done
 
+- **PR #17 merged** as 2db1e52: workspace templates (replaces the six built-ins). Migration 1791849606 is not yet applied to `server/pb_data`; see Progress above.
 - **PR #7 merged** into `main` as 0d1ef0b with the user's OK: https://github.com/moxabdullah/pm-studio/pull/7 (branch `fix/missing-pref-defaults`, commit 42809e8, only `src/core/sync-map.js`; no migrations). cubic: "No issues found in 1 file", 0 review threads.
   - **Fix:** `DEFAULT_PREFS` gains `timeFmt: '12'`, `spell: true`, `defaultTab: 'board'`, `showDoneBoard: true`, `permCreate: true`, `permPublic: false`, `confirmDel: true`. Each one is what its readers already take an unset value for (`|| 'board'`, `|| '12'`, `!== false`, `!!P.permPublic`). `prefOk()` is unchanged: a key with a default needs the default's type. The comment on `DEFAULT_PREFS` states the rule (see Decisions).
   - **Before/after (browser):** with a record holding `defaultTab: 5`, `main` shows "Something went wrong." on every project opened through the default tab (`tab.startsWith is not a function`, project.js:39). The fix opens on Board, with no errors and nothing pending. On a thin record, the seven controls show the old unset values, and toggling "Allow public share links" sends one PATCH 200 with all 18 keys and leaves nothing pending.
