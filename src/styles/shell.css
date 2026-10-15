@@ -225,13 +225,14 @@
 .sitem.dragging {
   opacity: 0.4;
 }
-.sub {
+/* Only the sidebar's project sub-list: a bare .sub also hid the sign-in subtitle and the command palette's row text. */
+.sproj > .sub {
   padding-left: 14px;
   margin-left: 8px;
   border-left: 1px solid var(--border);
   display: none;
 }
-.sub.open {
+.sproj > .sub.open {
   display: block;
 }
 .sitem .chev {
@@ -257,7 +258,7 @@
 .collapsed .sitem .sdot,
 .collapsed .sitem .fav,
 .collapsed .sitem .hov,
-.collapsed .sub,
+.collapsed .sproj > .sub,
 .collapsed .side-search,
 .collapsed .sitem .chev {
   display: none !important;
