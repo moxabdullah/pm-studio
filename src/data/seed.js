@@ -90,7 +90,7 @@ export function seed() {
     {
       id: 'm8',
       name: 'Diego Alvarez',
-      email: 'diego@freelance.io',
+      email: 'diego@example.net',
       role: 'Member',
       team: 'mkt',
       title: 'Freelance Copywriter',
