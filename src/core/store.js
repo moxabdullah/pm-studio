@@ -143,11 +143,13 @@ export const allTasks = () =>
     const p = proj(t.project);
     return !t.archived && inWs(p) && canSee(p);
   });
-/* Events, files and activity hang off projects, so they follow the project's workspace. An activity record has no workspace of its own,
-   so one that names no project (the server allows that, the app never writes it) cannot be placed and is left out everywhere. */
+/* Events and files hang off projects, so they follow the project's workspace. So does activity that names a project. Activity that
+   names a task but no project (the server allows it, the app never writes it) shows in the workspace it names itself, which the server
+   requires to be the one of the task's project. One that names neither, or that names no workspace (a row from before activity had
+   one, which the migration could not fill in), cannot be placed and is left out everywhere. */
 export const wsEvents = () => D().events.filter(e => inWs(proj(e.project)));
 export const wsFiles = () => D().files.filter(f => inWs(proj(f.project)));
-export const wsActivity = () => D().activity.filter(a => inWs(proj(a.project)));
+export const wsActivity = () => D().activity.filter(a => (a.project ? inWs(proj(a.project)) : !!a.workspace && inWs(a)));
 /* What the Archive page lists: archived tasks, except those of an archived project, which come back with the project. */
 export const wsArchivedTasks = () => D().tasks.filter(t => t.archived && inWs(proj(t.project)) && canSee(proj(t.project)) && !proj(t.project)?.archived);
 export const isOver = t => t.due && t.status !== 'done' && diffD(parse(t.due), TODAY) < 0;
@@ -164,8 +166,15 @@ export function taskProg(t) {
 }
 
 /* ---------- activity + notification helpers ---------- */
+/* One new entry at the top of the feed. Every entry the app writes goes through here. Its workspace is the one of its project, else of
+   its task's project, else none (null, the way a record with an empty relation loads): the server refuses an entry whose workspace is
+   not the one it hangs off, and one that hangs off nothing may not name a workspace (pb_migrations/1791849604_activity_workspace.js). */
+export function pushAct(verb, taskId, projectId, extra = '') {
+  const workspace = (projectId ? proj(projectId) : proj(task(taskId)?.project))?.workspace || null;
+  D().activity.unshift({ id: uid('a'), by: D().me, verb, task: taskId || null, project: projectId || null, workspace, at: Date.now(), extra });
+}
 export function logAct(verb, t, extra = '') {
-  D().activity.unshift({ id: uid('a'), by: D().me, verb, task: t?.id || null, project: t?.project || null, at: Date.now(), extra });
+  pushAct(verb, t?.id, t?.project, extra);
   if (t) t.updated = Date.now();
 }
 

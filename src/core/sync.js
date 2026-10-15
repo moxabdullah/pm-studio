@@ -239,9 +239,12 @@ const canon = (key, rec) => toRecord(key, fromRecord(key, rec), { me: st.me, ord
 /* The `order` to write for each project, as Map(id -> value). D().projOrder ranks only the projects this user can see, but the
    server's column ranks all of them (a member does not see a private project), so the position in that list cannot be the value:
    it would collide with the hidden ones. The server's own values are kept and handed out in the local order, so moving a project
-   swaps two values and rewrites nothing else, and a project the server has not seen yet gets a value between its neighbours. That value
-   can equal a hidden project's (their values are not known here): ties are settled by id, so the visible order does not change, and
-   it is only if that project is ever shown that it lands next to the new one. */
+   swaps two values and rewrites nothing else. A project the server has not seen yet gets a value between its neighbours, but that is
+   only a placeholder: the server allocates a created project's value (pb_hooks/project_order.pb.js: one below the lowest of ALL
+   projects, hidden ones included) and ignores the one sent. The placeholder is what the create carries; the answer brings the real
+   value, which becomes the baseline and from then on the value handed out here, so the new project is not written again. (Without
+   that hook the placeholder is stored, and it can equal a hidden project's: ties are settled by id, so the visible order does not
+   change, and it is only if that project is ever shown that it lands next to the new one.) */
 function projectOrders() {
   const known = base.get('projects');
   const have = new Set(D().projects.map(p => p.id));

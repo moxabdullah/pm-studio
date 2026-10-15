@@ -198,6 +198,7 @@ function remap(seedData) {
     a.by = ref('users', a.by);
     a.task = ref('tasks', a.task);
     a.project = ref('projects', a.project);
+    a.workspace = ref('workspaces', a.workspace);
   });
   d.notifs.forEach(n => {
     n.id = ref('notifs', n.id);
