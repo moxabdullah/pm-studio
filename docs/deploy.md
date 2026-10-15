@@ -108,6 +108,7 @@ npm run build:server
 # the only folder the service account may write to
 mkdir server/pb_data
 sudo chown pmspace:pmspace server/pb_data
+sudo chmod 700 server/pb_data              # without this the database and uploads are readable by every local user
 ```
 
 ### 3.2 Windows
@@ -178,6 +179,7 @@ Restart=always
 RestartSec=5
 LimitNOFILE=4096
 NoNewPrivileges=true
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
@@ -206,6 +208,7 @@ With `--dev=false` the journal only has the start-up banner and fatal errors. Re
 | `Restart=always`        | start again after a crash or a failed start-up (it retries every 5 seconds)                                   |
 | `LimitNOFILE=4096`      | more open files than the systemd default of 1024: each live-update connection and each database file uses one |
 | `NoNewPrivileges=true`  | the process can never gain more privileges                                                                    |
+| `UMask=0077`            | files the service creates later (database, uploads, backups) are readable by `pmspace` only                   |
 
 If SELinux is enforcing (RHEL family) and systemd reports `status=203/EXEC`, the program needs an executable label (_untested_): `sudo semanage fcontext -a -t bin_t '/opt/pm-space/server/pocketbase' && sudo restorecon -v /opt/pm-space/server/pocketbase`.
 
@@ -239,10 +242,11 @@ PocketBase is not a native Windows service, so wrap it with [WinSW](https://gith
 </service>
 ```
 
-3. Let the service account write to the data and log folders, then install and start it (elevated PowerShell):
+3. Close the install folder to other users, let the service account write to the data and log folders, then install and start it (elevated PowerShell):
 
 ```powershell
 New-Item -ItemType Directory -Force C:\pm-space\server\pb_data, C:\pm-space\logs | Out-Null
+icacls C:\pm-space /inheritance:r /grant "BUILTIN\Administrators:(OI)(CI)F" "NT AUTHORITY\SYSTEM:(OI)(CI)F" "NT AUTHORITY\LocalService:(OI)(CI)RX"
 icacls C:\pm-space\server\pb_data /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
 icacls C:\pm-space\logs /grant "NT AUTHORITY\LocalService:(OI)(CI)M"
 
@@ -252,6 +256,8 @@ cd C:\pm-space\service
 .\pm-space.exe status          # prints Started
 Invoke-RestMethod http://127.0.0.1:8090/api/health
 ```
+
+The first `icacls` line is there because a folder created directly under `C:\` inherits "Authenticated Users: Modify", so any local user could replace the server program or its hooks, which run as LocalService; after it only administrators (use an elevated PowerShell for upgrades too), the system and the service account can open the folder.
 
 Other WinSW commands: `stopwait` (stop and wait until it has stopped), `restart`, `uninstall`. `stop` alone does not wait. To change the XML: `stopwait`, `uninstall`, edit, `install`, `start`. Output and WinSW's own messages go to `C:\pm-space\logs` and the Windows Event Log. If the service will not start, look there first; as a last resort delete the `<serviceaccount>` block so it runs as LocalSystem, the WinSW default.
 
@@ -524,10 +530,10 @@ What you get, in `server/pb_data/backups/` (`core/backup_create.go`, `core/backu
 Try it now instead of waiting for tonight: **Settings > Crons**, press **Run** next to `__pbAutoBackup__`, then:
 
 ```bash
-ls -l /opt/pm-space/server/pb_data/backups/
+sudo ls -l /opt/pm-space/server/pb_data/backups/
 ```
 
-Check from a monitoring job that a backup is recent (prints a warning when no automatic backup is younger than two days):
+Check from a monitoring job (run it as root, since `pb_data` is closed to other users) that a backup is recent (prints a warning when no automatic backup is younger than two days):
 
 ```bash
 find /opt/pm-space/server/pb_data/backups -name '@auto_pb_backup_*.zip' -mtime -2 | grep -q . || echo "NO RECENT BACKUP"
@@ -535,7 +541,7 @@ find /opt/pm-space/server/pb_data/backups -name '@auto_pb_backup_*.zip' -mtime -
 
 ### 8.2 Copy the zips off the machine
 
-A backup on the same disk does not survive a dead disk or a stolen server. Copy the zips elsewhere every night.
+A backup on the same disk does not survive a dead disk or a stolen server. Copy the zips elsewhere every night. Each zip holds the whole database and every upload, so the copy needs the same care as `pb_data`: readable only by the account that looks after backups.
 
 **Linux (cron and rsync).** This copies only the `.zip` files and only what is new. It also copes with the UTC-versus-local-time difference, because it simply runs every hour. Put it in `/etc/cron.d/pm-space-backup-copy` (this assumes a `backup` user on `backuphost` and an SSH key for root, or run it as a user that has one). The rsync options were tested as a local copy; the SSH part depends on your environment.
 
@@ -567,7 +573,7 @@ If the backup is older than the code you now run, nothing special is needed: the
 
 ### 9.1 From the dashboard (Linux only)
 
-**Settings > Backups**. If the zip is not in the list, copy it into `server/pb_data/backups/` (owned by `pmspace`) or use the **Upload backup** button. Press **Restore** on its row and type the file name to confirm. PocketBase unpacks it, swaps `pb_data` and restarts itself. Under systemd the service keeps running (it re-executes in place), and the page reloads when it is back. Checked on Linux.
+**Settings > Backups**. If the zip is not in the list, copy it into `server/pb_data/backups/` (owned by `pmspace` and closed to other users, so use `sudo`) or use the **Upload backup** button. Press **Restore** on its row and type the file name to confirm. PocketBase unpacks it, swaps `pb_data` and restarts itself. Under systemd the service keeps running (it re-executes in place), and the page reloads when it is back. Checked on Linux.
 
 PocketBase marks this feature experimental and it **does not work on Windows** (`core/backup_restore.go:21,66-68`). Use the manual path there.
 
@@ -584,6 +590,7 @@ mv pb_data pb_data.old &&                      # keep it until you are happy
 mkdir pb_data &&
 unzip -q /path/to/@auto_pb_backup_pm_space_20261013010000.zip -d pb_data &&
 sudo chown -R pmspace:pmspace pb_data &&
+sudo chmod 700 pb_data &&
 sudo systemctl start pm-space
 sudo journalctl -u pm-space -n 20 --no-pager
 ```
@@ -663,7 +670,7 @@ PocketBase is pre-1.0 and minor versions can contain breaking changes, so upgrad
    cd ~/pm-space-test
    # change PB_VERSION and the checksums in scripts/get-pocketbase.sh (step 4 below), then:
    scripts/get-pocketbase.sh
-   mkdir server/pb_data && unzip -q /path/to/latest-backup.zip -d server/pb_data
+   mkdir -m 700 server/pb_data && unzip -q /path/to/latest-backup.zip -d server/pb_data
    server/pocketbase serve --http=127.0.0.1:8091 \
      --dir=server/pb_data --migrationsDir=server/pb_migrations --hooksDir=server/pb_hooks \
      --publicDir=/opt/pm-space/server/pb_public --dev=false --automigrate=false --hooksWatch=false
