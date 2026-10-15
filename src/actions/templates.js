@@ -3,7 +3,7 @@
    Starting a project from one is createProject() in actions.js.
    ===================================================================== */
 import { $, TODAY, diffD, parse, uid } from '../core/utils.js';
-import { TEMPLATE_NAME_MAX as NAME_MAX, TEMPLATE_SUBTASKS_MAX, TEMPLATE_TASKS_MAX } from '../core/constants.js';
+import { TEMPLATE_BYTES_MAX, TEMPLATE_NAME_MAX as NAME_MAX, TEMPLATE_SUBTASKS_MAX, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { D, S, canManageTemplates, proj, tasksOf, templatesOf, tmpl } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
@@ -21,11 +21,14 @@ function mayManage() {
   return false;
 }
 const nameError = name => (!name ? 'Give the template a name' : name.length > NAME_MAX ? `Template names can be up to ${NAME_MAX} characters` : '');
-/* Why a project cannot be saved as a template, or '': it has no tasks to copy, or more than a template holds (archived tasks are not copied). */
+/* Why a project cannot be saved as a template, or '': it has no tasks to copy, more than a template holds (archived tasks are not
+   copied), or tasks too long for the server to take. */
 function tasksError(p) {
   const n = tasksOf(p.id).length;
   if (!n) return 'This project has no tasks to save.';
-  return n > TEMPLATE_TASKS_MAX ? `Templates can hold up to ${TEMPLATE_TASKS_MAX} tasks; this project has ${n}.` : '';
+  if (n > TEMPLATE_TASKS_MAX) return `Templates can hold up to ${TEMPLATE_TASKS_MAX} tasks; this project has ${n}.`;
+  const bytes = new TextEncoder().encode(JSON.stringify(templateTasks(p))).length;
+  return bytes > TEMPLATE_BYTES_MAX ? 'These tasks are too long for a template. Shorten their descriptions and try again.' : '';
 }
 
 /* What a template keeps of a project's tasks, in the order the project's list shows them (manual order, within each group). Status:

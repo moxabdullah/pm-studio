@@ -75,6 +75,9 @@ export const TEMPLATE_NAME_MAX = 80;
    createProject() applies them again when it copies a template, so a template written through the API cannot make a huge project. */
 export const TEMPLATE_TASKS_MAX = 300;
 export const TEMPLATE_SUBTASKS_MAX = 50;
+/* The most bytes a template's tasks can take: the server refuses a template record over 2 MB (1791849606_templates.js), and this
+   leaves room for its name, description and the rest, so a project with long descriptions is refused when saving, not after. */
+export const TEMPLATE_BYTES_MAX = 1.9 * 1024 * 1024;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },
