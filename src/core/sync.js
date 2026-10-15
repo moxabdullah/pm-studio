@@ -70,8 +70,8 @@
                401 -> sign-in page. Any other 4xx -> one toast, and the server's version of the record replaces the local one (so a
                rejected change is never sent again). Should that version not be readable right now (the server fails or cannot be
                reached: the page goes offline), a refused update of a record goes back at once to the copy the baseline holds (see
-               putBack()), so the field snaps back where it was edited (a project's order to the server's), and so does a refused delete
-               of a file; any other refusal takes the local one as the baseline instead.
+               putBack()), so the field snaps back where it was edited (a project to its place in the server's order, the rest of the
+               order staying as it is), and so does a refused delete of a file; any other refusal takes the local one as the baseline instead.
                Either way the change is never sent again, and the reload that recovery makes brings the server's version in; flush
                resolves false then. Should it be unreadable for another reason (a 4xx on the read-back, a cancelled request), the local
                one is the baseline as well and a quiet reload follows once no recovery or reload is running, so the refused value does
@@ -384,13 +384,35 @@ function reorderProjects(before) {
   if (mine.length === was.length && mine.every((id, i) => id === was[i])) D().projOrder = after;
   else D().projOrder = [...mine, ...after.filter(id => !mine.includes(id))];
 }
-/* The page's project order goes back to the server's, for a re-order the server refused. reorderProjects() cannot do it: a page order
-   that differs from the server's looks like the user's own unsent re-order to it, and is kept (a refused change leaves the baseline as
-   it was, so the order it reads is the same before and after). A project the server does not know yet (an unsent create) stays, last. */
+/* The whole page order goes back to the server's, which is what restoreState() (Undo) needs once it has replayed the changes made
+   since. A refused change does not use it, as a re-order made after the refused one, which is not sent yet, would be lost with it:
+   takeServerPlace(). reorderProjects() cannot do it: a page order that differs from the server's looks like the user's own unsent
+   re-order to it, and is kept. A project the server does not know yet (an unsent create) stays, last. */
 function takeServerOrder() {
   const have = new Set(D().projects.map(p => p.id));
   const server = serverOrder().filter(id => have.has(id));
   D().projOrder = [...server, ...D().projOrder.filter(id => have.has(id) && !server.includes(id))];
+}
+/* One project goes back to its place in the server's order, for a change to it that the server refused (a re-order, or a delete: a
+   project put back goes last, where reorderProjects() leaves it). reorderProjects() cannot do it, see takeServerOrder(), and
+   takeServerOrder() would put the others back too, losing a re-order the user made since that is not sent yet. The rest of the page
+   order stays as the user left it, and the project is put among them so that as many projects the server knows come before it as do in
+   the server's order: projectOrders() gives the k-th of those the k-th smallest value of the baseline, which is the project's own, so
+   nothing is sent for it again, and the moves of the others go out. A project the server does not know yet (an unsent create) keeps
+   its place. */
+function takeServerPlace(id) {
+  const have = new Set(D().projects.map(p => p.id));
+  if (!have.has(id)) return;
+  const k = serverOrder()
+    .filter(x => have.has(x))
+    .indexOf(id);
+  if (k < 0) return;
+  const rest = D().projOrder.filter(x => x !== id && have.has(x));
+  const known = base.get('projects');
+  let at = 0;
+  for (let seen = 0; seen < k && at < rest.length; at++) if (known.has(rest[at])) seen++;
+  rest.splice(at, 0, id);
+  D().projOrder = rest;
 }
 function insertObject(key, obj) {
   const list = D()[key];
@@ -1122,7 +1144,8 @@ async function adoptServerTruth(op, gen) {
       if (items[0]) {
         applyRecord(key, items[0], true, true); // journaled: an Undo of something done since must not bring the refused value back
         // reorderProjects() kept the refused order, or put a project whose delete was refused last (every one after it would be sent a new order)
-        if (key === 'projects' && (type === 'delete' || (type === 'update' && 'order' in op.fields))) takeServerOrder();
+        if (key === 'projects' && (type === 'delete' || (type === 'update' && 'order' in op.fields))) takeServerPlace(id);
+        if (key === 'files') D().files.sort(byAtDesc); // it comes in first: back where its date puts it
       } else removeRecord(key, id, true); // gone, or not ours to see
     }
     return '';
@@ -1153,10 +1176,11 @@ async function adoptServerTruth(op, gen) {
    email, a file's stored name) is read from the object. The baseline ends as that copy, so the refused change is not sent again, and
    the reload that recovery makes merges cleanly (and brings in whatever changed on the server meanwhile). A change to a project's
    order is put back whole, forced and journaled (the baseline never held the refused order, so there is no stand-in to merge from),
-   and the page's order is set to the server's (takeServerOrder()): reorderProjects() would keep the refused one as the user's own
-   unsent re-order, the diff would then find nothing to send only because the check below baselines it, and the page and the
-   baseline would hold an order the server never had. Where part of what was refused would still be sent after all (any other field
-   kept in a list the entry does not cover) the change is baselined as before: a change must never be sent again.
+   and that project goes back to its place in the server's order (takeServerPlace()), the others staying as the user left them:
+   reorderProjects() would keep the refused place as the user's own unsent re-order, the diff would then find nothing to send only
+   because the check below baselines it, and the page and the baseline would hold an order the server never had; and putting the
+   whole order back would lose a re-order made since that is not sent yet. Where part of what was refused would still be sent after
+   all (any other field kept in a list the entry does not cover) the change is baselined as before: a change must never be sent again.
    Everything else is baselined, as it was before, and settled by the reload that recovery makes:
    - a delete is not put back: a project put back goes last, and projectOrders() would send an `order` for every project after it.
      The exception is a file's (putBackFile()): it is in no order list and nothing hangs off it, so it goes back where its date puts
@@ -1177,7 +1201,7 @@ function putBack(op) {
     const rec = { ...obj, ...old.p, updated: old.u };
     if ('order' in op.fields) {
       applyRecord(key, rec, true, true); // forced, as the stand-in below cannot hold the order; journaled all the same
-      takeServerOrder(); // the order the user was refused is still on the page: reorderProjects() takes it for an unsent re-order
+      takeServerPlace(id); // its refused place is still on the page: reorderProjects() takes it for an unsent re-order
     } else {
       known.set(id, entryOf(withFields(old.p, op.fields), old.u)); // the stand-in: the server's copy, had it taken the change
       applyRecord(key, rec);
