@@ -166,34 +166,40 @@ export function templateModal(m, H) {
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTemplate">Save changes</button></div>`;
 }
-/* Edit a stage set, or make one (Settings > Stages): its name, and its stages in order, each with a name, a colour and whether it
-   finishes a project. The form is S.ui.ssform; what a click or a save refuses is under S.ui.errors (ssname, sslist, and ssrow, the
-   stage the message is about). data-keep: the body scrolls, and a move or a removal re-renders it. */
+/* Edit a stage set, or make one (Settings > Stages): its name, and its stages in order, each with a name, a color and whether it
+   finishes a project. The form is S.ui.ssform; what a click or a save refuses is under S.ui.errors: ssname (under the name), and
+   sslist, which is under the stage ssrow is about, or under the list when ssrow is -1. data-keep: the body scrolls, and a move or a
+   removal re-renders it. */
 export function stageSetModal(m, H) {
   const f = S.ui.ssform;
   const e = S.ui.errors;
-  const err = (id, msg) => (msg ? `<span class="err" id="${id}" role="alert">${ic('circle-alert', 12)}${esc(msg)}</span>` : '');
-  const row = (s, i) => `<div class="row" role="group" aria-label="Stage ${i + 1}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">
+  const bad = e.sslist ? e.ssrow : -1; // the stage the message under the list is about
+  const err = (id, msg, st = '') =>
+    msg ? `<span class="err" id="${id}" role="alert"${st ? ` style="${st}"` : ''}>${ic('circle-alert', 12)}${esc(msg)}</span>` : '';
+  const last = f.stages.length - 1;
+  const row = (s, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="Stage ${i + 1}" style="gap:6px 8px;flex-wrap:wrap">
       <span class="pdot" style="--c:${STAGE_COLORS[s.color]};border-radius:50%;width:10px;height:10px" aria-hidden="true"></span>
-      <input class="input ${e.ssrow === i ? 'is-error' : ''}" id="ss-name-${i}" data-in="ssStage" data-i="${i}" data-f="name" value="${esc(s.name)}" maxlength="${STAGE_NAME_MAX}" placeholder="Stage name" aria-label="Stage ${i + 1} name" style="flex:1;min-width:140px">
-      <select class="select" data-in="ssStage" data-i="${i}" data-f="color" aria-label="Stage ${i + 1} colour" style="width:auto">${Object.keys(STAGE_COLORS)
+      <input class="input ${bad === i ? 'is-error' : ''}" id="ss-name-${i}" data-in="ssStage" data-i="${i}" data-f="name" value="${esc(s.name)}" maxlength="${STAGE_NAME_MAX}" placeholder="Stage name" aria-label="Stage ${i + 1} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="ss-row-err"' : ''} style="flex:1;min-width:140px">
+      <select class="select" data-in="ssStage" data-i="${i}" data-f="color" aria-label="Stage ${i + 1} color" style="width:auto">${Object.keys(STAGE_COLORS)
         .map(k => `<option value="${k}" ${s.color === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)}</option>`)
         .join('')}</select>
       <label class="row" style="gap:4px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="check" data-in="ssStage" data-i="${i}" data-f="finished" ${s.finished ? 'checked' : ''}>Finished</label>
-      <button type="button" class="ibtn ibtn-sm" data-a="ssMove" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move stage ${i + 1} up">${ic('arrow-up', 14)}</button>
-      <button type="button" class="ibtn ibtn-sm" data-a="ssMove" data-i="${i}" data-d="1" ${i === f.stages.length - 1 ? 'disabled' : ''} aria-label="Move stage ${i + 1} down">${ic('arrow-down', 14)}</button>
-      <button type="button" class="ibtn ibtn-sm" data-a="ssRemove" data-i="${i}" aria-label="Remove stage ${i + 1}">${ic('trash-2', 14)}</button>
-    </div>`;
+      <span class="row" style="gap:2px;flex-wrap:nowrap;margin-left:auto">
+        <button type="button" class="ibtn ibtn-sm" data-a="ssMove" data-i="${i}" data-v="up" ${i === 0 ? 'disabled' : ''} aria-label="Move stage ${i + 1} up">${ic('arrow-up', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="ssMove" data-i="${i}" data-v="down" ${i === last ? 'disabled' : ''} aria-label="Move stage ${i + 1} down">${ic('arrow-down', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="ssRemove" data-i="${i}" aria-label="Remove stage ${i + 1}">${ic('trash-2', 14)}</button>
+      </span>
+    </div>${bad === i ? err('ss-row-err', e.sslist, 'margin-top:4px') : ''}</div>`;
   return `${H(m.edit ? 'Edit stage set' : 'New stage set', 'A project sits in one stage of its set. A finished stage (Closed, Cancelled) takes the project out of the Active lists.')}
   <form class="modal-b" data-submit="submitStageSet" data-keep="modal-stageset:${m.edit ? esc(m.edit) : 'new'}">
     <div class="field"><label class="label" for="ss-name">Stage set name</label><input class="input ${e.ssname ? 'is-error' : ''}" id="ss-name" data-in="ssName" value="${esc(f.name)}" maxlength="${STAGE_SET_NAME_MAX}" placeholder="e.g. Integrator job" autofocus aria-invalid="${!!e.ssname}"${e.ssname ? ' aria-describedby="ss-name-err"' : ''}>${err('ss-name-err', e.ssname)}</div>
     <div class="field"><span class="label">Stages, in order</span>
       ${f.stages.map(row).join('')}
-      ${err('ss-list-err', e.sslist)}
+      ${bad < 0 ? err('ss-list-err', e.sslist) : ''}
       <div><button type="button" class="btn btn-secondary btn-sm" data-a="ssAdd">${ic('plus', 13)}Add stage</button></div>
     </div>
   </form>
-  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitStageSet">Save changes</button></div>`;
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitStageSet">${m.edit ? 'Save changes' : 'Create stage set'}</button></div>`;
 }
 /* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
    level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the

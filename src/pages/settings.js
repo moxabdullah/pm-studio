@@ -385,9 +385,9 @@ function stageSetRow(set, manage, builtin) {
   const btns = !manage
     ? ''
     : builtin
-      ? `<button class="btn btn-secondary btn-sm" data-a="customiseStages" aria-label="Customise ${esc(set.name)}">Customise</button>`
+      ? `<button class="btn btn-secondary btn-sm" data-a="customiseStages" aria-label="Customize ${esc(set.name)}">Customize</button>`
       : `<button class="btn btn-secondary btn-sm" data-a="editStageSet" data-id="${esc(set.id)}" aria-label="Edit ${esc(set.name)}">Edit</button><button class="btn btn-danger-ghost btn-sm" data-a="delStageSet" data-id="${esc(set.id)}" aria-label="Delete ${esc(set.name)}">Delete</button>`;
-  return `<div style="border-bottom:1px solid var(--divider);padding-bottom:12px"><div class="srow" style="border-bottom:0">
+  return `<div style="border-bottom:1px solid var(--divider);padding-bottom:12px"><div class="srow" style="border-bottom:0;grid-template-columns:minmax(0,1fr) auto;gap:12px">
     <div class="row" style="gap:10px;min-width:0;align-items:flex-start">
       <span class="picon" style="--c:var(--gray)">${ic('list-ordered', 14)}</span>
       <div style="min-width:0"><div class="t trunc">${esc(set.name)}${builtin ? ' <span class="faint" style="font-weight:400">(built-in)</span>' : ''}</div><div class="faint" style="font-size:12px;margin-top:2px">${meta}</div></div>

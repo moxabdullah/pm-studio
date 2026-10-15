@@ -11,6 +11,7 @@ import { openModal } from '../overlays/modals.js';
 import { A, IN, confirmDlg, isTop, needWorkspace } from './actions.js';
 
 const COLORS = Object.keys(STAGE_COLORS);
+const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 const projectsText = n => `${n} project${n === 1 ? '' : 's'}`;
 /* "3 projects", or "3 projects (1 archived)": archived projects count, since they come back in the stage they were in. */
 const countText = list => {
@@ -40,6 +41,10 @@ function removedError(set, keep) {
   for (const s of set.stages) if (!keep.has(s.id)) return inStageError(set.id, s);
   return '';
 }
+/* (the message under the stage list in the editor has no full stop when it is one clause, as the other forms' have none; a toast has) */
+const setsMaxText = `A workspace can have up to ${STAGE_SETS_MAX} stage sets`;
+/* After a render that shows a refusal in the editor: the message may be below the fold of the dialog's body. */
+const reveal = () => $('#ss-name-err, #ss-row-err, #ss-list-err')?.scrollIntoView({ block: 'nearest' });
 const usedError = (set, list) =>
   `${countText(list)} ${list.length === 1 ? 'uses' : 'use'} ${set.name}. Move ${list.length === 1 ? 'it' : 'them'} to another stage set first.`;
 
@@ -70,7 +75,7 @@ A.newStageSet = () => {
     return;
   }
   if (stageSetsOf(D().ws.id).length >= STAGE_SETS_MAX) {
-    toast(`A workspace can have up to ${STAGE_SETS_MAX} stage sets.`, { kind: 'err' });
+    toast(`${setsMaxText}.`, { kind: 'err' });
     return;
   }
   openEditor(null, '', stagesCopy(DEFAULT_STAGE_SET.stages));
@@ -99,24 +104,35 @@ IN.ssStage = el => {
   const s = S.ui.ssform.stages[+el.dataset.i];
   if (!s) return;
   const f = el.dataset.f;
+  if (f === 'color') {
+    // only the swatch changes: no re-render, so the focus stays on the color control (a message about the stages is still true)
+    s.color = COLORS.includes(el.value) ? el.value : 'gray';
+    el.closest('[role="group"]')?.querySelector('.pdot')?.style.setProperty('--c', STAGE_COLORS[s.color]);
+    return;
+  }
   if (f === 'finished') s.finished = el.checked;
-  else if (f === 'color') s.color = COLORS.includes(el.value) ? el.value : 'gray';
   else s.name = el.value;
-  // the colour shows in a swatch, and a message about the stages is out of date once one is changed
-  if (f === 'color' || S.ui.errors.sslist) {
+  // a message about the stages is out of date once one is changed
+  if (S.ui.errors.sslist) {
     S.ui.errors.sslist = null;
     S.ui.errors.ssrow = -1;
     render();
   }
 };
+/* Move and Remove re-render the dialog, and focus goes where the person is working: a moved stage keeps its button (the other one
+   when it reached an end), a removed one hands focus to the stage that took its place, or to Add stage. */
 A.ssMove = el => {
   const stages = S.ui.ssform.stages;
   const i = +el.dataset.i;
-  const j = i + +el.dataset.d;
+  const v = el.dataset.v;
+  const j = v === 'up' ? i - 1 : i + 1;
   if (!stages[i] || !stages[j]) return;
   [stages[i], stages[j]] = [stages[j], stages[i]];
   S.ui.errors.sslist = null;
+  S.ui.errors.ssrow = -1;
   render();
+  const btn = d => $(`[data-a="ssMove"][data-i="${j}"][data-v="${d}"]:not([disabled])`);
+  (btn(v) || btn(v === 'up' ? 'down' : 'up'))?.focus({ preventScroll: true });
 };
 A.ssRemove = el => {
   const m = S.ui.modals[S.ui.modals.length - 1];
@@ -130,17 +146,22 @@ A.ssRemove = el => {
   S.ui.errors.ssrow = why ? i : -1;
   if (!why) stages.splice(i, 1);
   render();
+  if (why)
+    reveal(); // (the focus stays on this button)
+  else ($(`#ss-name-${i}`) || $('[data-a="ssAdd"]'))?.focus({ preventScroll: true });
 };
 A.ssAdd = () => {
   const stages = S.ui.ssform.stages;
   if (stages.length >= STAGES_MAX) {
-    S.ui.errors.sslist = `A set can have up to ${STAGES_MAX} stages.`;
+    S.ui.errors.sslist = `A set can have up to ${STAGES_MAX} stages`;
     S.ui.errors.ssrow = -1;
     render();
+    reveal();
     return;
   }
   stages.push({ id: uid(), name: '', color: 'gray', finished: false });
   S.ui.errors.sslist = null;
+  S.ui.errors.ssrow = -1;
   render();
   setTimeout(() => $(`#ss-name-${stages.length - 1}`)?.focus(), 0);
 };
@@ -151,14 +172,20 @@ A.submitStageSet = () => {
   const name = f.name.trim();
   const stages = f.stages.map(s => stageCopy({ ...s, name: s.name.trim() }));
   const saved = m.edit ? findStageSet(m.edit) : null;
-  const nameErr = !name ? 'Give the stage set a name' : name.length > STAGE_SET_NAME_MAX ? `Names can be up to ${STAGE_SET_NAME_MAX} characters` : '';
+  const nameErr = !name
+    ? 'Give the stage set a name'
+    : name.length > STAGE_SET_NAME_MAX
+      ? `Names can be up to ${STAGE_SET_NAME_MAX} characters`
+      : stageSetsOf(saved ? saved.workspace : D().ws.id).some(x => x.id !== m.edit && sameName(x.name, name))
+        ? `A stage set called “${name}” already exists`
+        : '';
   let listErr = '';
   let row = -1;
-  if (!stages.length) listErr = 'Add at least one stage.';
-  else if (stages.length > STAGES_MAX) listErr = `A set can have up to ${STAGES_MAX} stages.`;
+  if (!stages.length) listErr = 'Add at least one stage';
+  else if (stages.length > STAGES_MAX) listErr = `A set can have up to ${STAGES_MAX} stages`;
   else {
     row = stages.findIndex(s => !s.name || s.name.length > STAGE_NAME_MAX);
-    if (row >= 0) listErr = stages[row].name ? `Stage names can be up to ${STAGE_NAME_MAX} characters.` : 'Every stage needs a name.';
+    if (row >= 0) listErr = stages[row].name ? `Stage names can be up to ${STAGE_NAME_MAX} characters` : 'Every stage needs a name';
   }
   if (!listErr && saved) listErr = removedError(saved, new Set(stages.map(s => s.id)));
   if (nameErr || listErr) {
@@ -167,6 +194,7 @@ A.submitStageSet = () => {
     S.ui.errors.ssrow = row;
     render();
     $(nameErr ? '#ss-name' : row >= 0 ? `#ss-name-${row}` : '#ss-name')?.focus();
+    reveal();
     return;
   }
   // what was validated: the form stays editable after a refusal, so "Try again" must not read it again
@@ -176,13 +204,19 @@ A.submitStageSet = () => {
   if (!id && needWorkspace()) return;
   const fresh = latest(m);
   let why = '';
+  let nameWhy = ''; // a set of that name saved meanwhile (another admin)
   mutate(
     () => {
-      why = '';
+      why = nameWhy = '';
       if (id) {
         const s = findStageSet(id); // by id: sync or Undo can replace the set while a refused save waits for "Try again"
         if (!s) {
-          why = 'That stage set is gone.';
+          why = 'That stage set is gone';
+          return;
+        }
+        const clash = stageSetsOf(s.workspace).find(x => x.id !== id && sameName(x.name, v.name));
+        if (clash) {
+          nameWhy = `A stage set called “${clash.name}” already exists`;
           return;
         }
         why = removedError(s, new Set(v.stages.map(x => x.id)));
@@ -190,7 +224,12 @@ A.submitStageSet = () => {
         Object.assign(s, { name: v.name, stages: stagesCopy(v.stages) });
       } else {
         if (stageSetsOf(ws).length >= STAGE_SETS_MAX) {
-          why = `A workspace can have up to ${STAGE_SETS_MAX} stage sets.`;
+          why = setsMaxText;
+          return;
+        }
+        const clash = stageSetsOf(ws).find(x => sameName(x.name, v.name));
+        if (clash) {
+          nameWhy = `A stage set called “${clash.name}” already exists`;
           return;
         }
         // (a delete by another admin since the dialog opened) with no set saved, this one becomes the first and takes the built-in one's projects
@@ -202,10 +241,12 @@ A.submitStageSet = () => {
       }
     },
     () => {
-      if (why) {
+      if (why || nameWhy) {
+        S.ui.errors.ssname = nameWhy;
         S.ui.errors.sslist = why;
         S.ui.errors.ssrow = -1;
         render();
+        reveal();
         return;
       }
       S.ui.modals.pop();
