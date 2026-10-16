@@ -69,9 +69,11 @@
   opacity: 1;
 }
 /* The projects Board: the task board's columns (board.css) on the page, whose gutters it keeps; it scrolls sideways inside itself, and
-   its columns are as tall as the tallest (an empty one is a drop target to aim at) up to the screen. */
+   its columns are as tall as the tallest (an empty one is a drop target to aim at) up to the screen. The padding gives the focus ring of
+   the first and last column room inside the scrolling box; the margin takes it back, so that the board lines up with the toolbar. */
 .board.pboard {
-  padding: 0 0 12px;
+  padding: 4px 4px 12px;
+  margin: -4px -4px 0;
   align-items: stretch;
 }
 .pboard .bcol {
@@ -80,6 +82,14 @@
 }
 .pboard .bcol-h .trunc {
   flex: 0 1 auto;
+}
+/* the collapse button is not dimmed: at .55 it fails 3:1, and a keyboard focus on it would not bring it back */
+.pboard .bcol-h .acts {
+  opacity: 1;
+}
+.pboard .bcol-h .ibtn {
+  width: 24px;
+  height: 24px;
 }
 .pboard .bcol.collapsed {
   justify-content: flex-start;
@@ -120,6 +130,35 @@
   gap: 8px;
   font-size: var(--fs-xs);
   color: var(--text-3);
+}
+.pbcard .pmove {
+  min-width: 24px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  gap: 3px;
+}
+/* a finger: the stage button and the column's collapse button are 32px tall */
+@media (pointer: coarse) {
+  .pbcard .pmove {
+    height: 32px;
+    min-height: 32px;
+  }
+  .pboard .bcol-h .ibtn {
+    width: 32px;
+    height: 32px;
+  }
+}
+/* On a phone the columns are as tall as their cards and the page scrolls: a column with its own scroll (and a height cut to the screen)
+   would end under the bottom nav. An empty one keeps a little height to drop on. */
+@media (max-width: 640px) {
+  .pboard .bcol {
+    max-height: none;
+    min-height: 120px;
+  }
+  .pboard .bcol-b {
+    overflow-y: visible;
+  }
 }
 .pstatus {
   display: inline-flex;

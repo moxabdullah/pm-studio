@@ -90,7 +90,7 @@ function pipeCard(p) {
     <div class="row" style="gap:8px">${pIcon(p, '', 14)}<b class="trunc grow" style="font-weight:600" title="${esc(p.name)}">${esc(p.name)}</b>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</div>
     ${health ? `<div class="pstatuses">${health}</div>` : ''}
     ${canSee(p) ? `<div class="row" style="gap:10px">${progBar(pr, progClass(p))}<span class="num" style="font-size:12px;font-weight:500">${pr}%</span></div>` : `<div class="row faint" style="font-size:12px">${ic('lock', 12)}Restricted — request access to see tasks</div>`}
-    <div class="pfoot">${p.due ? `<span class="row" style="gap:4px">${ic('calendar', 12)}${fmtDate(p.due)}</span>` : ''}<span class="sp"></span>${av(p.lead, 'sm')}<button class="ibtn ibtn-xs" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}" data-tip="Change stage" aria-label="${esc(move)}">${ic('move-right', 13)}</button></div>
+    <div class="pfoot">${p.due ? `<span class="row" style="gap:4px">${ic('calendar', 12)}${fmtDate(p.due)}</span>` : ''}<span class="sp"></span>${av(p.lead, 'sm')}<button class="btn btn-ghost btn-sm pmove" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}" aria-label="${esc(move)}">Move${ic('chevron-down', 12)}</button></div>
   </div>`;
 }
 /* The Board: a column per stage of the set shown, in the set's order, and the projects of that set (`ps`) in them, in the page's sort.
@@ -105,17 +105,19 @@ function pipeBoard(ps, set, st) {
     const cards = mine.filter(p => stageOf(p).id === s.id);
     const drop = `data-drop-stage="${esc(s.id)}" data-set="${esc(set.id)}"`;
     const ck = pipeKey(set, s);
-    if (pipeCollapsed(set, s, st))
-      return `<button class="bcol collapsed" ${drop} data-a="togglePipeCol" data-key="${esc(ck)}" data-to="expand" aria-label="Expand ${esc(s.name)} (${cards.length})" title="Expand ${esc(s.name)}">${dot(STAGE_COLORS[s.color])}<span class="vname"><span class="vn">${esc(s.name)}</span><span class="faint">${cards.length}</span></span></button>`;
+    if (pipeCollapsed(set, s, st)) {
+      const expand = `Expand ${s.name}, ${cards.length} ${cards.length === 1 ? 'project' : 'projects'}`;
+      return `<button class="bcol collapsed" ${drop} data-a="togglePipeCol" data-key="${esc(ck)}" data-to="expand" aria-label="${esc(expand)}" title="${esc(expand)}">${dot(STAGE_COLORS[s.color])}<span class="vname"><span class="vn">${esc(s.name)}</span><span class="faint">${cards.length}</span></span></button>`;
+    }
     return `<section class="bcol" ${drop} aria-label="${esc(s.name)}">
       <div class="bcol-h">${dot(STAGE_COLORS[s.color])}<span class="trunc" title="${esc(s.name)}">${esc(s.name)}</span><span class="cnt">${cards.length}</span><span class="acts"><button class="ibtn ibtn-xs" data-a="togglePipeCol" data-key="${esc(ck)}" data-to="collapse" data-tip="Collapse" aria-label="Collapse ${esc(s.name)}">${ic('chevrons-left', 14)}</button></span></div>
-      <div class="bcol-b">${cards.map(pipeCard).join('')}</div>
+      <div class="bcol-b" data-keep="pcol:${esc(set.id)}:${esc(s.id)}">${cards.map(pipeCard).join('')}</div>
     </section>`;
   });
   if (unknown.length)
     cols.unshift(`<section class="bcol" aria-label="Unknown stage">
       <div class="bcol-h">${dot(STAGE_COLORS.gray)}<span class="trunc">Unknown stage</span><span class="cnt">${unknown.length}</span></div>
-      <div class="bcol-b">${unknown.map(pipeCard).join('')}</div>
+      <div class="bcol-b" data-keep="pcol:${esc(set.id)}:unknown">${unknown.map(pipeCard).join('')}</div>
     </section>`);
   return `${other ? `<p class="faint" style="font-size:12px;margin:0 0 8px">${other} ${other === 1 ? 'project in another stage set' : 'projects in other stage sets'}</p>` : ''}<div class="board pboard" data-keep="pboard:${esc(set.id)}">${cols.join('')}</div>`;
 }

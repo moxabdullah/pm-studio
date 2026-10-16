@@ -346,8 +346,26 @@ A.popPickSet = el => {
   render();
   $('.pop.floating [data-a="popPick"]')?.focus({ preventScroll: true }); // the first stage, not "Back"
 };
+/* Focus an element of the Board and bring it into view: the board scrolls inside itself, and so do its columns, so a focus that is
+   only put there can sit off screen. */
+function focusShown(el) {
+  el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+/* Where focus goes after a stage is picked on the Board: the card's own stage button when it is still on it (it is in another column
+   now, maybe out of view); else the column the card went to (its strip, or the collapse button of the open column); else the Board
+   button of the layout toggle, so that focus is never left on the page. `setId` is the set the stage was picked in. */
+function focusMoved(id, stageId, setId) {
+  const col = setId && $(`.pboard [data-drop-stage="${CSS.escape(stageId)}"][data-set="${CSS.escape(setId)}"]`);
+  const el =
+    $(`.pboard [data-pop="pstage"][data-id="${CSS.escape(id)}"]`) ||
+    (col && (col.matches('button') ? col : col.querySelector('.bcol-h [data-a="togglePipeCol"]'))) ||
+    $('.seg [data-k="projView"][data-v="board"]');
+  if (el) focusShown(el);
+}
 A.popPick = el => {
   const p = S.ui.pop;
+  if (!p) return; // a drag cleared it (drag-drop.js) while its items were still on screen
   let v = el.dataset.v;
   if (p.type === 'subassignee' || (p.type === 'date' && p.field === 'subdue')) {
     const id = p.id;
@@ -375,6 +393,7 @@ A.popPick = el => {
   }
   if (p.type === 'pstage' || p.type === 'phealth') {
     const { id, set } = p;
+    let pickedSet = null;
     S.ui.pop = null;
     if (p.type === 'phealth') setHealth(id, v);
     else {
@@ -382,11 +401,13 @@ A.popPick = el => {
       const pr = proj(id);
       const shown = pr && ((set && stageSetsOf(pr.workspace).find(s => s.id === set)) || setOf(pr));
       if (shown) moveProject(id, v, shown.id !== setOf(pr).id ? shown.id : undefined);
+      pickedSet = shown?.id;
     }
     render();
-    // "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page.
-    // A stage picked on the Board moves the card, whose stage button is the one to come back to.
-    if (!document.activeElement || document.activeElement === document.body)
+    // On the Board the picker's own stage button is where focus comes back to, or the column the card went to (focusMoved).
+    // Elsewhere "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page.
+    if (p.type === 'pstage' && $('.pboard')) focusMoved(id, v, pickedSet);
+    else if (!document.activeElement || document.activeElement === document.body)
       $(`[data-pop="pstage"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     return;
   }
@@ -1489,6 +1510,9 @@ A.toggleCol = el => {
 A.togglePipeCol = el => {
   S.ui.collapsedCols[el.dataset.key] = el.dataset.to === 'collapse';
   render();
+  // focus comes back to the button that took the place of this one (render does that, without scrolling), which can be off screen
+  const f = document.activeElement;
+  if (f?.closest?.('.pboard')) f.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 };
 A.colCollapse = el => {
   S.ui.collapsedCols[S.ui.pop.key + ':' + el.dataset.id] = true;

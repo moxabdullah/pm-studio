@@ -8,6 +8,7 @@ import { peekView, viewOf } from '../shell/view-engine.js';
 import { applyPatch, handleFiles, updateTask } from './actions.js';
 import { moveProject } from './stages.js';
 
+const EDGE = 56; // px from the Board's left or right edge within which a card being dragged scrolls it
 export let DRAG = null;
 export function clearDropMarks() {
   $$('.drop-line').forEach(x => x.remove());
@@ -51,6 +52,8 @@ document.addEventListener('dragstart', e => {
 document.addEventListener('dragend', () => {
   DRAG = null;
   clearDropMarks();
+  // dragstart closed the picker (S.ui.pop) without drawing; a drag that wrote nothing left it on screen, its items with nothing behind them
+  if (!S.ui.pop && $('.pop.floating')) render();
 });
 /* A drag that carries files from the computer. Where nothing in the app takes them the browser would open the first one in this
    very tab, in place of the app (and whatever was being typed or edited with it). So everywhere outside the places that do take
@@ -124,14 +127,24 @@ document.addEventListener('dragover', e => {
     it.querySelector('.sitem')?.classList.add('drop-before');
     DRAG.before = it.dataset.projDrop;
   } else if (DRAG.type === 'pcard') {
+    // The browser scrolls a page near its own edge, over a zone of some 16px; the Board's far columns are further than that from the
+    // pointer, so near the board's left or right edge it is scrolled here, faster the closer the pointer (once per dragover, no timer).
+    const bd = $('.pboard');
+    if (bd) {
+      const r = bd.getBoundingClientRect();
+      if (e.clientY >= r.top && e.clientY <= r.bottom) {
+        const dl = Math.max(0, e.clientX - r.left);
+        const dr = Math.max(0, r.right - e.clientX);
+        if (dl < EDGE) bd.scrollLeft -= Math.ceil((EDGE - dl) / 3);
+        else if (dr < EDGE) bd.scrollLeft += Math.ceil((EDGE - dr) / 3);
+      }
+    }
     // a column of the projects Board (the "Unknown stage" one has no data-drop-stage: no drop there)
     const col = e.target.closest('[data-drop-stage]');
     $$('.bcol.over').forEach(x => x !== col && x.classList.remove('over'));
-    DRAG.stage = col ? col.dataset.dropStage : null;
     if (!col) return;
     e.preventDefault();
     col.classList.add('over');
-    DRAG.set = col.dataset.set;
   }
 });
 document.addEventListener('dragleave', e => {
@@ -235,11 +248,12 @@ document.addEventListener('drop', e => {
       () => toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 }),
       () => !!task(d.id) && fresh(),
     );
-  } else if (d.type === 'pcard' && d.stage) {
-    // moveProject renders (through mutate) and says nothing when the card is dropped on the stage it is in. The set is checked since
-    // sync can have moved the project to another set while it was dragged.
+  } else if (d.type === 'pcard') {
+    // The column is the one under the pointer now. moveProject renders (through mutate) and says nothing when the card is dropped on
+    // the stage it is in. The set is checked since sync can have moved the project to another set while it was dragged.
+    const col = e.target.closest?.('[data-drop-stage]');
     const pr = proj(d.id);
-    if (pr && setOf(pr).id === d.set) moveProject(d.id, d.stage);
+    if (col && pr && setOf(pr).id === col.dataset.set) moveProject(d.id, col.dataset.dropStage);
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);
     o.splice(o.indexOf(d.before), 0, d.id);
