@@ -10,10 +10,13 @@ import { latestFields, mutate, toast } from '../ui/toast.js';
    the stage, in one change. The history gets an entry when the stage changes (by id: a stage with the same id in another set, which
    "Customize" makes, is the same stage to the project) or the set does; picking where the project already is writes nothing and says
    nothing. Look-ups are by id, inside the change, since sync or Undo can replace the project (or the set can go) while a refused
-   change waits for "Try again". */
+   change waits for "Try again". That does nothing for a project that has changed set since the call (another tab moved it): the stage
+   was chosen in the set it was in then, and a set made by "Customize" shares its stage ids with its source, so the move would land
+   in a stage of a set that nobody looked at. */
 export function moveProject(id, stageId, setId) {
   const pr0 = proj(id);
   if (!pr0) return;
+  const from = setOf(pr0).id;
   const set0 = setId ? stageSetsOf(pr0.workspace).find(s => s.id === setId) : setOf(pr0);
   if (set0 && set0.id === setOf(pr0).id && stageOf(pr0).id === stageId && set0.stages.some(s => s.id === stageId)) return;
   const fresh = latestFields('proj', id, setId ? ['stageSet', 'stage', 'stageHistory'] : ['stage', 'stageHistory']);
@@ -38,7 +41,7 @@ export function moveProject(id, stageId, setId) {
       moved = [stage, setChanged ? set : null];
     },
     () => (moved ? toast(`${name} moved to ${moved[0].name}${moved[1] ? ` (${moved[1].name})` : ''}`) : toast('That stage is gone.', { kind: 'err' })),
-    () => fresh() && !!proj(id),
+    () => fresh() && !!proj(id) && setOf(proj(id)).id === from,
   );
 }
 

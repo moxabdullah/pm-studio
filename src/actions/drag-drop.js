@@ -1,13 +1,17 @@
 /* ---------- drag & drop ---------- */
 import { $, $$, addD, diffD, fmtDate, iso, parse } from '../core/utils.js';
 import { PR, ST } from '../core/constants.js';
-import { D, S, proj, save, task } from '../core/store.js';
+import { D, S, proj, save, setOf, task } from '../core/store.js';
 import { latestFields, mutate, toast } from '../ui/toast.js';
 import { fxSet, render } from '../shell/render.js';
 import { peekView, viewOf } from '../shell/view-engine.js';
 import { applyPatch, handleFiles, updateTask } from './actions.js';
+import { moveProject } from './stages.js';
 
+const EDGE = 56; // px from the Board's left or right edge within which a card being dragged scrolls it
+const GUTTER = 24; // px past either edge where it still does (the page's gutter), but not past the page itself: the sidebar never scrolls the Board
 export let DRAG = null;
+let pickerClosed = false; // dragstart closed a picker without drawing: dragend draws
 export function clearDropMarks() {
   $$('.drop-line').forEach(x => x.remove());
   $$('.over').forEach(x => x.classList.remove('over'));
@@ -18,8 +22,9 @@ document.addEventListener('dragstart', e => {
   const card = e.target.closest?.('[data-drag-card]'),
     row = e.target.closest?.('[data-drag-row]'),
     cal = e.target.closest?.('[data-drag-cal]'),
-    sp = e.target.closest?.('[data-drag-proj]');
-  const el = card || row || cal || sp;
+    sp = e.target.closest?.('[data-drag-proj]'),
+    pc = e.target.closest?.('[data-drag-pcard]');
+  const el = card || row || cal || sp || pc;
   if (!el) return;
   DRAG = card
     ? { type: 'card', id: card.dataset.dragCard }
@@ -27,7 +32,9 @@ document.addEventListener('dragstart', e => {
       ? { type: 'row', id: row.dataset.dragRow }
       : cal
         ? { type: 'cal', id: cal.dataset.dragCal }
-        : { type: 'proj', id: sp.dataset.dragProj };
+        : sp
+          ? { type: 'proj', id: sp.dataset.dragProj }
+          : { type: 'pcard', id: pc.dataset.dragPcard };
   e.dataTransfer.effectAllowed = 'move';
   try {
     e.dataTransfer.setData('text/plain', DRAG.id);
@@ -41,12 +48,23 @@ document.addEventListener('dragstart', e => {
     } catch {
       /* not supported here; safe to skip */
     }
+  // not drawn (that would detach the card being dragged), so an open picker is taken off the page here: it would cover a part of a column and take its drops
+  const floating = $$('.pop.floating');
+  pickerClosed = !!S.ui.pop || floating.length > 0;
   S.ui.pop = null;
+  floating.forEach(x => x.remove());
   setTimeout(() => vis.classList.add('dragging'), 0);
 });
 document.addEventListener('dragend', () => {
   DRAG = null;
   clearDropMarks();
+  // dragstart closed the picker without drawing, so the page still holds what it knew of it: the overlay state render keeps, and the
+  // focus, which was in the picker and is now on the page, not on the button that opened it. A drag that wrote nothing draws nothing
+  // else; one that did has drawn already, and this is one more draw.
+  if (pickerClosed) {
+    pickerClosed = false;
+    render();
+  }
 });
 /* A drag that carries files from the computer. Where nothing in the app takes them the browser would open the first one in this
    very tab, in place of the app (and whatever was being typed or edited with it). So everywhere outside the places that do take
@@ -119,6 +137,28 @@ document.addEventListener('dragover', e => {
     $$('.drop-before').forEach(x => x.classList.remove('drop-before'));
     it.querySelector('.sitem')?.classList.add('drop-before');
     DRAG.before = it.dataset.projDrop;
+  } else if (DRAG.type === 'pcard') {
+    // The browser scrolls a page near its own edge, over a zone of some 16px; the Board's far columns are further than that from the
+    // pointer, so near the board's left or right edge it is scrolled here, faster the closer the pointer (once per dragover, no timer).
+    const bd = $('.pboard');
+    if (bd) {
+      const r = bd.getBoundingClientRect();
+      // the Board sits 4px out into the page's 24px gutter, so 24px past its edge would reach into the sidebar: not past the page
+      const pg = bd.closest('.content')?.getBoundingClientRect() || { left: -Infinity, right: Infinity };
+      const near = e.clientX >= Math.max(r.left - GUTTER, pg.left) && e.clientX <= Math.min(r.right + GUTTER, pg.right);
+      if (near && e.clientY >= r.top && e.clientY <= r.bottom) {
+        const dl = Math.max(0, e.clientX - r.left);
+        const dr = Math.max(0, r.right - e.clientX);
+        if (dl < EDGE) bd.scrollLeft -= Math.ceil((EDGE - dl) / 3);
+        else if (dr < EDGE) bd.scrollLeft += Math.ceil((EDGE - dr) / 3);
+      }
+    }
+    // a column of the projects Board (the "Unknown stage" one has no data-drop-stage: no drop there)
+    const col = e.target.closest('[data-drop-stage]');
+    $$('.bcol.over').forEach(x => x !== col && x.classList.remove('over'));
+    if (!col) return;
+    e.preventDefault();
+    col.classList.add('over');
   }
 });
 document.addEventListener('dragleave', e => {
@@ -222,6 +262,14 @@ document.addEventListener('drop', e => {
       () => toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 }),
       () => !!task(d.id) && fresh(),
     );
+  } else if (d.type === 'pcard') {
+    // The column is the one under the pointer now. moveProject renders (through mutate) and says nothing when the card is dropped on
+    // the stage it is in. The set is checked since sync can have moved the project to another set while it was dragged; moveProject
+    // takes the project's set as it is now, so a "Try again" (offline) after another tab moved it does nothing. The column's set is
+    // not passed as `setId`: that writes the set too, and would move the project back to it.
+    const col = e.target.closest?.('[data-drop-stage]');
+    const pr = proj(d.id);
+    if (col && pr && setOf(pr).id === col.dataset.set) moveProject(d.id, col.dataset.dropStage);
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);
     o.splice(o.indexOf(d.before), 0, d.id);
