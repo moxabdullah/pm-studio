@@ -4,8 +4,21 @@
 import { dOff, esc, fmtDate, fmtTime } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { DEFAULT_STAGE_SET } from '../core/constants.js';
-import { D, S, canManageStages, canManageTemplates, inWs, isAdmin, me, projectsUsing, stageSetsOf, templatesOf } from '../core/store.js';
-import { av, pIcon, stagePill } from '../ui/helpers.js';
+import {
+  D,
+  S,
+  canManageLabels,
+  canManageStages,
+  canManageTemplates,
+  inWs,
+  isAdmin,
+  labelsOf,
+  me,
+  projectsUsing,
+  stageSetsOf,
+  templatesOf,
+} from '../core/store.js';
+import { av, lbl, pIcon, stagePill } from '../ui/helpers.js';
 import { permsTable, teamsGrid } from './members.js';
 import { page404 } from './errors.js';
 import { SHORTCUTS } from '../overlays/modals.js';
@@ -28,6 +41,7 @@ export const SET_NAV = [
       ['projects', 'Projects', 'folder-kanban'],
       ['templates', 'Templates', 'layers'],
       ['stages', 'Stages', 'list-ordered'],
+      ['labels', 'Labels', 'tag'],
       ['permissions', 'Permissions', 'shield'],
     ],
   ],
@@ -249,6 +263,22 @@ export function settingsBody(sec, title) {
           : list.length
             ? `<div class="row" style="margin-top:12px"><button class="btn btn-secondary" data-a="newStageSet">${ic('plus', 14)}New stage set</button></div>`
             : '<p class="faint" style="font-size:12px;margin-top:12px">Customize the built-in set to add more stage sets.</p>')
+      );
+    }
+    case 'labels': {
+      // the workspace's own list, or the built-in one until an admin or manager saves a list (store.js labelsOf)
+      const manage = canManageLabels();
+      const list = labelsOf(d.ws.id);
+      return (
+        H(`Labels for ${esc(d.ws.name)}. Tasks in its projects can carry any of them.`) +
+        `<div class="sblock" style="margin-top:0">${
+          list.length
+            ? `<div class="row" style="flex-wrap:wrap;gap:6px">${list.map(l => lbl(l.id, d.ws.id)).join('')}</div>`
+            : '<p class="faint" style="margin:0">No labels yet.</p>'
+        }</div>` +
+        (manage
+          ? `<div class="row" style="margin-top:12px"><button class="btn btn-secondary" data-a="editLabels">${ic('pencil', 14)}Edit labels</button></div>`
+          : '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change labels.</p>')
       );
     }
     case 'permissions':
