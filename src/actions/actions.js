@@ -384,8 +384,9 @@ A.popPick = el => {
       if (shown) moveProject(id, v, shown.id !== setOf(pr).id ? shown.id : undefined);
     }
     render();
-    // "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page
-    if (p.type === 'phealth' && (!document.activeElement || document.activeElement === document.body))
+    // "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page.
+    // A stage picked on the Board moves the card, whose stage button is the one to come back to.
+    if (!document.activeElement || document.activeElement === document.body)
       $(`[data-pop="pstage"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     return;
   }
@@ -1483,6 +1484,12 @@ A.toggleCol = el => {
   delete S.ui.collapsedCols[el.dataset.ck];
   render();
 };
+/* A column of the projects Board (`pipe:<set>:<stage>`): collapsed or expanded, kept either way, since the default depends on the stage
+   (a finished stage starts collapsed). `data-to` is the state the button asks for. */
+A.togglePipeCol = el => {
+  S.ui.collapsedCols[el.dataset.key] = el.dataset.to === 'collapse';
+  render();
+};
 A.colCollapse = el => {
   S.ui.collapsedCols[S.ui.pop.key + ':' + el.dataset.id] = true;
   S.ui.pop = null;
@@ -1582,6 +1589,13 @@ IN.projQ = el => {
 };
 IN.projStatus = el => {
   S.ui.projStatus = el.value;
+  render();
+};
+/* The Board's stage set selector. A stage filter of another set would put the board back on that set, so it is cleared. */
+IN.projBoardSet = el => {
+  S.ui.projBoardSet = el.value;
+  const [kind, setId] = (S.ui.projStatus || 'active').split(':');
+  if (kind === 'stage' && setId !== el.value) S.ui.projStatus = 'active';
   render();
 };
 IN.projSort = el => {

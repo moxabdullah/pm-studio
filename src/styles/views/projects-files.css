@@ -68,6 +68,59 @@
 .pcard:hover .more {
   opacity: 1;
 }
+/* The projects Board: the task board's columns (board.css) on the page, whose gutters it keeps; it scrolls sideways inside itself, and
+   its columns are as tall as the tallest (an empty one is a drop target to aim at) up to the screen. */
+.board.pboard {
+  padding: 0 0 12px;
+  align-items: stretch;
+}
+.pboard .bcol {
+  max-height: calc(100dvh - 240px);
+  min-height: 180px;
+}
+.pboard .bcol-h .trunc {
+  flex: 0 1 auto;
+}
+.pboard .bcol.collapsed {
+  justify-content: flex-start;
+  padding-bottom: 8px;
+  text-align: center;
+}
+.pboard .bcol.collapsed .vn {
+  max-height: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A project on the Board: a kcard's look, with the stage button on its foot always showing (the way to move it with a keyboard or a finger). */
+.pbcard {
+  background: var(--surface);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-card);
+  padding: var(--card-pad) calc(var(--card-pad) + 2px);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+  transition: box-shadow var(--dur);
+}
+.pbcard:hover {
+  box-shadow:
+    0 2px 6px -2px rgba(0, 0, 0, 0.08),
+    0 0 0 1px var(--border-strong);
+}
+.pbcard.dragging {
+  opacity: 0.35;
+}
+.pbcard .pfoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
 .pstatus {
   display: inline-flex;
   align-items: center;

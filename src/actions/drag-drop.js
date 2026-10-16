@@ -1,11 +1,12 @@
 /* ---------- drag & drop ---------- */
 import { $, $$, addD, diffD, fmtDate, iso, parse } from '../core/utils.js';
 import { PR, ST } from '../core/constants.js';
-import { D, S, proj, save, task } from '../core/store.js';
+import { D, S, proj, save, setOf, task } from '../core/store.js';
 import { latestFields, mutate, toast } from '../ui/toast.js';
 import { fxSet, render } from '../shell/render.js';
 import { peekView, viewOf } from '../shell/view-engine.js';
 import { applyPatch, handleFiles, updateTask } from './actions.js';
+import { moveProject } from './stages.js';
 
 export let DRAG = null;
 export function clearDropMarks() {
@@ -18,8 +19,9 @@ document.addEventListener('dragstart', e => {
   const card = e.target.closest?.('[data-drag-card]'),
     row = e.target.closest?.('[data-drag-row]'),
     cal = e.target.closest?.('[data-drag-cal]'),
-    sp = e.target.closest?.('[data-drag-proj]');
-  const el = card || row || cal || sp;
+    sp = e.target.closest?.('[data-drag-proj]'),
+    pc = e.target.closest?.('[data-drag-pcard]');
+  const el = card || row || cal || sp || pc;
   if (!el) return;
   DRAG = card
     ? { type: 'card', id: card.dataset.dragCard }
@@ -27,7 +29,9 @@ document.addEventListener('dragstart', e => {
       ? { type: 'row', id: row.dataset.dragRow }
       : cal
         ? { type: 'cal', id: cal.dataset.dragCal }
-        : { type: 'proj', id: sp.dataset.dragProj };
+        : sp
+          ? { type: 'proj', id: sp.dataset.dragProj }
+          : { type: 'pcard', id: pc.dataset.dragPcard };
   e.dataTransfer.effectAllowed = 'move';
   try {
     e.dataTransfer.setData('text/plain', DRAG.id);
@@ -119,6 +123,15 @@ document.addEventListener('dragover', e => {
     $$('.drop-before').forEach(x => x.classList.remove('drop-before'));
     it.querySelector('.sitem')?.classList.add('drop-before');
     DRAG.before = it.dataset.projDrop;
+  } else if (DRAG.type === 'pcard') {
+    // a column of the projects Board (the "Unknown stage" one has no data-drop-stage: no drop there)
+    const col = e.target.closest('[data-drop-stage]');
+    $$('.bcol.over').forEach(x => x !== col && x.classList.remove('over'));
+    DRAG.stage = col ? col.dataset.dropStage : null;
+    if (!col) return;
+    e.preventDefault();
+    col.classList.add('over');
+    DRAG.set = col.dataset.set;
   }
 });
 document.addEventListener('dragleave', e => {
@@ -222,6 +235,11 @@ document.addEventListener('drop', e => {
       () => toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 }),
       () => !!task(d.id) && fresh(),
     );
+  } else if (d.type === 'pcard' && d.stage) {
+    // moveProject renders (through mutate) and says nothing when the card is dropped on the stage it is in. The set is checked since
+    // sync can have moved the project to another set while it was dragged.
+    const pr = proj(d.id);
+    if (pr && setOf(pr).id === d.set) moveProject(d.id, d.stage);
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);
     o.splice(o.indexOf(d.before), 0, d.id);

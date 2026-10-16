@@ -73,6 +73,7 @@ export function freshUi() {
     fileView: 'grid',
     projView: 'grid',
     projStatus: 'active',
+    projBoardSet: null,
     homeTab: 'upcoming',
     inboxCat: 'all',
     inboxUnread: false,

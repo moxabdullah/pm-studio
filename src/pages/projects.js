@@ -1,8 +1,9 @@
 /* ---------- PROJECTS ---------- */
 import { ago, esc, fmtDate, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
+import { STAGE_COLORS } from '../core/constants.js';
 import { D, S, TM, canSee, isFinished, mem, progressOf, setOf, stageOf, stageSetsOf, tasksOf, visibleProjects } from '../core/store.js';
-import { av, avStack, empty, pIcon, pStatuses, progBar, progClass } from '../ui/helpers.js';
+import { av, avStack, empty, pHealth, pIcon, pStatuses, progBar, progClass } from '../ui/helpers.js';
 
 export function projectCard(p) {
   const ts = tasksOf(p.id);
@@ -65,6 +66,59 @@ function filterNow() {
   if (!ok) u.projStatus = 'active';
   return ok ? st : 'active';
 }
+/* The stage set the Board shows: the set of a stage filter, else the one picked in the selector (S.ui.projBoardSet) while the workspace
+   still has it, else the first. Written back, so that the selector shows what is applied. `st` is what filterNow() returned. */
+function shownSet(st) {
+  const sets = setsShown();
+  const [kind, setId] = st.split(':');
+  const set = (kind === 'stage' && sets.find(s => s.id === setId)) || sets.find(s => s.id === S.ui.projBoardSet) || sets[0];
+  S.ui.projBoardSet = set.id;
+  return set;
+}
+/* A column of the Board is collapsed when it was (S.ui.collapsedCols, true or false: unlike the task board's, this key is kept once
+   it has been set), else when its stage finishes projects, unless the filter is there to show them. */
+const pipeKey = (set, s) => `pipe:${set.id}:${s.id}`;
+const pipeCollapsed = (set, s, st) => S.ui.collapsedCols[pipeKey(set, s)] ?? (s.finished && st !== 'finished' && st !== `stage:${set.id}:${s.id}`);
+/* A project on the Board: a link like projectCard (a div, with buttons in it), to drag to another column. Its stage is its column, so
+   there is no stage pill; the stage button is the way to move it without a mouse (it opens the picker the project's page has). */
+function pipeCard(p) {
+  const pr = progressOf(p.id);
+  const stage = stageOf(p);
+  const health = pHealth(p);
+  const move = `Move ${p.name} to another stage (now: ${stage.name})`;
+  return `<div class="pbcard" draggable="true" data-drag-pcard="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" aria-label="${esc(p.name)}">
+    <div class="row" style="gap:8px">${pIcon(p, '', 14)}<b class="trunc grow" style="font-weight:600" title="${esc(p.name)}">${esc(p.name)}</b>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</div>
+    ${health ? `<div class="pstatuses">${health}</div>` : ''}
+    ${canSee(p) ? `<div class="row" style="gap:10px">${progBar(pr, progClass(p))}<span class="num" style="font-size:12px;font-weight:500">${pr}%</span></div>` : `<div class="row faint" style="font-size:12px">${ic('lock', 12)}Restricted — request access to see tasks</div>`}
+    <div class="pfoot">${p.due ? `<span class="row" style="gap:4px">${ic('calendar', 12)}${fmtDate(p.due)}</span>` : ''}<span class="sp"></span>${av(p.lead, 'sm')}<button class="ibtn ibtn-xs" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}" data-tip="Change stage" aria-label="${esc(move)}">${ic('move-right', 13)}</button></div>
+  </div>`;
+}
+/* The Board: a column per stage of the set shown, in the set's order, and the projects of that set (`ps`) in them, in the page's sort.
+   A column takes a drop (drag-drop.js) and moves the project to its stage; the "Unknown stage" one, for projects whose stage is not in
+   the set, takes none. A collapsed column is the narrow strip, which takes a drop and a click (to expand it) as well. */
+function pipeBoard(ps, set, st) {
+  const mine = ps.filter(p => setOf(p).id === set.id);
+  const other = ps.length - mine.length;
+  const unknown = mine.filter(p => !set.stages.some(s => s.id === stageOf(p).id));
+  const dot = c => `<span class="pdot" style="--c:${c};border-radius:50%;width:10px;height:10px" aria-hidden="true"></span>`;
+  const cols = set.stages.map(s => {
+    const cards = mine.filter(p => stageOf(p).id === s.id);
+    const drop = `data-drop-stage="${esc(s.id)}" data-set="${esc(set.id)}"`;
+    const ck = pipeKey(set, s);
+    if (pipeCollapsed(set, s, st))
+      return `<button class="bcol collapsed" ${drop} data-a="togglePipeCol" data-key="${esc(ck)}" data-to="expand" aria-label="Expand ${esc(s.name)} (${cards.length})" title="Expand ${esc(s.name)}">${dot(STAGE_COLORS[s.color])}<span class="vname"><span class="vn">${esc(s.name)}</span><span class="faint">${cards.length}</span></span></button>`;
+    return `<section class="bcol" ${drop} aria-label="${esc(s.name)}">
+      <div class="bcol-h">${dot(STAGE_COLORS[s.color])}<span class="trunc" title="${esc(s.name)}">${esc(s.name)}</span><span class="cnt">${cards.length}</span><span class="acts"><button class="ibtn ibtn-xs" data-a="togglePipeCol" data-key="${esc(ck)}" data-to="collapse" data-tip="Collapse" aria-label="Collapse ${esc(s.name)}">${ic('chevrons-left', 14)}</button></span></div>
+      <div class="bcol-b">${cards.map(pipeCard).join('')}</div>
+    </section>`;
+  });
+  if (unknown.length)
+    cols.unshift(`<section class="bcol" aria-label="Unknown stage">
+      <div class="bcol-h">${dot(STAGE_COLORS.gray)}<span class="trunc">Unknown stage</span><span class="cnt">${unknown.length}</span></div>
+      <div class="bcol-b">${unknown.map(pipeCard).join('')}</div>
+    </section>`);
+  return `${other ? `<p class="faint" style="font-size:12px;margin:0 0 8px">${other} ${other === 1 ? 'project in another stage set' : 'projects in other stage sets'}</p>` : ''}<div class="board pboard" data-keep="pboard:${esc(set.id)}">${cols.join('')}</div>`;
+}
 export function pageProjects() {
   const u = S.ui;
   const q = (u.projQ || '').toLowerCase();
@@ -74,6 +128,7 @@ export function pageProjects() {
   const sorter = { recent: p => p.last, name: p => p.name, due: p => p.due, progress: p => -progressOf(p.id) }[sort];
   ps.sort((a, b) => (sorter(a) > sorter(b) ? 1 : -1));
   const view = u.projView;
+  const set = view === 'board' ? shownSet(st) : null;
   let body;
   if (!visibleProjects().length)
     body = `<div class="panel">${empty('folder-kanban', 'No projects yet', 'Create your first project to start organizing your work.', `<button class="btn btn-primary btn-sm" data-a="newProject">${ic('plus', 14)}Create project</button>`)}</div>`;
@@ -89,6 +144,7 @@ export function pageProjects() {
         return `<div class="mini" style="min-height:52px;gap:12px" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project">${pIcon(p)}<div class="grow" style="min-width:0"><div class="row" style="gap:6px"><b style="font-weight:500">${esc(p.name)}</b>${p.private ? ic('lock', 12) : ''}</div><div class="trunc faint" style="font-size:12px">${esc(p.desc)}</div></div><span class="hide-m">${pStatuses(p)}</span><span class="row hide-m" style="width:140px">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px">${pr}%</span></span><span class="num muted hide-m" style="width:70px;font-size:12px">${fmtDate(p.due)}</span>${avStack(p.members, 3)}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`;
       })
       .join('')}</div>`;
+  else if (view === 'board') body = pipeBoard(ps, set, st);
   else
     body = `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:860px"><thead><tr><th style="padding-left:14px">Project</th><th style="text-align:left">Stage</th><th style="text-align:left">Lead</th><th style="text-align:left">Team</th><th style="text-align:left;width:16%">Progress</th><th>Tasks</th><th style="text-align:left">Start</th><th style="text-align:left">Due</th><th style="text-align:left">Last activity</th><th></th></tr></thead><tbody>
     ${ps
@@ -112,11 +168,19 @@ export function pageProjects() {
       ]
         .map(([k, n]) => `<option value="${k}" ${sort === k ? 'selected' : ''}>Sort: ${n}</option>`)
         .join('')}</select>
+      ${
+        view === 'board' && setsShown().length > 1
+          ? `<select class="select" style="height:26px;width:auto;font-size:12px" data-in="projBoardSet" aria-label="Stage set">${setsShown()
+              .map(x => `<option value="${esc(x.id)}" ${x.id === set.id ? 'selected' : ''}>${esc(x.name)}</option>`)
+              .join('')}</select>`
+          : ''
+      }
       <span class="sp"></span>
       <div class="seg" role="tablist" aria-label="Layout">${[
         ['grid', 'Grid', 'layout-grid'],
         ['list', 'List', 'list'],
         ['table', 'Table', 'table-2'],
+        ['board', 'Board', 'square-kanban'],
       ]
         .map(
           ([k, n, i]) =>
