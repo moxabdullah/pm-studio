@@ -79,8 +79,34 @@
   border-radius: 5px;
   border: 1px solid var(--border);
   white-space: nowrap;
+  max-width: 24ch;
+}
+/* A long stage name is cut by an ellipsis, not by squeezing the project's name: in a table cell by a width of its own (a plain length:
+   a percentage does not cap a box in table layout), on a project card by 55% of its row (the pills together), which gives way
+   before the project's name does. The pill of a picker has room of its own. */
+.pillbtn .pstatus {
+  max-width: 32ch;
+}
+/* The stage pill and the health pill of a project side by side, with a gap, and below one another when the cell is narrow. */
+.pstatuses {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.pstatuses .pstatus {
+  min-width: 0;
+}
+.pstatuses .pstatus-h {
+  flex-shrink: 0;
+}
+.pcard .pstatuses {
+  flex-wrap: nowrap;
+  max-width: 55%;
 }
 .pstatus i {
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 50%;

@@ -3,8 +3,9 @@
    ===================================================================== */
 import { dOff, esc, fmtDate, fmtTime } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { D, S, canManageTemplates, inWs, isAdmin, me, templatesOf } from '../core/store.js';
-import { av, pIcon } from '../ui/helpers.js';
+import { DEFAULT_STAGE_SET } from '../core/constants.js';
+import { D, S, canManageStages, canManageTemplates, inWs, isAdmin, me, projectsUsing, stageSetsOf, templatesOf } from '../core/store.js';
+import { av, pIcon, stagePill } from '../ui/helpers.js';
 import { permsTable, teamsGrid } from './members.js';
 import { page404 } from './errors.js';
 import { SHORTCUTS } from '../overlays/modals.js';
@@ -26,6 +27,7 @@ export const SET_NAV = [
       ['teams', 'Teams', 'users-round'],
       ['projects', 'Projects', 'folder-kanban'],
       ['templates', 'Templates', 'layers'],
+      ['stages', 'Stages', 'list-ordered'],
       ['permissions', 'Permissions', 'shield'],
     ],
   ],
@@ -236,6 +238,19 @@ export function settingsBody(sec, title) {
         (manage ? '' : '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change templates.</p>')
       );
     }
+    case 'stages': {
+      const manage = canManageStages();
+      const list = stageSetsOf(d.ws.id);
+      return (
+        H(`Stages for ${esc(d.ws.name)}. Each project sits in one stage of a set.`) +
+        `<div class="sblock" style="margin-top:0">${(list.length ? list : [DEFAULT_STAGE_SET]).map(s => stageSetRow(s, manage, !list.length)).join('')}</div>` +
+        (!manage
+          ? '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change stage sets.</p>'
+          : list.length
+            ? `<div class="row" style="margin-top:12px"><button class="btn btn-secondary" data-a="newStageSet">${ic('plus', 14)}New stage set</button></div>`
+            : '<p class="faint" style="font-size:12px;margin-top:12px">Customize the built-in set to add more stage sets.</p>')
+      );
+    }
     case 'permissions':
       return H('Control what each role can do.') + `<div class="sblock"><h2>Role permissions</h2><div style="margin-top:12px">${permsTable()}</div></div>`;
     case 'notif-email':
@@ -359,6 +374,26 @@ function templateRow(t, manage) {
     </div>
     <div class="row" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="newProject" data-tmpl="${esc(t.id)}" aria-label="New project from ${esc(t.name)}">New project</button>${manage ? `<button class="btn btn-secondary btn-sm" data-a="editTemplate" data-id="${esc(t.id)}" aria-label="Edit template ${esc(t.name)}">Edit</button><button class="btn btn-danger-ghost btn-sm" data-a="delTemplate" data-id="${esc(t.id)}" aria-label="Delete template ${esc(t.name)}">Delete</button>` : ''}</div>
   </div>${open ? desc + titles : ''}</div>`;
+}
+/* One stage set in Settings > Stages: its name, how many stages and projects it has, its stages in order, and what can be done with it.
+   The built-in set (no records yet) cannot be edited: Customize makes a copy of it that can. */
+function stageSetRow(set, manage, builtin) {
+  const n = set.stages.length;
+  const using = projectsUsing(set.id);
+  const arch = using.filter(x => x.archived).length;
+  const meta = `${n} stage${n === 1 ? '' : 's'} · ${using.length} project${using.length === 1 ? '' : 's'}${arch ? ` (${arch} archived)` : ''}`;
+  const btns = !manage
+    ? ''
+    : builtin
+      ? `<button class="btn btn-secondary btn-sm" data-a="customiseStages" aria-label="Customize ${esc(set.name)}">Customize</button>`
+      : `<button class="btn btn-secondary btn-sm" data-a="editStageSet" data-id="${esc(set.id)}" aria-label="Edit ${esc(set.name)}">Edit</button><button class="btn btn-danger-ghost btn-sm" data-a="delStageSet" data-id="${esc(set.id)}" aria-label="Delete ${esc(set.name)}">Delete</button>`;
+  return `<div style="border-bottom:1px solid var(--divider);padding-bottom:12px"><div class="srow" style="border-bottom:0;gap:12px">
+    <div class="row" style="gap:10px;min-width:0;align-items:flex-start">
+      <span class="picon" style="--c:var(--gray)">${ic('list-ordered', 14)}</span>
+      <div style="min-width:0"><div class="t trunc">${esc(set.name)}${builtin ? ' <span class="faint" style="font-weight:400">(built-in)</span>' : ''}</div><div class="faint" style="font-size:12px;margin-top:2px">${meta}</div></div>
+    </div>
+    <div class="row" style="flex-wrap:wrap;justify-content:flex-end">${btns}</div>
+  </div><div class="row" style="flex-wrap:wrap;gap:4px;margin-left:46px">${set.stages.map(s => stagePill(s)).join('')}</div></div>`;
 }
 export function strengthMeter(pw) {
   let s = 0;

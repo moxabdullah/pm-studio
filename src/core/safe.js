@@ -15,7 +15,7 @@ export function safeColor(c, fallback = 'var(--gray)') {
 }
 
 /* ---------- lookup tables ---------- */
-/* Tables like ST, PR and PSTAT are indexed by values from the server. A plain object answers "constructor" or
+/* Tables like ST, PR and HEALTH are indexed by values from the server. A plain object answers "constructor" or
    "__proto__" with an inherited property, and answers an unknown key with undefined, which then crashes the render
    (`ST[t.status].name`). Here only the table's own keys resolve, and with a `fallback` any other key yields it, so
    one bad record can't break a page for everyone. Without a fallback unknown keys are simply undefined. */

@@ -1,8 +1,8 @@
 /* ---------------- MODALS ---------------- */
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { PCOLORS, PICONS, TEMPLATE_DESC_MAX, TEMPLATE_NAME_MAX } from '../core/constants.js';
-import { D, S, canManageTemplates, mem, pColor, proj, task, teamsList, templatesOf } from '../core/store.js';
+import { PCOLORS, PICONS, STAGE_COLORS, STAGE_NAME_MAX, STAGE_SET_NAME_MAX, TEMPLATE_DESC_MAX, TEMPLATE_NAME_MAX } from '../core/constants.js';
+import { D, S, canManageTemplates, mem, pColor, proj, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lbl, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -51,6 +51,8 @@ export function modalHtml(m) {
       return wrap('', teamModal(m, H));
     case 'template':
       return wrap('sm', templateModal(m, H));
+    case 'stageSet':
+      return wrap('', stageSetModal(m, H));
     case 'filePreview':
       return wrap('lg', filePreviewModal(m, H));
     case 'saveView':
@@ -139,9 +141,18 @@ export function projectModal(m, H) {
         .join('')}</select></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}"></div>
     </div>
+    ${m.edit ? '' : stageSetPicker(f)}
     ${m.edit ? '' : templatePicker(f)}
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
+}
+/* Which stage set a new project is in; asked only when the workspace has more than one (a project of the only set needs no choice). */
+function stageSetPicker(f) {
+  const sets = stageSetsOf(D().ws.id);
+  if (sets.length < 2) return '';
+  return `<div class="field"><label class="label" for="p-stageset">Stage set</label><select class="select" id="p-stageset" data-in="pform" data-f="stageSet">${sets
+    .map(s => `<option value="${esc(s.id)}" ${f.stageSet === s.id ? 'selected' : ''}>${esc(s.name)}</option>`)
+    .join('')}</select></div>`;
 }
 /* Edit a template's name and description (Settings > Templates). The tasks it carries are not edited here: save the project again to replace them. */
 export function templateModal(m, H) {
@@ -154,6 +165,41 @@ export function templateModal(m, H) {
     <div class="field"><label class="label" for="tp-desc">Description</label><textarea class="textarea ${descErr ? 'is-error' : ''}" id="tp-desc" data-in="tpform" data-f="desc" rows="2" maxlength="${TEMPLATE_DESC_MAX}" placeholder="What is this template for?" aria-invalid="${!!descErr}"${descErr ? ' aria-describedby="tp-desc-err"' : ''}>${esc(f.desc)}</textarea>${descErr ? `<span class="err" id="tp-desc-err" role="alert">${ic('circle-alert', 12)}${esc(descErr)}</span>` : ''}</div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitTemplate">Save changes</button></div>`;
+}
+/* Edit a stage set, or make one (Settings > Stages): its name, and its stages in order, each with a name, a color and whether it
+   finishes a project. The form is S.ui.ssform; what a click or a save refuses is under S.ui.errors: ssname (under the name), and
+   sslist, which is under the stage ssrow is about, or under the list when ssrow is -1. data-keep: the body scrolls, and a move or a
+   removal re-renders it. */
+export function stageSetModal(m, H) {
+  const f = S.ui.ssform;
+  const e = S.ui.errors;
+  const bad = e.sslist ? e.ssrow : -1; // the stage the message under the list is about
+  const err = (id, msg, st = '') =>
+    msg ? `<span class="err" id="${id}" role="alert"${st ? ` style="${st}"` : ''}>${ic('circle-alert', 12)}${esc(msg)}</span>` : '';
+  const last = f.stages.length - 1;
+  const row = (s, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="Stage ${i + 1}" style="gap:6px 8px;flex-wrap:wrap">
+      <span class="pdot" style="--c:${STAGE_COLORS[s.color]};border-radius:50%;width:10px;height:10px" aria-hidden="true"></span>
+      <input class="input ${bad === i ? 'is-error' : ''}" id="ss-name-${i}" data-in="ssStage" data-i="${i}" data-f="name" value="${esc(s.name)}" maxlength="${STAGE_NAME_MAX}" placeholder="Stage name" aria-label="Stage ${i + 1} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="ss-row-err"' : ''} style="flex:1;min-width:140px">
+      <select class="select" data-in="ssStage" data-i="${i}" data-f="color" aria-label="Stage ${i + 1} color" style="width:auto">${Object.keys(STAGE_COLORS)
+        .map(k => `<option value="${k}" ${s.color === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)}</option>`)
+        .join('')}</select>
+      <label class="row" style="gap:4px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="check" data-in="ssStage" data-i="${i}" data-f="finished" ${s.finished ? 'checked' : ''}>Finished</label>
+      <span class="row" style="gap:2px;flex-wrap:nowrap;margin-left:auto">
+        <button type="button" class="ibtn ibtn-sm" data-a="ssMove" data-i="${i}" data-v="up" ${i === 0 ? 'disabled' : ''} aria-label="Move stage ${i + 1} up">${ic('arrow-up', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="ssMove" data-i="${i}" data-v="down" ${i === last ? 'disabled' : ''} aria-label="Move stage ${i + 1} down">${ic('arrow-down', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="ssRemove" data-i="${i}" aria-label="Remove stage ${i + 1}">${ic('trash-2', 14)}</button>
+      </span>
+    </div>${bad === i ? err('ss-row-err', e.sslist, 'margin-top:4px') : ''}</div>`;
+  return `${H(m.edit ? 'Edit stage set' : 'New stage set', 'A project sits in one stage of its set. A finished stage (Closed, Cancelled) takes the project out of the Active lists.')}
+  <form class="modal-b" data-submit="submitStageSet" data-keep="modal-stageset:${m.edit ? esc(m.edit) : 'new'}">
+    <div class="field"><label class="label" for="ss-name">Stage set name</label><input class="input ${e.ssname ? 'is-error' : ''}" id="ss-name" data-in="ssName" value="${esc(f.name)}" maxlength="${STAGE_SET_NAME_MAX}" placeholder="e.g. Integrator job" autofocus aria-invalid="${!!e.ssname}"${e.ssname ? ' aria-describedby="ss-name-err"' : ''}>${err('ss-name-err', e.ssname)}</div>
+    <div class="field"><span class="label">Stages, in order</span>
+      ${f.stages.map(row).join('')}
+      ${bad < 0 ? err('ss-list-err', e.sslist) : ''}
+      <div><button type="button" class="btn btn-secondary btn-sm" data-a="ssAdd">${ic('plus', 13)}Add stage</button></div>
+    </div>
+  </form>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitStageSet">${m.edit ? 'Save changes' : 'Create stage set'}</button></div>`;
 }
 /* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
    level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the

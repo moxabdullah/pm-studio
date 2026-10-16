@@ -2,8 +2,8 @@
 import { ago, esc, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ROLES } from '../core/constants.js';
-import { D, S, TM, allTasks, canSee, isAdmin, isOver, mem, progressOf, team, teamsList, visibleProjects, wsActivity } from '../core/store.js';
-import { av, avStack, empty, pIcon, pStatus, progBar, safeColor } from '../ui/helpers.js';
+import { D, S, TM, allTasks, canSee, isAdmin, isFinished, isOver, mem, progressOf, team, teamsList, visibleProjects, wsActivity } from '../core/store.js';
+import { av, avStack, empty, pIcon, pStatuses, progBar, safeColor } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
 import { page404 } from './errors.js';
@@ -36,7 +36,7 @@ export function pageMembers() {
         ? `<table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">Member</th><th style="text-align:left">Role</th><th style="text-align:left">Team</th><th>Active projects</th><th>Tasks</th><th style="text-align:left">Last active</th><th style="text-align:left">Status</th><th></th></tr></thead><tbody>
     ${ms
       .map(m => {
-        const ap = visibleProjects().filter(p => p.members.includes(m.id) && p.status !== 'complete').length;
+        const ap = visibleProjects().filter(p => p.members.includes(m.id) && !isFinished(p)).length;
         const ot = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
         return `<tr data-ctx="member" data-id="${esc(m.id)}"><td style="padding-left:14px"><button class="row" data-a="go" data-r="member" data-id="${esc(m.id)}" style="gap:10px;text-align:left">${av(m.id, 'md', false)}<span class="col"><b style="font-weight:500">${esc(m.name)}${m.id === D().me ? ' <span class="faint" style="font-weight:400">(you)</span>' : ''}</b><span class="faint" style="font-size:12px">${esc(m.email)}</span></span></button></td>
       <td style="text-align:left">${isAdmin() && m.id !== D().me ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${esc(m.id)}">${esc(m.role)}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${esc(m.role)}</span>`}</td>
@@ -59,6 +59,7 @@ export function permsTable() {
     ['Create and edit tasks', 1, 1, 1],
     ['Create projects', 1, 1, 1],
     ['Manage templates', 1, 1, 0],
+    ['Manage stage sets', 1, 1, 0],
     ['Manage roles', 1, 0, 0],
     ['Create workspaces', 1, 0, 0],
     ['Workspace settings', 1, 0, 0],
@@ -100,7 +101,7 @@ export function pageTeam() {
   return `<div class="page">
     <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${safeColor(t.c)}">${ic(t.icon, 18)}</span><div><h1>${esc(t.name)}</h1><p style="margin:2px 0 0">${esc(t.desc)}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${esc(t.id)}">${ic('pencil', 14)}Edit team</button></div></div>
     <div class="grid2"><div class="stack">
-      <section class="panel"><div class="panel-h"><h2>Projects</h2><span class="faint">${ps.length}</span></div>${ps.map(p => `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 14)}<span class="tt">${esc(p.name)}</span>${pStatus(p.status)}<span class="row" style="width:120px">${progBar(progressOf(p.id))}</span></div>`).join('') || '<div class="panel-b faint">No projects</div>'}</section>
+      <section class="panel"><div class="panel-h"><h2>Projects</h2><span class="faint">${ps.length}</span></div>${ps.map(p => `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 14)}<span class="tt">${esc(p.name)}</span>${pStatuses(p)}<span class="row" style="width:120px">${progBar(progressOf(p.id))}</span></div>`).join('') || '<div class="panel-b faint">No projects</div>'}</section>
       <section class="panel"><div class="panel-h"><h2>Open tasks</h2><span class="faint">${ts.length}</span></div>${sortTasks(ts, { f: 'due', dir: 1 })
         .slice(0, 8)
         .map(x => miniRow(x))
@@ -115,7 +116,7 @@ export function pageMember() {
   const ts = allTasks().filter(t => t.assignee === m.id);
   const open = ts.filter(t => t.status !== 'done');
   const done = ts.filter(t => t.status === 'done');
-  const ps = visibleProjects().filter(p => p.members.includes(m.id) && p.status !== 'complete' && canSee(p));
+  const ps = visibleProjects().filter(p => p.members.includes(m.id) && !isFinished(p) && canSee(p));
   const acts = wsActivity()
     .filter(a => a.by === m.id)
     .slice(0, 8);

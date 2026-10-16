@@ -1,9 +1,9 @@
 /* ---------- small render helpers ---------- */
 import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { LB, PR, PSTAT, ST } from '../core/constants.js';
+import { HEALTH, LB, PR, ST, STAGE_COLORS } from '../core/constants.js';
 import { lookup, safeColor, sanitizeHtml } from '../core/safe.js';
-import { D, mem, pColor } from '../core/store.js';
+import { D, isFinished, mem, pColor, stageOf } from '../core/store.js';
 
 /* Hardening for stored data lives in core/safe.js; the render helpers re-export what templates need. */
 export { safeColor, sanitizeHtml };
@@ -67,7 +67,19 @@ export const stPill = st => `${stIcon(st)}<span>${ST[st].name}</span>`;
 export const prPill = p => `${prIcon(p)}<span>${PR[p || 'none'].name}</span>`;
 export const lbl = id => (LB[id] ? `<span class="lbl" style="--c:${LB[id].c}"><i></i>${LB[id].name}</span>` : '');
 export const pIcon = (p, cls = '', s = 15) => `<span class="picon ${cls}" style="--c:${pColor(p)}">${ic(p.icon, s)}</span>`;
-export const pStatus = s => `<span class="pstatus" style="--c:${PSTAT[s].c}"><i></i>${PSTAT[s].name}</span>`;
+/* A project's stage (its name comes from whoever made the set; the colour is a key, resolved here) and its health, which shows only
+   when it is not "On track". `tail` is markup inside the pill after the text: the chevron of a pill that opens a picker. */
+export const stagePill = (s, tail = '') =>
+  `<span class="pstatus" title="${esc(s.name)}" style="--c:${STAGE_COLORS[s.color]}"><i></i><span class="trunc">${esc(s.name)}</span>${tail}</span>`;
+export const pStage = (p, tail = '') => stagePill(stageOf(p), tail);
+/* The dot beside a project in the sidebar: red or amber when it is at risk or on hold (as the status dot was), else its stage's colour. */
+export const pDot = p => (p.health && p.health !== 'ok' ? HEALTH[p.health].c : STAGE_COLORS[stageOf(p).color]);
+export const pHealth = (p, tail = '') =>
+  p.health && p.health !== 'ok' ? `<span class="pstatus pstatus-h" style="--c:${HEALTH[p.health].c}"><i></i>${HEALTH[p.health].name}${tail}</span>` : '';
+/* A project's stage pill and health pill together, as the lists and tables show them. */
+export const pStatuses = p => `<span class="pstatuses">${pStage(p)}${pHealth(p)}</span>`;
+/* The colour of a project's progress bar: green once it is in a finished stage, red when it is at risk. */
+export const progClass = p => (isFinished(p) ? 'green' : p.health === 'risk' ? 'red' : '');
 export function dueHtml(t, withIcon = true) {
   if (!t.due) return '';
   const n = diffD(parse(t.due), TODAY);

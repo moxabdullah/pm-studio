@@ -2,7 +2,7 @@
 import { ago, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, canSee, inWs, pColor, proj, task, visibleProjects, wsFiles } from '../core/store.js';
-import { FORMER, FT, av, empty, hl, nameOf, pIcon, pStatus, stIcon } from '../ui/helpers.js';
+import { FORMER, FT, av, empty, hl, nameOf, pIcon, pStatuses, stIcon } from '../ui/helpers.js';
 
 export function searchAll(q) {
   q = (q || '').trim().toLowerCase();
@@ -61,7 +61,7 @@ export function pageSearch() {
               r.projects
                 .map(
                   p =>
-                    `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 13)}<span class="tt">${hl(p.name, q)} <span class="faint" style="font-size:12px">— ${esc(p.desc.slice(0, 70))}…</span></span>${pStatus(p.status)}</div>`,
+                    `<div class="mini" data-a="go" data-r="project" data-id="${esc(p.id)}">${pIcon(p, '', 13)}<span class="tt">${hl(p.name, q)} <span class="faint" style="font-size:12px">— ${esc(p.desc.slice(0, 70))}…</span></span>${pStatuses(p)}</div>`,
                 )
                 .join(''),
             ) +

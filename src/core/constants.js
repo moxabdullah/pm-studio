@@ -30,16 +30,54 @@ export const LABELS = [
   { id: 'growth', name: 'Growth', c: 'var(--orange)' },
 ];
 export const LB = lookup(Object.fromEntries(LABELS.map(l => [l.id, l])));
-export const PSTAT = lookup(
+/* A project's health, a flag apart from its stage (stages are the workspace's own, see DEFAULT_STAGE_SET). */
+export const HEALTH = lookup(
   {
-    planning: { name: 'Planning', c: 'var(--gray)' },
-    active: { name: 'In Progress', c: 'var(--blue)' },
-    risk: { name: 'At Risk', c: 'var(--red)' },
-    hold: { name: 'On Hold', c: 'var(--amber)' },
-    complete: { name: 'Completed', c: 'var(--green)' },
+    ok: { name: 'On track', c: 'var(--green)' },
+    risk: { name: 'At risk', c: 'var(--red)' },
+    hold: { name: 'On hold', c: 'var(--amber)' },
   },
-  { name: 'Unknown', c: 'var(--gray)' },
+  { name: 'On track', c: 'var(--green)' },
 );
+/* The colours a stage can have. A stage stores the key only; the CSS value comes from here, so a stage written through the API
+   cannot put its own CSS into a style attribute. An unknown key reads as gray. normalize.js keeps a copy of the keys: change both
+   together. */
+export const STAGE_COLORS = lookup(
+  {
+    gray: 'var(--gray)',
+    blue: 'var(--blue)',
+    violet: 'var(--violet)',
+    teal: 'var(--teal)',
+    amber: 'var(--amber)',
+    rose: 'var(--rose)',
+    red: 'var(--red)',
+    green: 'var(--green)',
+    orange: 'var(--orange)',
+  },
+  'var(--gray)',
+);
+/* The stages a workspace has until it makes its own set (Settings > Stages > Customize copies these, with the same ids, so a project
+   keeps its stage). `finished` stages leave the "Active" lists. */
+export const DEFAULT_STAGE_SET = Object.freeze({
+  id: 'builtin',
+  name: 'Integrator job',
+  stages: Object.freeze(
+    [
+      ['tender', 'Tender', 'gray', false],
+      ['awarded', 'Awarded', 'violet', false],
+      ['design', 'Design', 'blue', false],
+      ['procurement', 'Procurement', 'teal', false],
+      ['fat', 'FAT', 'amber', false],
+      ['installation', 'Installation', 'orange', false],
+      ['commissioning', 'Commissioning / SAT', 'rose', false],
+      ['handover', 'Handover', 'green', false],
+      ['warranty', 'Warranty', 'teal', false],
+      ['closed', 'Closed', 'green', true],
+      ['cancelled', 'Cancelled', 'gray', true],
+      ['lost', 'Lost tender', 'gray', true],
+    ].map(([id, name, color, finished]) => Object.freeze({ id, name, color, finished })),
+  ),
+});
 export const PCOLORS = lookup({
   indigo: '#5A67D8',
   blue: '#3B82C4',
@@ -81,6 +119,15 @@ export const TEMPLATE_SUBTASKS_MAX = 50;
    whole. The server refuses a template record over 2 MB (1791849606_templates.js) and this leaves a margin, so a project with long
    descriptions is refused when saving, not after. */
 export const TEMPLATE_BYTES_MAX = 1.9 * 1024 * 1024;
+/* How much stage data one workspace and one project can hold: stage sets in a workspace, stages in a set, the longest stage and set
+   name (the editor stops typing there), and the entries of a project's stage history (the oldest go first). normalize.js cuts what
+   the server holds to the same numbers (a copy of them, as with the template limits above): change both together, or a record is
+   cut on reading and stays pending for ever. */
+export const STAGE_SETS_MAX = 20;
+export const STAGES_MAX = 30;
+export const STAGE_NAME_MAX = 40;
+export const STAGE_SET_NAME_MAX = 80;
+export const STAGE_HISTORY_MAX = 200;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },

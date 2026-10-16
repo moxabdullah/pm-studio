@@ -1,8 +1,25 @@
 /* ---------------- POPOVERS ---------------- */
 import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, fmtTime, iso, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { LABELS, PRIOS, PSTAT, ROLES, STATUSES } from '../core/constants.js';
-import { D, S, allTasks, canSee, isAdmin, me, mem, pColor, proj, task, visibleProjects, wsEvents } from '../core/store.js';
+import { HEALTH, LABELS, PRIOS, ROLES, STAGE_COLORS, STATUSES } from '../core/constants.js';
+import {
+  D,
+  S,
+  allTasks,
+  canSee,
+  isAdmin,
+  isFinished,
+  me,
+  mem,
+  pColor,
+  proj,
+  setOf,
+  stageOf,
+  stageSetsOf,
+  task,
+  visibleProjects,
+  wsEvents,
+} from '../core/store.js';
 import { av, avStack, prIcon, stIcon } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { FIELDS, hiddenCols, peekView } from '../shell/view-engine.js';
@@ -147,7 +164,7 @@ export function popHtml(p) {
     case 'project':
       inner = popList(
         visibleProjects()
-          .filter(q => canSee(q) && q.status !== 'complete')
+          .filter(q => canSee(q) && !isFinished(q))
           .map(q => ({ id: q.id, name: q.name, html: `<span class="pdot" style="--c:${pColor(q)}"></span>`, on: t?.project === q.id })),
         { search: 'Move to project…' },
       );
@@ -189,14 +206,55 @@ export function popHtml(p) {
       style = 'min-width:0';
       break;
     }
-    case 'pstatus': {
+    // The stages of the project's set (or of the one picked under "Change stage set…": p.set), those that finish a project after a
+    // separator. The stage that is checked is the project's own, so none is in another set.
+    case 'pstage': {
       const pr = proj(p.id);
+      if (!pr) break;
+      const sets = stageSetsOf(pr.workspace);
+      const cur = setOf(pr);
+      const picked = p.set && sets.find(s => s.id === p.set);
+      const set = picked || cur;
+      const item = s => ({
+        id: s.id,
+        name: s.name,
+        html: `<span class="pdot" style="--c:${STAGE_COLORS[s.color]};border-radius:50%"></span>`,
+        on: set.id === cur.id && stageOf(pr).id === s.id,
+      });
+      const open = set.stages.filter(s => !s.finished);
+      const done = set.stages.filter(s => s.finished);
+      // (a heading and a way back when the stages are those of a set picked under "Change stage set…")
+      inner =
+        (picked
+          ? `<div class="mh">${esc(set.name)}</div><button class="mi" data-a="popStageSets">${ic('chevron-left', 15)}<span class="trunc">Back</span></button><div class="msep"></div>`
+          : '') +
+        (open.length ? popList(open.map(item)) : '') +
+        (open.length && done.length ? '<div class="msep"></div>' : '') +
+        (done.length ? popList(done.map(item)) : '') +
+        (!picked && sets.length > 1
+          ? `<div class="msep"></div><button class="mi" data-a="popStageSets">${ic('layers', 15)}<span class="trunc">Change stage set…</span></button>`
+          : '');
+      style = 'min-width:200px';
+      break;
+    }
+    case 'pstagesets': {
+      const pr = proj(p.id);
+      if (!pr) break;
+      inner =
+        '<div class="mh">Stage set</div>' +
+        popList(stageSetsOf(pr.workspace).map(s => ({ id: s.id, name: s.name, html: ic('layers', 15), on: s.id === setOf(pr).id, act: 'popPickSet' })));
+      style = 'min-width:200px';
+      break;
+    }
+    case 'phealth': {
+      const pr = proj(p.id);
+      if (!pr) break;
       inner = popList(
-        Object.entries(PSTAT).map(([k, v]) => ({
+        Object.entries(HEALTH).map(([k, v]) => ({
           id: k,
           name: v.name,
           html: `<span class="pdot" style="--c:${v.c};border-radius:50%"></span>`,
-          on: pr.status === k,
+          on: (pr.health || 'ok') === k,
         })),
       );
       break;

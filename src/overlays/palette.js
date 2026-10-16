@@ -1,8 +1,7 @@
 /* ---------------- COMMAND PALETTE ---------------- */
 import { MOD, clamp, esc } from '../core/utils.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
-import { PSTAT } from '../core/constants.js';
-import { D, S, allTasks, pColor, proj, save, task } from '../core/store.js';
+import { D, S, allTasks, pColor, proj, save, stageOf, task } from '../core/store.js';
 import { FT, av, hl, stIcon } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { go, render } from '../shell/render.js';
@@ -130,7 +129,7 @@ export function paletteItems() {
       items: r.projects.slice(0, lim).map(p => ({
         html: `<span class="pdot" style="--c:${pColor(p)}"></span>`,
         name: p.name,
-        sub: PSTAT[p.status].name,
+        sub: stageOf(p).name,
         run: () => go('project', { id: p.id }),
       })),
     });

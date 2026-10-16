@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { LB, PCOLORS, PICONS, PR, PRIOS, PSTAT, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
+import { DEFAULT_STAGE_SET, LB, PCOLORS, PICONS, PR, PRIOS, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { lookup, sanitizeHtml } from '../core/safe.js';
 import {
   D,
@@ -17,7 +17,10 @@ import {
   proj,
   pushAct,
   resetStore,
+  isFinished,
   save,
+  setOf,
+  stageSetsOf,
   task,
   tasksOf,
   teamsList,
@@ -47,6 +50,7 @@ import { remoteRender } from '../shell/remote-render.js';
 import { hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
+import { moveProject, setHealth } from './stages.js';
 import { strengthMeter } from '../pages/settings.js';
 
 export const A = {},
@@ -330,6 +334,18 @@ A.ctxBtn = el => {
   S.ui.pop = { type: 'ctx', ctx: d.ctx, id: d.id, key: d.key, vid: d.vid, x: r.left, y: r.bottom + 4, top: r.top, w: r.width };
   render();
 };
+/* "Change stage set…" in a project's stage picker: the picker shows the sets, and a set picked shows its stages (p.set), to pick one of. */
+A.popStageSets = () => {
+  S.ui.pop = { ...S.ui.pop, type: 'pstagesets', set: null, q: '' };
+  render();
+  // the project's own set (checked), also when this is "Back" from the stages of another one
+  ($('.pop.floating [data-a="popPickSet"][aria-checked="true"]') || $('.pop.floating [data-a="popPickSet"]'))?.focus({ preventScroll: true });
+};
+A.popPickSet = el => {
+  S.ui.pop = { ...S.ui.pop, type: 'pstage', set: el.dataset.v, q: '' };
+  render();
+  $('.pop.floating [data-a="popPick"]')?.focus({ preventScroll: true }); // the first stage, not "Back"
+};
 A.popPick = el => {
   const p = S.ui.pop;
   let v = el.dataset.v;
@@ -357,21 +373,20 @@ A.popPick = el => {
     );
     return;
   }
-  if (p.type === 'pstatus') {
-    const id = p.id;
-    let pr;
-    const fresh = latestFields('proj', id, ['status']);
-    mutate(
-      () => {
-        pr = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
-        pr.status = v;
-        pushAct('changed status of project', null, pr.id, 'to ' + PSTAT[v].name);
-      },
-      () => toast(`${pr.name} marked ${PSTAT[v].name}`),
-      () => fresh() && !!proj(id),
-    );
+  if (p.type === 'pstage' || p.type === 'phealth') {
+    const { id, set } = p;
     S.ui.pop = null;
+    if (p.type === 'phealth') setHealth(id, v);
+    else {
+      // the set the picker showed: the one chosen under "Change stage set…" unless it is gone since (live), when it showed the project's own
+      const pr = proj(id);
+      const shown = pr && ((set && stageSetsOf(pr.workspace).find(s => s.id === set)) || setOf(pr));
+      if (shown) moveProject(id, v, shown.id !== setOf(pr).id ? shown.id : undefined);
+    }
     render();
+    // "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page
+    if (p.type === 'phealth' && (!document.activeElement || document.activeElement === document.body))
+      $(`[data-pop="pstage"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     return;
   }
   if (p.type === 'role') {
@@ -643,7 +658,7 @@ A.newTask = el => {
     curProjectId() ||
     projectFromKey(S.ui.composer?.ctx) ||
     (S.ui.drawer && task(S.ui.drawer)?.project) ||
-    visibleProjects().find(p => canSee(p) && p.status !== 'complete')?.id;
+    visibleProjects().find(p => canSee(p) && !isFinished(p))?.id;
   const project = proj(pid) && canSee(proj(pid)) ? pid : visibleProjects().find(canSee)?.id;
   if (!project) return needProject();
   S.ui.form = {
@@ -1575,7 +1590,7 @@ IN.projSort = el => {
 };
 A.clearProjFilters = () => {
   S.ui.projQ = '';
-  S.ui.projStatus = 'all';
+  S.ui.projStatus = 'all'; // (the page starts on 'active': Clear filters shows every project)
   render();
 };
 /* `el.dataset.tmpl`, when there is one (Settings > Templates), is the template the form starts with. */
@@ -1597,6 +1612,7 @@ A.newProject = el => {
     lead: D().me,
     due: dOff(30),
     tmpl: 'blank',
+    stageSet: stageSetsOf(D().ws.id)[0]?.id || null, // only asked for when the workspace has more than one (projectModal)
   };
   pickTemplate(S.ui.pform, el?.dataset?.tmpl);
   S.ui.errors = {};
@@ -1657,7 +1673,13 @@ export function makeKey(name) {
   while (D().projects.some(p => p.key === k)) k += 'X';
   return k;
 }
+/* The stage set of a new project is the one of the form (`f.stageSet`, only when the workspace has more than one set; a set that has gone
+   since the form opened counts as none), else the workspace's first. A project of the only set (or of the built-in one) names none
+   (stageSet null), and starts in the first stage of its set, with that as the first entry of its history. */
 export function createProject(f, tmplId) {
+  const sets = stageSetsOf(D().ws.id);
+  const set = (sets.length > 1 && sets.find(s => s.id === f.stageSet)) || sets[0] || DEFAULT_STAGE_SET;
+  const stage = set.stages[0]?.id || '';
   const p = {
     id: uid('p'),
     workspace: D().ws.id,
@@ -1665,7 +1687,10 @@ export function createProject(f, tmplId) {
     name: f.name,
     icon: f.icon,
     color: f.color,
-    status: 'planning',
+    stageSet: sets.length > 1 ? set.id : null,
+    stage,
+    health: 'ok',
+    stageHistory: stage ? [{ stage, at: new Date().toISOString() }] : [],
     team: f.team,
     lead: f.lead,
     due: f.due || dOff(30),
@@ -2129,6 +2154,7 @@ export function setWorkspace(w) {
 A.switchWs = el => {
   const w = D().workspaces.find(x => x.id === el.dataset.v);
   S.ui.pop = null;
+  S.ui.projStatus = 'active'; // (a stage of the other workspace's sets means nothing here)
   setWorkspace(w);
   go('home');
   toast(`Switched to ${w.name}`);
