@@ -130,7 +130,8 @@ A.submitLabels = () => {
     return;
   }
   // Labels the list has now and this one lacks go from every task of the workspace that carries them. Counted over the tasks that are
-  // loaded, as allTasks() lists them but for the workspace the dialog was opened in: a private project the person cannot open is not.
+  // loaded, for the workspace the dialog was opened in (a private project the person cannot open is not), archived ones too: they come
+  // back from the Archive without them.
   const keep = new Set(labels.map(l => l.id));
   const gone = new Set(
     labelsOf(f.ws)
@@ -139,12 +140,14 @@ A.submitLabels = () => {
   );
   const used = new Set();
   let tasks = 0;
+  let arch = 0;
   for (const t of D().tasks) {
     const p = proj(t.project);
-    if (t.archived || p?.workspace !== f.ws || !canSee(p)) continue;
+    if (p?.workspace !== f.ws || !canSee(p)) continue;
     const had = t.labels.filter(id => gone.has(id));
     if (!had.length) continue;
     tasks++;
+    if (t.archived || p.archived) arch++;
     had.forEach(id => used.add(id));
   }
   // This attempt is the newest one even when the question below is cancelled: an older "Try again" must not save the list it was for.
@@ -158,13 +161,14 @@ A.submitLabels = () => {
     .filter(l => used.has(l.id))
     .map(l => l.name);
   const few = names.length <= 3;
-  const who = few ? plural(tasks, 'task') : tasks === 1 ? 'That task' : 'Those tasks';
+  const count = plural(tasks, 'task') + (arch ? ` (${arch} archived)` : ''); // "3 tasks (1 archived)", as the stage editor counts projects
+  const who = few ? count : tasks === 1 ? 'That task' : 'Those tasks';
   // (Cancel pops this question and leaves the editor as it was)
   confirmDlg({
     wlId: listsOf(f.ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
     title: few
       ? `Remove ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]}?`
-      : `Remove ${plural(used.size, 'label')} used on ${plural(tasks, 'task')}?`,
+      : `Remove ${plural(used.size, 'label')} used on ${count}?`,
     body: `${who} no longer ${tasks === 1 ? 'shows' : 'show'} ${used.size === 1 ? 'it' : 'them'}. Private projects you can't see aren't counted.`,
     ok: used.size === 1 ? 'Remove label' : 'Remove labels',
     danger: true,
