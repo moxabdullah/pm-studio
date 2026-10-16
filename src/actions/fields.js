@@ -7,7 +7,7 @@
    Every write is applied to the list as it is when it runs, by field id, and writes only `fields`: another admin may have saved
    meanwhile, and the record's other lists (and anything unsent) stay as they are.
    ===================================================================== */
-import { $, esc, uid } from '../core/utils.js';
+import { $, uid } from '../core/utils.js';
 import { FIELDS_MAX, FIELD_NAME_MAX, FIELD_OPTIONS_MAX, FIELD_OPTION_MAX, FIELD_TYPES } from '../core/constants.js';
 import { D, S, canManageFields, canSee, fieldsOf, listsOf } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
@@ -27,6 +27,14 @@ const fieldCopy = f => ({
   ...(f.type === 'select' ? { options: (f.options || []).map(o => ({ id: o.id, name: o.name.trim() })) } : {}),
 });
 const capText = `A workspace can have up to ${FIELDS_MAX} fields`;
+/* Said to screen readers without moving focus: the polite live region main.js makes (render.js uses it for the page title). It is
+   emptied first, so the same words twice in a row are said twice. */
+const announce = msg => {
+  const live = $('#sr-live');
+  if (!live) return;
+  live.textContent = '';
+  setTimeout(() => (live.textContent = msg), 50);
+};
 /* After a render that shows a refusal in the dialog: the message may be below the fold of the dialog's body. */
 const reveal = () => $('#fd-name-err, #fd-list-err')?.scrollIntoView({ block: 'nearest' });
 /* The error under the name, or under the option row `row` of the dialog, or under the list when `row` is -1 (S.ui.errors.fdname,
@@ -131,6 +139,7 @@ A.moveField = el => {
       const to = btn(el.dataset.v) || btn(el.dataset.v === 'up' ? 'down' : 'up');
       to?.focus({ preventScroll: true });
       to?.scrollIntoView({ block: 'nearest' });
+      announce(`Moved “${name}” ${el.dataset.v}.`);
     },
     () => at(fieldsOf(ws)) >= 0,
   );
@@ -143,30 +152,40 @@ A.delField = el => {
   if (!f) return;
   const name = f.name;
   const ps = projectsWith(ws, id);
+  const one = ps.length === 1;
   confirmDlg({
     wlId: listsOf(ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
     title: `Delete the field “${name}”?`,
     body: ps.length
-      ? `${countOf(ps)} ${ps.length === 1 ? 'has' : 'have'} a value; it will no longer show. Private projects you can't see aren't counted.`
+      ? `${countOf(ps)} ${one ? 'has' : 'have'} a value for it. ${one ? "That value isn't" : "Those values aren't"} erased: ${one ? 'it stays on the project but no longer shows' : 'they stay on the projects but no longer show'}. Private projects you can't see aren't counted.`
       : 'It will no longer show on projects.',
     ok: 'Delete field',
     danger: true,
     run: () => {
       let gone = false;
+      let next, prev; // the fields around it in the list the delete is applied to
       mutate(
         () => {
           gone = false;
           const l = currentList(ws); // by id: another admin may have changed the list while the question was open
-          if (!l.some(x => x.id === id)) {
+          const i = l.findIndex(x => x.id === id);
+          if (i < 0) {
             gone = true;
             return;
           }
+          next = l[i + 1]?.id;
+          prev = l[i - 1]?.id;
           put(
             ws,
             l.filter(x => x.id !== id),
           );
         },
-        () => toast(gone ? `“${name}” is already deleted.` : `Deleted the field “${name}”`),
+        () => {
+          toast(gone ? `“${name}” is already deleted.` : `Deleted the field “${name}”`);
+          // focus goes where the person is working: the Edit button of the row that took its place, else of the one before it, else Add field
+          const edit = fid => fid && $(`[data-a="editField"][data-id="${CSS.escape(fid)}"]`);
+          (edit(next) || edit(prev) || $('[data-a="newField"]'))?.focus({ preventScroll: true });
+        },
         () => fieldsOf(ws).some(x => x.id === id),
       );
     },
@@ -189,6 +208,8 @@ IN.fdType = el => {
   f.type = Object.hasOwn(FIELD_TYPES, el.value) ? el.value : 'text';
   refuse('');
   render();
+  // the dialog is drawn again, so the select the choice was made in is a new one: focus stays with it (the enhanced select's button)
+  $('[data-for="fd-type"]')?.focus({ preventScroll: true });
 };
 IN.fdTable = el => {
   S.ui.fdform.inTable = el.checked;
@@ -296,19 +317,14 @@ A.submitField = () => {
     saveField(m, f.ws, c, fresh);
     return;
   }
-  // A few options are named (in the field's order); more are counted. "it" or "them" follows how many options go, not how many projects.
+  // One option is named, as are none of several (they are counted); "it" or "them" follows how many options in use go, not how many projects.
   const used = new Set(ps.map(p => p['f_' + f.id]));
   const names = [...dropped].filter(([id]) => used.has(id)).map(([, n]) => n);
-  const few = names.length <= 3;
-  const count = countOf(ps);
-  const who = few ? count : ps.length === 1 ? 'That project' : 'Those projects';
   // (Cancel pops this question and leaves the dialog as it was)
   confirmDlg({
     wlId: listsOf(f.ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
-    title: few
-      ? `Remove ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]}?`
-      : `Remove ${plural(names.length, 'option')} used on ${count}?`,
-    body: `${who} no longer ${ps.length === 1 ? 'shows' : 'show'} ${used.size === 1 ? 'it' : 'them'} as the value of ${esc(c.name)}. Private projects you can't see aren't counted.`,
+    title: names.length === 1 ? `Remove the option “${names[0]}” from ${c.name}?` : `Remove ${names.length} options from ${c.name}?`,
+    body: `${countOf(ps)} ${ps.length === 1 ? 'uses' : 'use'} ${used.size === 1 ? 'it' : 'them'}. ${ps.length === 1 ? 'Its value stops' : 'Their value stops'} showing. Private projects you can't see aren't counted.`,
     ok: names.length === 1 ? 'Remove option' : 'Remove options',
     danger: true,
     run: () => saveField(m, f.ws, c, fresh),
@@ -327,12 +343,20 @@ function saveField(m, ws, c, fresh) {
       close = false;
       const l = currentList(ws);
       const i = l.findIndex(x => x.id === c.id);
-      if (i >= 0) l[i] = fieldCopy(c);
-      else if (!isNew) {
+      if (i < 0 && !isNew) {
         refused = `“${c.name}” is gone: it was deleted. Nothing was saved.`;
         close = true;
         return;
-      } else if (l.length >= FIELDS_MAX) {
+      }
+      // the name was free when it was validated; another admin may have taken it since, or this is a "Try again" that lands later
+      const clash = l.find(x => x.id !== c.id && sameName(x.name, c.name));
+      if (clash) {
+        refused = `There is already a field called “${clash.name}”. Nothing was saved.`;
+        S.ui.errors.fdname = `There is already a field called “${clash.name}”`;
+        return;
+      }
+      if (i >= 0) l[i] = fieldCopy(c);
+      else if (l.length >= FIELDS_MAX) {
         refused = `${capText}. Nothing was saved.`;
         return;
       } else l.push(fieldCopy(c));
@@ -340,7 +364,14 @@ function saveField(m, ws, c, fresh) {
     },
     () => {
       if (refused) toast(refused, { kind: 'err' });
-      if (refused && !close) return;
+      if (refused && !close) {
+        // (the message under the name is drawn by the render that followed the write)
+        if (S.ui.errors.fdname) {
+          $('#fd-name')?.focus();
+          reveal();
+        }
+        return;
+      }
       S.ui.modals.pop();
       render();
       if (!refused) toast(isNew ? `Added the field “${c.name}”` : `Saved the field “${c.name}”`);
