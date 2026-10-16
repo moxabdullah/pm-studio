@@ -1697,17 +1697,28 @@ A.editProject = el => {
   // the values of the project's fields, as the strings the inputs hold (the project's own workspace's fields, not the current one's)
   for (const fl of fieldsOf(p.workspace)) if (p['f_' + fl.id] !== undefined) S.ui.pform['f_' + fl.id] = String(p['f_' + fl.id]);
   S.ui.errors = {};
-  openModal({ type: 'project', edit: p.id });
+  // `snap`: each field's string as the form opened with it, and `touched`: the field inputs the person has changed since. Saving writes a
+  // field only if it was touched and now differs from `snap` (fieldValues), so a value that changed elsewhere meanwhile, or one its
+  // input cannot show, is left as it is. They sit on the dialog, not in S.ui.pform, which only holds what the inputs write.
+  const snap = {};
+  for (const fl of fieldsOf(p.workspace)) snap['f_' + fl.id] = S.ui.pform['f_' + fl.id] ?? '';
+  openModal({ type: 'project', edit: p.id, snap, touched: new Set() });
 };
 IN.pform = el => {
   const k = el.dataset.f;
   S.ui.pform[k] = el.value;
+  if (k.startsWith('f_')) S.ui.modals[S.ui.modals.length - 1]?.touched?.add(k);
   if (k === 'name' && S.ui.errors.pname && el.value.trim()) {
     S.ui.errors.pname = null;
     render();
   } else if (S.ui.errors.pfields?.[k]) {
+    // A field's message goes without a render: the input being typed in must stay the same element (a date input that is replaced
+    // when its first digits make it valid takes the rest of the digits into another segment, a number input loses its caret).
     delete S.ui.errors.pfields[k];
-    render();
+    el.classList.remove('is-error');
+    el.setAttribute('aria-invalid', 'false');
+    el.removeAttribute('aria-describedby');
+    document.getElementById(el.id + '-err')?.remove();
   }
 };
 /* Picks a template in the New project form (an id of the current workspace's, else 'blank'). The form takes the template's icon and
@@ -1814,8 +1825,12 @@ export function createProject(f, tmplId) {
 /* The form's values for the fields of workspace `ws`, checked and in the forms a project stores them: { 'f_<id>': value }, where a field
    left empty has the value undefined (the project then has no such key). Read from the inputs, since a number or date that cannot be
    read (half typed) is an empty string in the form's state. A field the form did not show (added since it opened) is left out, so
-   saving never clears a value the person could not see. Returns the values and what was refused, { 'f_<id>': message }. */
-function fieldValues(ws, f) {
+   saving never clears a value the person could not see. Returns the values and what was refused, { 'f_<id>': message }.
+   Every input is checked, but when editing (`m.edit`) only the fields the person changed are returned: one whose input was touched and
+   now differs from what it held when the form opened (m.snap). The rest are left as the project has them, so a value that someone else
+   changed while the form was open is not overwritten by the stale input, and one the input cannot show (a dropdown's removed option, a
+   date it rejects) is not deleted by an unrelated save. A new project takes every value. */
+function fieldValues(ws, f, m) {
   const vals = {};
   const errs = {};
   for (const fl of fieldsOf(ws)) {
@@ -1824,15 +1839,18 @@ function fieldValues(ws, f) {
     if (!el && !(k in f)) continue;
     const raw = String((el ? el.value : f[k]) ?? '').trim();
     const unread = el?.validity?.badInput; // typed in a number or date input, but not a number or a date
+    let val;
     if (fl.type === 'number') {
       const n = Number(raw);
       if (unread || (raw && !Number.isFinite(n))) errs[k] = 'Enter a number';
-      else vals[k] = raw ? n + 0 : undefined; // (+ 0: -0 is 0, as it is after a round trip through the server)
+      else val = raw ? n + 0 : undefined; // (+ 0: -0 is 0, as it is after a round trip through the server)
     } else if (fl.type === 'date') {
       if (unread || (raw && !isDay(raw))) errs[k] = 'Enter a date';
-      else vals[k] = raw || undefined;
-    } else if (fl.type === 'select') vals[k] = (fl.options || []).some(o => o.id === raw) ? raw : undefined;
-    else vals[k] = raw.slice(0, FIELD_TEXT_MAX) || undefined;
+      else val = raw || undefined;
+    } else if (fl.type === 'select') val = (fl.options || []).some(o => o.id === raw) ? raw : undefined;
+    else val = raw.slice(0, FIELD_TEXT_MAX) || undefined;
+    if (errs[k] || (m.edit && !(m.touched?.has(k) && raw !== String(m.snap?.[k] ?? '').trim()))) continue;
+    vals[k] = val;
   }
   return { vals, errs };
 }
@@ -1847,14 +1865,15 @@ A.submitProject = () => {
     $('#p-name')?.focus();
     return;
   }
-  const { vals, errs } = fieldValues(m.edit ? proj(m.edit)?.workspace : D().ws.id, f);
+  const { vals, errs } = fieldValues(m.edit ? proj(m.edit)?.workspace : D().ws.id, f, m);
   const bad = Object.keys(errs)[0];
   S.ui.errors.pfields = bad ? errs : null;
   if (bad) {
     render();
     const el = $('#' + CSS.escape('p-' + bad));
     el?.focus();
-    el?.scrollIntoView({ block: 'nearest' });
+    // the message under the input, which may be below the fold of the dialog's body (the input itself is just above it)
+    ($('#' + CSS.escape('p-' + bad + '-err')) || el)?.scrollIntoView({ block: 'nearest' });
     return;
   }
   const fresh = latest(m);
@@ -1878,7 +1897,7 @@ A.submitProject = () => {
           due: v.due,
           members: [...new Set([...p.members, v.lead])],
         });
-        // a field left empty has no key; the keys of fields the workspace does not have are not touched
+        // a field left empty has no key; only the fields the person changed are here, and the keys of fields the workspace does not have are not touched
         for (const [k, val] of Object.entries(vals)) {
           if (val === undefined) delete p[k];
           else p[k] = val;
