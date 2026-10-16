@@ -9,7 +9,7 @@ import { LABELS_MAX, LABEL_NAME_MAX, STAGE_COLORS } from '../core/constants.js';
 import { D, S, canManageLabels, canSee, labelsOf, listsOf, proj } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
-import { openModal } from '../overlays/modals.js';
+import { lbRowName, openModal } from '../overlays/modals.js';
 import { A, IN, confirmDlg, isTop, needWorkspace } from './actions.js';
 
 const COLORS = Object.keys(STAGE_COLORS);
@@ -55,6 +55,12 @@ IN.lbRow = el => {
     return;
   }
   l.name = el.value;
+  // the row's buttons are named by it (no re-render: the focus stays in the field)
+  const n = lbRowName(l, +el.dataset.i);
+  const g = el.closest('[role="group"]');
+  g?.querySelector('[data-v="up"]')?.setAttribute('aria-label', `Move ${n} up`);
+  g?.querySelector('[data-v="down"]')?.setAttribute('aria-label', `Move ${n} down`);
+  g?.querySelector('[data-a="lbRemove"]')?.setAttribute('aria-label', `Remove ${n}`);
   // a message about the labels is out of date once one is changed
   if (S.ui.errors.lblist) {
     refuse('');
@@ -84,11 +90,11 @@ A.lbRemove = el => {
   labels.splice(i, 1);
   refuse('');
   render();
-  ($(`#lb-name-${i}`) || $('[data-a="lbAdd"]:not([disabled])') || $('[data-a="submitLabels"]'))?.focus({ preventScroll: true });
+  ($(`#lb-name-${i}`) || $('[data-a="lbAdd"]') || $('[data-a="submitLabels"]'))?.focus({ preventScroll: true });
 };
 A.lbAdd = () => {
   const labels = S.ui.lbform.labels;
-  if (labels.length >= LABELS_MAX) return; // (the button is disabled, with a note)
+  if (labels.length >= LABELS_MAX) return; // (the button is aria-disabled, with a note)
   labels.push({ id: uid(), name: '', color: 'gray' });
   refuse('');
   render();

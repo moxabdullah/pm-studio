@@ -13,6 +13,7 @@ import {
   inWs,
   isAdmin,
   labelsOf,
+  listsOf,
   me,
   projectsUsing,
   stageSetsOf,
@@ -269,9 +270,12 @@ export function settingsBody(sec, title) {
       // the workspace's own list, or the built-in one until an admin or manager saves a list (store.js labelsOf)
       const manage = canManageLabels();
       const list = labelsOf(d.ws.id);
+      const builtin = listsOf(d.ws.id)?.labels === undefined; // no record, or one whose doc has no list (an empty list is the workspace's own)
       return (
         H(`Labels for ${esc(d.ws.name)}. Tasks in its projects can carry any of them.`) +
         `<div class="sblock" style="margin-top:0">${
+          builtin ? '<div class="t" style="margin-bottom:10px">Labels <span class="faint" style="font-weight:400">(built-in)</span></div>' : ''
+        }${
           list.length
             ? `<div class="row" style="flex-wrap:wrap;gap:6px">${list.map(l => lbl(l.id, d.ws.id)).join('')}</div>`
             : '<p class="faint" style="margin:0">No labels yet.</p>'
