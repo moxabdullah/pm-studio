@@ -36,6 +36,13 @@
   margin: 0 0 4px;
   letter-spacing: -0.015em;
 }
+/* a note beside the heading ("(built-in)"), smaller than it so the heading's line is no taller */
+.set-in h1 .h-tag {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
 .set-in > p.lead {
   color: var(--text-2);
   margin: 0 0 24px;

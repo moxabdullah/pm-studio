@@ -90,7 +90,7 @@ export function settingsBody(sec, title) {
   const d = D();
   const np = d.notifPrefs;
   const admin = isAdmin();
-  const H = lead => `<h1>${title}</h1><p class="lead">${lead}</p>`;
+  const H = (lead, tag = '') => `<h1>${title}${tag}</h1><p class="lead">${lead}</p>`;
   switch (sec) {
     case 'workspace':
       return (
@@ -271,10 +271,10 @@ export function settingsBody(sec, title) {
       const manage = canManageLabels();
       const list = labelsOf(d.ws.id);
       const builtin = listsOf(d.ws.id)?.labels === undefined; // no record, or one whose doc has no list (an empty list is the workspace's own)
-      // "(built-in)" is in the intro line, not a line of its own in the block: the block does not move once a list is saved. The intro stays on
-      // one line (a longer wording would wrap, and the block would move by that line).
+      // "(built-in)" is beside the heading, which never wraps, so nothing moves once a list is saved. In the intro line it made the intro
+      // wrap at some widths, and the block below moved up by that line when it went.
       return (
-        H(`Labels for ${esc(d.ws.name)}${builtin ? ' (built-in)' : ''}. Tasks in its projects can carry any of them.`) +
+        H(`Labels for ${esc(d.ws.name)}. Tasks in its projects can carry any of them.`, builtin ? ' <span class="h-tag faint">(built-in)</span>' : '') +
         `<div class="sblock" style="margin-top:0">${
           list.length
             ? `<div class="row" style="flex-wrap:wrap;gap:6px">${list.map(l => lbl(l.id, d.ws.id)).join('')}</div>`
