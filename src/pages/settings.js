@@ -296,7 +296,7 @@ export function settingsBody(sec, title) {
       const full = list.length >= FIELDS_MAX;
       return (
         H(
-          `Project fields for ${esc(d.ws.name)}. Values are filled in on a project’s Edit form and show in its overview, and in the Projects table when “Show in the Projects table” is on.`,
+          `Project fields for ${esc(d.ws.name)}. Fill in values on a project’s Edit form. They show in its overview, and in the Projects table when “Show in the Projects table” is on.`,
           builtin ? ' <span class="h-tag faint">(built-in)</span>' : '',
         ) +
         `<div class="sblock" style="margin-top:0">${

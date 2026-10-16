@@ -310,7 +310,7 @@ export function fieldModal(m, H) {
         <button type="button" class="ibtn ibtn-sm" data-a="fdOptRemove" data-i="${i}" aria-label="Remove ${esc(fdOptName(o, i))}">${ic('trash-2', 14)}</button>
       </span>
     </div>${bad === i ? err('fd-list-err', e.fdlist, 'margin-top:4px') : ''}</div>`;
-  return `${H(m.edit ? 'Edit field' : 'New field', 'Fill in each project’s value on the project’s Edit form.')}
+  return `${H(m.edit ? 'Edit field' : 'New field', 'Each project’s value is filled in on its Edit form.')}
   <form class="modal-b" data-submit="submitField" data-keep="modal-field">
     <div class="field"><label class="label" for="fd-name">Field name</label><input class="input ${e.fdname ? 'is-error' : ''}" id="fd-name" data-in="fdName" value="${esc(f.name)}" maxlength="${FIELD_NAME_MAX}" placeholder="e.g. Client" autofocus aria-invalid="${!!e.fdname}"${e.fdname ? ' aria-describedby="fd-name-err"' : ''}>${err('fd-name-err', e.fdname)}</div>
     <div class="field"><label class="label" for="fd-type">Type</label>${

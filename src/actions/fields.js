@@ -157,7 +157,7 @@ A.delField = el => {
     wlId: listsOf(ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
     title: `Delete the field “${name}”?`,
     body: ps.length
-      ? `${countOf(ps)} ${one ? 'has' : 'have'} a value for it. ${one ? "That value isn't" : "Those values aren't"} erased: ${one ? 'it stays on the project but no longer shows' : 'they stay on the projects but no longer show'}. Private projects you can't see aren't counted.`
+      ? `${countOf(ps)} ${one ? 'has' : 'have'} a value for it. ${one ? 'Its value stays' : 'Their values stay'} stored on the ${one ? 'project' : 'projects'}, but ${one ? "it won't" : "they won't"} show again, even if you add a field with the same name. Private projects you can't see aren't counted.`
       : 'It will no longer show on projects.',
     ok: 'Delete field',
     danger: true,
@@ -317,15 +317,14 @@ A.submitField = () => {
     saveField(m, f.ws, c, fresh);
     return;
   }
-  // One option is named, as are none of several (they are counted); "it" or "them" follows how many options in use go, not how many projects.
-  const used = new Set(ps.map(p => p['f_' + f.id]));
-  const names = [...dropped].filter(([id]) => used.has(id)).map(([, n]) => n);
+  // The title is about every option that goes (one is named, several are counted), the body about the projects that use any of them.
+  const one = dropped.size === 1;
   // (Cancel pops this question and leaves the dialog as it was)
   confirmDlg({
     wlId: listsOf(f.ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
-    title: names.length === 1 ? `Remove the option “${names[0]}” from ${c.name}?` : `Remove ${names.length} options from ${c.name}?`,
-    body: `${countOf(ps)} ${ps.length === 1 ? 'uses' : 'use'} ${used.size === 1 ? 'it' : 'them'}. ${ps.length === 1 ? 'Its value stops' : 'Their value stops'} showing. Private projects you can't see aren't counted.`,
-    ok: names.length === 1 ? 'Remove option' : 'Remove options',
+    title: one ? `Remove the option “${[...dropped.values()][0]}” from ${c.name}?` : `Remove ${dropped.size} options from ${c.name}?`,
+    body: `${countOf(ps)} ${ps.length === 1 ? 'uses' : 'use'} ${one ? 'it' : 'them'}. ${ps.length === 1 ? 'Its value stops' : 'Their values stop'} showing. Private projects you can't see aren't counted.`,
+    ok: one ? 'Remove option' : 'Remove options',
     danger: true,
     run: () => saveField(m, f.ws, c, fresh),
   });
