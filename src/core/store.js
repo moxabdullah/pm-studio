@@ -212,8 +212,14 @@ export const isDay = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
    field has since lost). A value of another type than the field's (only a writer outside the app makes one) shows as it is, as text. */
 export function fieldText(p, f) {
   const v = p?.['f_' + f.id];
-  // (a number is shown whole: toLocaleString() alone would round 0.0004 to 0)
-  if (typeof v === 'number') return Number.isFinite(v) ? (f.type === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 20 }) : String(v)) : '';
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return '';
+    if (f.type !== 'number') return String(v);
+    // (a number is shown whole: toLocaleString() alone would round 0.0004 to 0; and even 20 digits give 0 or -0 for 1e-21, which is shown as JS writes it)
+    const o = { maximumFractionDigits: 20 };
+    const s = v.toLocaleString(undefined, o);
+    return v !== 0 && s === (v < 0 ? -0 : 0).toLocaleString(undefined, o) ? String(v) : s;
+  }
   if (typeof v !== 'string') return '';
   if (f.type === 'select') return (f.options || []).find(o => o.id === v)?.name ?? '';
   // fmtDate parses with Date(y, m, d), which makes the year 50 1950: a day before the year 1000 shows as stored
