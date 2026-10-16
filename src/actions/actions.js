@@ -1705,8 +1705,10 @@ A.editProject = el => {
   for (const fl of fieldsOf(p.workspace)) snap['f_' + fl.id] = S.ui.pform['f_' + fl.id] ?? '';
   openModal({ type: 'project', edit: p.id, snap, touched: new Set(), bad: new Set() });
 };
-/* The project dialog (the top-most one: a question can be on top of it), which keeps two sets of field keys. `touched`: inputs the
-   person changed since it opened (an edit only). `bad`: inputs last seen half typed, text a number or date input cannot read. Such an
+/* The project dialog (the top-most one: a question can be on top of it), which keeps two sets of form keys (an input's `data-f`: name,
+   desc, team, lead, due, f_<id>; the icon and colour are keys too, set by pformSet). `touched`: inputs the person changed since it
+   opened (an edit only). `bad`: inputs last seen half typed, text a number or date input cannot read (only the Target date and the
+   number and date fields can be). Such an
    input has the value '', so the form's state cannot tell it from a box the person emptied, and any render that rebuilds the box
    (a live update, a name error) shows it empty: a key in `bad` stays an error until the person types a value or empties the box
    themselves, so the half-typed text is never saved as a clear. `halfTyped` marks the very input that was seen so: a date input that
@@ -1719,14 +1721,12 @@ IN.pform = el => {
   const k = el.dataset.f;
   S.ui.pform[k] = el.value;
   const half = !!el.validity?.badInput;
-  if (k.startsWith('f_')) {
-    const m = projectDialog();
-    m?.touched?.add(k);
-    if (half) {
-      m?.bad?.add(k);
-      halfTyped.add(el);
-    } else m?.bad?.delete(k);
-  }
+  const m = projectDialog();
+  m?.touched?.add(k);
+  if (half) {
+    m?.bad?.add(k);
+    halfTyped.add(el);
+  } else m?.bad?.delete(k);
   if (k === 'name' && S.ui.errors.pname && el.value.trim()) {
     S.ui.errors.pname = null;
     render();
@@ -1848,6 +1848,21 @@ const differs = (fl, raw, snap) => {
   const b = String(snap ?? '').trim();
   return fl.type === 'number' && a && b ? Number(a) !== Number(b) : a !== b;
 };
+/* Whether the input of form key `k` (`el`, null when the form does not show it) is refused for being half typed, text a number or date
+   input cannot read (see projectDialog): it is half typed now, or `k` is in `bad` and `el` is not the input that was (it was rebuilt
+   empty by a render). Records the verdict in `bad` and `halfTyped`, and a key that is not refused leaves `bad`. Shared by the
+   project fields and the Target date. */
+function refusedHalfTyped(k, el, m) {
+  const half = !!el?.validity?.badInput; // typed in a number or date input, but not a number or a date
+  // (in `bad` but not half typed now: refused too, unless it is the input that was, which the person has emptied since)
+  if (half || (m.bad?.has(k) && !(el && halfTyped.has(el)))) {
+    m.bad?.add(k);
+    if (half) halfTyped.add(el);
+    return true;
+  }
+  m.bad?.delete(k);
+  return false;
+}
 /* The form's values for the fields of workspace `ws`, checked and in the forms a project stores them: { 'f_<id>': value }, where a field
    left empty has the value undefined (the project then has no such key). Read from the inputs, since a number or date that cannot be
    read (half typed) is an empty string in the form's state. A field the form did not show (added since it opened) is left out, so
@@ -1867,15 +1882,10 @@ function fieldValues(ws, f, m) {
     const el = $('#' + CSS.escape('p-' + k));
     if (!el && !(k in f)) continue;
     const raw = String((el ? el.value : f[k]) ?? '').trim();
-    const half = !!el?.validity?.badInput; // typed in a number or date input, but not a number or a date
-    // (in `bad` but not half typed now: refused too, unless it is the input that was, which the person has emptied since)
-    if (half || (m.bad?.has(k) && !(el && halfTyped.has(el)))) {
+    if (refusedHalfTyped(k, el, m)) {
       errs[k] = fl.type === 'number' ? 'Enter a number' : 'Enter a date';
-      m.bad?.add(k);
-      if (half) halfTyped.add(el);
       continue;
     }
-    m.bad?.delete(k);
     // (a date filled in with no event, which Safari may not send before a Ctrl+Enter, counts too; only a date: a text input shows some stored
     // values changed, a stored line break for one, and that must not count as the person's edit)
     if (m.edit && !(m.touched?.has(k) || (fl.type === 'date' && el && raw && differs(fl, raw, m.snap?.[k])))) continue;
@@ -1900,12 +1910,11 @@ function fieldValues(ws, f, m) {
   }
   return { vals, errs };
 }
-/* What fieldValues refused, shown in the open form without render(): that would rebuild the inputs, and a number or date that is half
-   typed would come back empty. The message, the red border and the aria attributes are those projectFields draws; the fields that
-   are not refused lose theirs. */
+/* What the Target date check and fieldValues refused, shown in the open form without render(): that would rebuild the inputs, and a
+   number or date that is half typed would come back empty. The message, the red border and the aria attributes are those projectFields
+   and projectModal draw; the inputs that are not refused lose theirs. */
 function showFieldErrors(ws, errs) {
-  for (const fl of fieldsOf(ws)) {
-    const k = 'f_' + fl.id;
+  for (const k of ['due', ...fieldsOf(ws).map(fl => 'f_' + fl.id)]) {
     const el = $('#' + CSS.escape('p-' + k));
     if (!el) continue;
     document.getElementById(el.id + '-err')?.remove();
@@ -1929,7 +1938,13 @@ A.submitProject = () => {
     return;
   }
   const ws = m.edit ? proj(m.edit)?.workspace : D().ws.id;
-  const { vals, errs } = fieldValues(ws, f, m);
+  // The Target date comes first in the form, so it is first in `errs` (focus and scroll go to it). Read from the input, as the fields
+  // are: half typed, the form's state holds '' for it, and a date filled in with no event is not in the state either.
+  const dueEl = $('#p-due');
+  if (dueEl) f.due = dueEl.value;
+  const dueBad = refusedHalfTyped('due', dueEl, m) || (f.due && !isDay(f.due));
+  const { vals, errs: fieldErrs } = fieldValues(ws, f, m);
+  const errs = { ...(dueBad ? { due: 'Enter a date' } : {}), ...fieldErrs };
   const bad = Object.keys(errs)[0];
   S.ui.errors.pfields = bad ? errs : null;
   if (bad) {
