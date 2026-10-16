@@ -2,6 +2,10 @@
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import {
+  FIELD_NAME_MAX,
+  FIELD_OPTIONS_MAX,
+  FIELD_OPTION_MAX,
+  FIELD_TYPES,
   LABELS_MAX,
   LABEL_NAME_MAX,
   PCOLORS,
@@ -65,6 +69,8 @@ export function modalHtml(m) {
       return wrap('', stageSetModal(m, H));
     case 'labels':
       return wrap('', labelsModal(H));
+    case 'field':
+      return wrap('', fieldModal(m, H));
     case 'filePreview':
       return wrap('lg', filePreviewModal(m, H));
     case 'saveView':
@@ -251,6 +257,52 @@ export function labelsModal(H) {
     </div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitLabels">Save changes</button></div>`;
+}
+/* Edit one of the workspace's project fields (Settings > Project fields), new or existing. The form is S.ui.fdform; what a click or a
+   save refuses is under S.ui.errors: fdname (about the name), and fdlist, which is under the option fdrow is about, or under the list of
+   options when fdrow is -1. The options are laid out as the labels' rows are. A field's type is chosen when it is made and shown, not
+   offered, when editing (a native select disabled would still open: see ui/select.js). data-keep: the body scrolls, and a move or a
+   removal re-renders it. */
+export const fdOptName = (o, i) => o.name.trim() || `option ${i + 1}`;
+export const fdOptTitle = (o, i) => o.name.trim() || `Option ${i + 1}`;
+export function fieldModal(m, H) {
+  const f = S.ui.fdform;
+  const e = S.ui.errors;
+  const bad = e.fdlist ? e.fdrow : -1; // the option the message under the list is about
+  const err = (id, msg, st = '') =>
+    msg ? `<span class="err" id="${id}" role="alert"${st ? ` style="${st}"` : ''}>${ic('circle-alert', 12)}${esc(msg)}</span>` : '';
+  const last = f.options.length - 1;
+  const full = f.options.length >= FIELD_OPTIONS_MAX;
+  const row = (o, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="${esc(fdOptTitle(o, i))}" style="gap:6px 8px;flex-wrap:wrap">
+      <input class="input ${bad === i ? 'is-error' : ''}" id="fd-opt-${i}" data-in="fdOpt" data-i="${i}" value="${esc(o.name)}" maxlength="${FIELD_OPTION_MAX}" placeholder="Option name" aria-label="${esc(fdOptTitle(o, i))} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="fd-list-err"' : ''} style="flex:1;min-width:140px">
+      <span class="row" style="gap:2px;flex-wrap:nowrap;margin-left:auto">
+        <button type="button" class="ibtn ibtn-sm" data-a="fdOptMove" data-i="${i}" data-v="up" ${i === 0 ? 'disabled' : ''} aria-label="Move ${esc(fdOptName(o, i))} up">${ic('arrow-up', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="fdOptMove" data-i="${i}" data-v="down" ${i === last ? 'disabled' : ''} aria-label="Move ${esc(fdOptName(o, i))} down">${ic('arrow-down', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="fdOptRemove" data-i="${i}" aria-label="Remove ${esc(fdOptName(o, i))}">${ic('trash-2', 14)}</button>
+      </span>
+    </div>${bad === i ? err('fd-list-err', e.fdlist, 'margin-top:4px') : ''}</div>`;
+  return `${H(m.edit ? 'Edit field' : 'New field', 'A project’s values for it are filled in on its Edit form.')}
+  <form class="modal-b" data-submit="submitField" data-keep="modal-field">
+    <div class="field"><label class="label" for="fd-name">Field name</label><input class="input ${e.fdname ? 'is-error' : ''}" id="fd-name" data-in="fdName" value="${esc(f.name)}" maxlength="${FIELD_NAME_MAX}" placeholder="e.g. Client" autofocus aria-invalid="${!!e.fdname}"${e.fdname ? ' aria-describedby="fd-name-err"' : ''}>${err('fd-name-err', e.fdname)}</div>
+    <div class="field"><label class="label" for="fd-type">Type</label>${
+      m.edit
+        ? `<input class="input" id="fd-type" value="${esc(FIELD_TYPES[f.type])}" disabled aria-describedby="fd-type-note"><span class="hint" id="fd-type-note">A field’s type can’t be changed after it’s created.</span>`
+        : `<select class="select" id="fd-type" data-in="fdType">${Object.entries(FIELD_TYPES)
+            .map(([k, n]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${n}</option>`)
+            .join('')}</select>`
+    }</div>
+    ${
+      f.type === 'select'
+        ? `<div class="field"><span class="label">Options, in order</span>
+      ${f.options.length ? f.options.map(row).join('') : '<p class="faint" style="margin:0 0 12px">No options yet.</p>'}
+      ${bad < 0 ? err('fd-list-err', e.fdlist) : ''}
+      <div class="row" style="gap:8px"><button type="button" class="btn btn-secondary btn-sm" data-a="fdOptAdd" ${full ? 'aria-disabled="true" aria-describedby="fd-cap"' : ''}>${ic('plus', 13)}Add option</button>${full ? `<span class="faint" id="fd-cap" style="font-size:12px">A dropdown can have up to ${FIELD_OPTIONS_MAX} options</span>` : ''}</div>
+    </div>`
+        : ''
+    }
+    <label class="row" style="font-size:13px;gap:8px;cursor:pointer"><input type="checkbox" class="check" id="fd-table" data-in="fdTable" ${f.inTable ? 'checked' : ''}>Show in the Projects table</label>
+  </form>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitField">Save changes</button></div>`;
 }
 /* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
    level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the

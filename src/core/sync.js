@@ -533,8 +533,9 @@ function refreshWs() {
 /* Whatever the view held about something that is gone. */
 function forgetUi(key, id) {
   const u = S.ui;
-  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task, template, stage set or label list, the
-  // question about deleting a template or stage set (or about removing labels), a file's preview.
+  // A dialog about it has nothing left to show: the share or settings dialog of a project, the edit form of a task, template, stage set, label list or
+  // project field (the record that holds both lists), the question about deleting a template or stage set (or about removing labels, or a
+  // project field or a dropdown's options: they carry the list's id as wlId), a file's preview.
   const open = u.modals.filter(m => {
     if (key === 'projects') return !(m.id === id || m.pid === id || (m.type === 'project' && m.edit === id));
     if (key === 'tasks') return !((m.type === 'task' && m.edit === id) || m.tid === id);

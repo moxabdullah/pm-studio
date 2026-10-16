@@ -3,13 +3,15 @@
    ===================================================================== */
 import { dOff, esc, fmtDate, fmtTime } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { DEFAULT_STAGE_SET } from '../core/constants.js';
+import { DEFAULT_STAGE_SET, FIELDS_MAX, FIELD_TYPES } from '../core/constants.js';
 import {
   D,
   S,
+  canManageFields,
   canManageLabels,
   canManageStages,
   canManageTemplates,
+  fieldsOf,
   inWs,
   isAdmin,
   labelsOf,
@@ -43,6 +45,7 @@ export const SET_NAV = [
       ['templates', 'Templates', 'layers'],
       ['stages', 'Stages', 'list-ordered'],
       ['labels', 'Labels', 'tag'],
+      ['fields', 'Project fields', 'table-properties'],
       ['permissions', 'Permissions', 'shield'],
     ],
   ],
@@ -285,6 +288,25 @@ export function settingsBody(sec, title) {
           : '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change labels.</p>')
       );
     }
+    case 'fields': {
+      // the workspace's own list, or the built-in one until an admin or manager saves a list (store.js fieldsOf); "(built-in)" as for labels
+      const manage = canManageFields();
+      const list = fieldsOf(d.ws.id);
+      const builtin = listsOf(d.ws.id)?.fields === undefined;
+      const full = list.length >= FIELDS_MAX;
+      return (
+        H(
+          `Project fields for ${esc(d.ws.name)}. Values are filled in on a project’s Edit form and show in its overview, and in the Projects table when ticked.`,
+          builtin ? ' <span class="h-tag faint">(built-in)</span>' : '',
+        ) +
+        `<div class="sblock" style="margin-top:0">${
+          list.length ? list.map((f, i) => fieldRow(f, i, list.length - 1, manage)).join('') : '<p class="faint" style="margin:0">No project fields yet.</p>'
+        }</div>` +
+        (manage
+          ? `<div class="row" style="margin-top:12px;gap:8px"><button class="btn btn-secondary" data-a="newField" ${full ? 'aria-disabled="true" aria-describedby="fields-cap"' : ''}>${ic('plus', 14)}Add field</button>${full ? `<span class="faint" id="fields-cap" style="font-size:12px">A workspace can have up to ${FIELDS_MAX} fields</span>` : ''}</div>`
+          : '<p class="faint" style="font-size:12px;margin-top:12px">Only admins and managers can change project fields.</p>')
+      );
+    }
     case 'permissions':
       return H('Control what each role can do.') + `<div class="sblock"><h2>Role permissions</h2><div style="margin-top:12px">${permsTable()}</div></div>`;
     case 'notif-email':
@@ -428,6 +450,22 @@ function stageSetRow(set, manage, builtin) {
     </div>
     <div class="row" style="flex-wrap:wrap;justify-content:flex-end">${btns}</div>
   </div><div class="row" style="flex-wrap:wrap;gap:4px;margin-left:46px">${set.stages.map(s => stagePill(s)).join('')}</div></div>`;
+}
+/* A project field of Settings > Project fields: its name, its type (and "Projects table" when it has a column there), a dropdown's options cut
+   to one line, and for an admin or manager the buttons that edit, move and delete it (named by the field, since the rows look alike). */
+function fieldRow(f, i, last, manage) {
+  const n = esc(f.name);
+  const opts = f.type === 'select' ? (f.options || []).map(o => o.name).join(', ') : '';
+  const btns = !manage
+    ? ''
+    : `<button class="btn btn-secondary btn-sm" data-a="editField" data-id="${esc(f.id)}" aria-label="Edit ${n}">Edit</button>
+      <button class="ibtn ibtn-sm" data-a="moveField" data-id="${esc(f.id)}" data-v="up" ${i === 0 ? 'disabled' : ''} aria-label="Move ${n} up">${ic('arrow-up', 14)}</button>
+      <button class="ibtn ibtn-sm" data-a="moveField" data-id="${esc(f.id)}" data-v="down" ${i === last ? 'disabled' : ''} aria-label="Move ${n} down">${ic('arrow-down', 14)}</button>
+      <button class="btn btn-danger-ghost btn-sm" data-a="delField" data-id="${esc(f.id)}" aria-label="Delete ${n}">Delete</button>`;
+  return `<div class="srow" style="gap:8px 12px">
+    <div style="min-width:0"><div class="t trunc" title="${n}">${n}</div><div class="d">${esc(FIELD_TYPES[f.type] || FIELD_TYPES.text)}${f.inTable ? ' · Projects table' : ''}</div>${opts ? `<div class="faint trunc" style="font-size:12px;margin-top:2px" title="${esc(opts)}">${esc(opts)}</div>` : f.type === 'select' ? '<div class="faint" style="font-size:12px;margin-top:2px">No options</div>' : ''}</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;justify-content:flex-end">${btns}</div>
+  </div>`;
 }
 export function strengthMeter(pw) {
   let s = 0;
