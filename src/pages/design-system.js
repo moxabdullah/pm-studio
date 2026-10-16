@@ -1,7 +1,7 @@
 /* ---------------- DESIGN SYSTEM ---------------- */
 import { dOff, esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { LABELS, PCOLORS, PRIOS, STATUSES } from '../core/constants.js';
+import { DEFAULT_LABELS, PCOLORS, PRIOS, STATUSES } from '../core/constants.js';
 import { S, allTasks, task } from '../core/store.js';
 import { av, avStack, empty, lbl, pHealth, pStage, prPill, progBar, stPill } from '../ui/helpers.js';
 import { sItem } from '../shell/layout.js';
@@ -44,7 +44,7 @@ export function pageSystem() {
     ]
       .map(([n, v]) => tok(n, v))
       .join('')}</div></div>
-    <div class="ds-sec"><h2>Status & priority <span>Always paired with text or a tooltip</span></h2><div class="ds-row">${STATUSES.map(s => `<span class="pillbtn bordered">${stPill(s.id)}</span>`).join('')}</div><div class="ds-row">${PRIOS.map(p => `<span class="pillbtn bordered">${prPill(p.id)}</span>`).join('')}</div><div class="ds-row">${LABELS.map(l => lbl(l.id)).join('')}</div></div>
+    <div class="ds-sec"><h2>Status & priority <span>Always paired with text or a tooltip</span></h2><div class="ds-row">${STATUSES.map(s => `<span class="pillbtn bordered">${stPill(s.id)}</span>`).join('')}</div><div class="ds-row">${PRIOS.map(p => `<span class="pillbtn bordered">${prPill(p.id)}</span>`).join('')}</div><div class="ds-row">${DEFAULT_LABELS.map(l => lbl(l.id)).join('')}</div></div>
     <div class="ds-sec"><h2>Typography <span>Geist · Geist Mono</span></h2><div class="panel" style="padding:4px 16px">${[
       ['Page title', 'var(--fs-2xl)', 600, 'Website Redesign'],
       ['Section title', 'var(--fs-xl)', 600, 'Upcoming deadlines'],
@@ -105,7 +105,7 @@ export function pageSystem() {
         ['Select', `<select class="select" id="ds-6"><option>In Progress</option><option>Review</option></select>`],
         [
           'Multi-select',
-          `<div class="input" style="height:auto;min-height:30px;display:flex;flex-wrap:wrap;gap:4px;padding:4px">${lbl('design')}${lbl('frontend')}${lbl('qa')}<span class="faint" style="font-size:12px;padding:2px 4px">Add…</span></div>`,
+          `<div class="input" style="height:auto;min-height:30px;display:flex;flex-wrap:wrap;gap:4px;padding:4px">${lbl('electrical')}${lbl('plc')}${lbl('snag')}<span class="faint" style="font-size:12px;padding:2px 4px">Add…</span></div>`,
         ],
         ['Date', `<input type="date" class="input" value="${dOff(3)}" id="ds-7">`],
         ['Time', `<input type="time" class="input" value="14:30" id="ds-8">`],

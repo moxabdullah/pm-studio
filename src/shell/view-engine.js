@@ -1,8 +1,8 @@
 /* ---------- filter engine ---------- */
 import { DAY, TODAY, diffD, esc, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { LABELS, PR, PRIOS, STATUSES } from '../core/constants.js';
-import { D, S, canSee, isOver, mem, pColor, proj, visibleProjects } from '../core/store.js';
+import { PR, PRIOS, STAGE_COLORS, STATUSES } from '../core/constants.js';
+import { D, S, canSee, isOver, labelsOf, mem, pColor, proj, visibleProjects } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
 import { defaultView } from '../core/sync-map.js';
 
@@ -38,7 +38,14 @@ export const FIELDS = {
         .filter(canSee)
         .map(p => ({ id: p.id, name: p.name, html: `<span class="pdot" style="--c:${pColor(p)}"></span>` })),
   },
-  labels: { name: 'Labels', icon: 'tag', opts: () => LABELS.map(l => ({ id: l.id, name: l.name, html: `<span class="pdot" style="--c:${l.c}"></span>` })) },
+  // the current workspace's list, read when the options are drawn: a view filters the tasks of the workspace shown, and a label that was
+  // removed from the list is still in the filter (`gone` names it in the chip)
+  labels: {
+    name: 'Labels',
+    icon: 'tag',
+    gone: 'Deleted label',
+    opts: () => labelsOf(D().ws.id).map(l => ({ id: l.id, name: l.name, html: `<span class="pdot" style="--c:${STAGE_COLORS[l.color]}"></span>` })),
+  },
   created: {
     name: 'Created date',
     icon: 'calendar-plus',
@@ -183,7 +190,7 @@ export function filterChips(key) {
     .map((f, i) => {
       const F = FIELDS[f.f];
       const opts = F.opts();
-      const names = f.v.map(id => opts.find(o => o.id === id)?.name || id);
+      const names = f.v.map(id => opts.find(o => o.id === id)?.name || F.gone || id);
       const val = names.length ? (names.length > 2 ? `${names.length} selected` : names.join(', ')) : 'any';
       return `${i ? '<span>and</span>' : ''}<span class="chip"><button data-a="pop" data-pop="fvals" data-key="${esc(key)}" data-i="${i}" style="display:inline-flex;gap:5px;align-items:center">${ic(F.icon, 12)}<b>${F.name}</b> ${f.op === 'not' ? 'is not' : 'is'} <span>${esc(val)}</span></button><button class="ibtn" data-a="rmFilter" data-key="${esc(key)}" data-i="${i}" aria-label="Remove filter">${ic('x', 12)}</button></span>`;
     })

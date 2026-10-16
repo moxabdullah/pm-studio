@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { DEFAULT_STAGE_SET, LB, PCOLORS, PICONS, PR, PRIOS, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
+import { DEFAULT_STAGE_SET, PCOLORS, PICONS, PR, PRIOS, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { lookup, sanitizeHtml } from '../core/safe.js';
 import {
   D,
@@ -11,6 +11,7 @@ import {
   canSee,
   commentsOf,
   isAdmin,
+  labelsOf,
   logAct,
   me,
   mem,
@@ -22,6 +23,7 @@ import {
   setOf,
   stageSetsOf,
   task,
+  taskWs,
   tasksOf,
   teamsList,
   templatesOf,
@@ -451,7 +453,9 @@ A.popToggleLabel = el => {
   const p = S.ui.pop;
   const t = tgt(p);
   const v = el.dataset.v;
-  const labels = t.labels.includes(v) ? t.labels.filter(x => x !== v) : [...t.labels, v];
+  // only labels the task's workspace has are written: one that was removed from the list falls away at the next toggle
+  const has = new Set(labelsOf(taskWs(t)).map(l => l.id));
+  const labels = (t.labels.includes(v) ? t.labels.filter(x => x !== v) : [...t.labels, v]).filter(x => has.has(x));
   updateTask(p.id, { labels });
 };
 A.popToggleDep = el => {
@@ -1772,6 +1776,8 @@ export function createProject(f, tmplId) {
     const d = dOff(n);
     return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
   };
+  // a template is readable in every workspace and was made in another one, maybe: only the labels this workspace has come across
+  const has = new Set(labelsOf(p.workspace).map(l => l.id));
   (tm?.tasks || []).slice(0, TEMPLATE_TASKS_MAX).forEach(t =>
     createTask({
       project: p.id,
@@ -1781,7 +1787,7 @@ export function createProject(f, tmplId) {
       priority: PRIOS.some(x => x.id === t.priority) ? t.priority : 'none',
       estimate: t.estimate || null,
       desc: sanitizeHtml(t.desc),
-      labels: [...new Set(t.labels.filter(l => LB[l]))],
+      labels: [...new Set(t.labels.filter(l => has.has(l)))],
       subtasks: t.subtasks.filter(s => s.title).map(s => ({ id: uid('s'), title: s.title, done: false })),
       start: day(t.startOff),
       due: day(t.dueOff),

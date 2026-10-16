@@ -1,7 +1,7 @@
 import { lookup } from './safe.js';
 
 /* ---------- vocab ---------- */
-/* Lookups keyed by stored values (status, priority, project status, colour name, label id) go through lookup():
+/* Lookups keyed by stored values (status, priority, health, colour name) go through lookup():
    an unknown or hostile key gets a neutral entry (or undefined where there is no fallback) instead of crashing. */
 export const STATUSES = [
   { id: 'backlog', name: 'Backlog' },
@@ -19,17 +19,6 @@ export const PRIOS = [
   { id: 'none', name: 'No priority', w: 0 },
 ];
 export const PR = lookup(Object.fromEntries(PRIOS.map(p => [p.id, p])), PRIOS[4]);
-export const LABELS = [
-  { id: 'design', name: 'Design', c: 'var(--violet)' },
-  { id: 'frontend', name: 'Frontend', c: 'var(--blue)' },
-  { id: 'backend', name: 'Backend', c: 'var(--teal)' },
-  { id: 'research', name: 'Research', c: 'var(--amber)' },
-  { id: 'content', name: 'Content', c: 'var(--rose)' },
-  { id: 'bug', name: 'Bug', c: 'var(--red)' },
-  { id: 'qa', name: 'QA', c: 'var(--green)' },
-  { id: 'growth', name: 'Growth', c: 'var(--orange)' },
-];
-export const LB = lookup(Object.fromEntries(LABELS.map(l => [l.id, l])));
 /* A project's health, a flag apart from its stage (stages are the workspace's own, see DEFAULT_STAGE_SET). */
 export const HEALTH = lookup(
   {

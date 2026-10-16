@@ -1,7 +1,7 @@
 /* ---------------- POPOVERS ---------------- */
 import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, fmtTime, iso, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { HEALTH, LABELS, PRIOS, ROLES, STAGE_COLORS, STATUSES } from '../core/constants.js';
+import { HEALTH, PRIOS, ROLES, STAGE_COLORS, STATUSES } from '../core/constants.js';
 import {
   D,
   S,
@@ -9,6 +9,7 @@ import {
   canSee,
   isAdmin,
   isFinished,
+  labelsOf,
   me,
   mem,
   pColor,
@@ -17,6 +18,7 @@ import {
   stageOf,
   stageSetsOf,
   task,
+  taskWs,
   visibleProjects,
   wsEvents,
 } from '../core/store.js';
@@ -151,10 +153,10 @@ export function popHtml(p) {
       break;
     case 'labels':
       inner = popList(
-        LABELS.map(l => ({
+        labelsOf(taskWs(t)).map(l => ({
           id: l.id,
           name: l.name,
-          html: `<span class="pdot" style="--c:${l.c}"></span>`,
+          html: `<span class="pdot" style="--c:${STAGE_COLORS[l.color]}"></span>`,
           on: t?.labels.includes(l.id),
           act: 'popToggleLabel',
         })),
