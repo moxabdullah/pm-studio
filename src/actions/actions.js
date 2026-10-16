@@ -1690,6 +1690,7 @@ A.newProject = el => {
   // Opened with a template chosen: the list may be longer than what it shows, so bring the chosen one into view (after the dialog has focused its first field)
   if (S.ui.pform.tmpl !== 'blank') setTimeout(() => $('.tmpls .opt.on')?.scrollIntoView({ block: 'nearest' }), 40);
 };
+const PROJECT_KEYS = ['name', 'desc', 'icon', 'color', 'team', 'lead', 'due']; // the project's own values on the form, besides its fields
 A.editProject = el => {
   const p = proj(el.dataset.id);
   S.ui.pop = null;
@@ -1697,11 +1698,13 @@ A.editProject = el => {
   // the values of the project's fields, as the strings the inputs hold (the project's own workspace's fields, not the current one's)
   for (const fl of fieldsOf(p.workspace)) if (p['f_' + fl.id] !== undefined) S.ui.pform['f_' + fl.id] = String(p['f_' + fl.id]);
   S.ui.errors = {};
-  // `snap`: each field's string as the form opened with it, and `touched`: the field inputs the person has changed since. Saving writes a
-  // field only if it counts as changed (touched, or holding a value that differs from `snap`) and differs from `snap` (fieldValues), so a
-  // value that changed elsewhere meanwhile, or one its input cannot show, is left as it is. `bad`: see projectDialog. They sit on the
-  // dialog, not in S.ui.pform, which only holds what the inputs write.
+  // `snap`: each input's string as the form opened with it (the project's own keys and its fields), and `touched`: the inputs the person
+  // has changed since (the icon and colour buttons too). Saving writes a key only if it counts as changed (touched, or a date holding a
+  // value that differs from `snap`) and differs from `snap` (submitProject, fieldValues), so a value that changed elsewhere meanwhile, or
+  // one its input cannot show, is left as it is. `bad`: see projectDialog. They sit on the dialog, not in S.ui.pform, which only holds
+  // what the inputs write.
   const snap = {};
+  for (const k of PROJECT_KEYS) snap[k] = String(S.ui.pform[k] ?? '');
   for (const fl of fieldsOf(p.workspace)) snap['f_' + fl.id] = S.ui.pform['f_' + fl.id] ?? '';
   openModal({ type: 'project', edit: p.id, snap, touched: new Set(), bad: new Set() });
 };
@@ -1758,6 +1761,7 @@ A.pformSet = el => {
     f[el.dataset.f] = el.dataset.v;
     if (el.dataset.f === 'icon') f.iconByHand = true;
     if (el.dataset.f === 'color') f.colorByHand = true;
+    projectDialog()?.touched?.add(el.dataset.f); // (these two buttons are no `data-in` input; the template is not saved with a project)
   }
   render();
 };
@@ -1841,6 +1845,7 @@ export function createProject(f, tmplId) {
   );
   return p;
 }
+const TEXT = { type: 'text' }; // (for differs(): the project's own values are compared as trimmed text)
 /* Whether a field's text in the form differs from the one it started with: numbers by value (5 and 5.0 are the same number), anything
    else as trimmed text. */
 const differs = (fl, raw, snap) => {
@@ -1963,19 +1968,23 @@ A.submitProject = () => {
   for (const [k, val] of Object.entries(vals)) if (val !== undefined) v[k] = val;
   if (m.edit) {
     const id = m.edit;
+    // Which of the project's own values this save writes, decided now and once (a "Try again" writes the same). Like the fields: only
+    // what the person changed, so a name, team, date... that someone else changed while the form was open is not overwritten by the stale
+    // input. An input is changed if it was touched and differs from `snap`. Not by value alone: a text input drops a stored line break and
+    // a textarea turns \r\n into \n, so an untouched value would count as changed, and a team the list lacks shows as the first one.
+    // The Target date also counts as changed when it holds a date that differs from `snap`, as a date field does (Safari may send no
+    // `change` before an Enter submit); emptied, it is written as ''.
+    const core = {};
+    for (const k of PROJECT_KEYS) {
+      const now = String(v[k] ?? '');
+      if (differs(TEXT, now, m.snap?.[k]) && (m.touched?.has(k) || (k === 'due' && now))) core[k] = now;
+    }
     mutate(
       () => {
         const p = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
-        Object.assign(p, {
-          name: v.name,
-          desc: v.desc,
-          icon: v.icon,
-          color: v.color,
-          team: v.team,
-          lead: v.lead,
-          due: v.due,
-          members: [...new Set([...p.members, v.lead])],
-        });
+        Object.assign(p, core);
+        // the lead is a member; a lead left as it was is not added again (it may have left the project meanwhile)
+        if (core.lead) p.members = [...new Set([...p.members, core.lead])];
         // a field left empty has no key; only the fields the person changed are here, and the keys of fields the workspace does not have are not touched
         for (const [k, val] of Object.entries(vals)) {
           if (val === undefined) delete p[k];
