@@ -152,7 +152,7 @@ export function projectModal(m, H) {
         )
         .join('')}</div></div>
     </div>
-    <div class="row" style="gap:12px;flex-wrap:wrap">
+    <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start">
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-team">Team</label><select class="select" id="p-team" data-in="pform" data-f="team">${teamsList()
         .map(t => `<option value="${esc(t.id)}" ${f.team === t.id ? 'selected' : ''}>${esc(t.name)}</option>`)
         .join('')}</select></div>

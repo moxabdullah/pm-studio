@@ -1960,6 +1960,9 @@ A.submitProject = () => {
     ($('#' + CSS.escape('p-' + bad + '-err')) || el)?.scrollIntoView({ block: 'nearest' });
     return;
   }
+  // Passed: a message drawn by an earlier refusal goes now, not at the next render. Clearing the segments left after a refusal fires no
+  // event, and an offline refusal of the save below keeps the form open for "Try again".
+  showFieldErrors(ws, {});
   const fresh = latest(m);
   const still = () => isTop(m) && fresh();
   // What the save applies is copied here, once validated: the form stays editable after an offline refusal, and "Try again" must not pick up what was typed since.
