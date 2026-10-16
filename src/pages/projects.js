@@ -159,7 +159,8 @@ export function pageProjects() {
   const st = filterNow();
   const sort = u.projSort || 'recent';
   let ps = visibleProjects().filter(p => inFilter(p, st) && (!q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)));
-  const sorter = { recent: p => p.last, name: p => p.name, due: p => p.due, progress: p => -progressOf(p.id) }[sort];
+  // (a project with no target date sorts after every dated one)
+  const sorter = { recent: p => p.last, name: p => p.name, due: p => p.due || '\uffff', progress: p => -progressOf(p.id) }[sort];
   ps.sort((a, b) => (sorter(a) > sorter(b) ? 1 : -1));
   const view = u.projView;
   const set = view === 'board' ? shownSet(st) : null;
