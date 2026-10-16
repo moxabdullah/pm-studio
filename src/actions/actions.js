@@ -2027,6 +2027,7 @@ A.dupProject = el => {
     () => {
       p = proj(id); // by id: a merge while a refused edit waits for "Try again" must not leave the copy with the values from the click
       n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
+      if (!p.due) n.due = ''; // a copy keeps the original's values, so no target date stays none (createProject gives a new project +30 days)
       tasksOf(p.id).forEach(t => createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, project: n.id, status: 'todo' }));
     },
     () => toast(`Duplicated ${p.name}`, { action: 'Open', onAction: () => go('project', { id: n.id }) }),
