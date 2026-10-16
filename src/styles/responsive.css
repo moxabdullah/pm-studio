@@ -124,6 +124,11 @@
   .bottomnav button.on {
     color: var(--text);
   }
+  /* what the nav covers of the page (1px border, 4px padding, a 48px button, 4px and the safe area below) and 12px more: a focused button
+     that the browser scrolls into view stops above the nav, not under it */
+  .content {
+    scroll-padding-bottom: calc(57px + env(safe-area-inset-bottom, 0px) + 12px);
+  }
   .bottomnav .bdot {
     position: absolute;
     top: 3px;

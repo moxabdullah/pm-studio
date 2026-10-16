@@ -1510,9 +1510,10 @@ A.toggleCol = el => {
 A.togglePipeCol = el => {
   S.ui.collapsedCols[el.dataset.key] = el.dataset.to === 'collapse';
   render();
-  // focus comes back to the button that took the place of this one (render does that, without scrolling), which can be off screen
+  // focus comes back to the button that took the place of this one (render does that, without scrolling), which can be off screen;
+  // only to that one: a click that did not focus it (Safari) leaves focus on some card's button in another column, which is not to be scrolled to
   const f = document.activeElement;
-  if (f?.closest?.('.pboard')) f.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (f?.dataset?.key === el.dataset.key) f.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 };
 A.colCollapse = el => {
   S.ui.collapsedCols[S.ui.pop.key + ':' + el.dataset.id] = true;

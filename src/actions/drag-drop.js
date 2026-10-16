@@ -9,6 +9,7 @@ import { applyPatch, handleFiles, updateTask } from './actions.js';
 import { moveProject } from './stages.js';
 
 const EDGE = 56; // px from the Board's left or right edge within which a card being dragged scrolls it
+const GUTTER = 24; // px past either edge where it still does (the page's gutter), but not past the page itself: the sidebar never scrolls the Board
 export let DRAG = null;
 export function clearDropMarks() {
   $$('.drop-line').forEach(x => x.remove());
@@ -47,6 +48,8 @@ document.addEventListener('dragstart', e => {
       /* not supported here; safe to skip */
     }
   S.ui.pop = null;
+  // not drawn (that would detach the card being dragged), so an open picker is taken off the page here: it would cover a part of a column and take its drops
+  $$('.pop.floating').forEach(x => x.remove());
   setTimeout(() => vis.classList.add('dragging'), 0);
 });
 document.addEventListener('dragend', () => {
@@ -132,7 +135,10 @@ document.addEventListener('dragover', e => {
     const bd = $('.pboard');
     if (bd) {
       const r = bd.getBoundingClientRect();
-      if (e.clientY >= r.top && e.clientY <= r.bottom) {
+      // the Board sits 4px out into the page's 24px gutter, so 24px past its edge would reach into the sidebar: not past the page
+      const pg = bd.closest('.content')?.getBoundingClientRect() || { left: -Infinity, right: Infinity };
+      const near = e.clientX >= Math.max(r.left - GUTTER, pg.left) && e.clientX <= Math.min(r.right + GUTTER, pg.right);
+      if (near && e.clientY >= r.top && e.clientY <= r.bottom) {
         const dl = Math.max(0, e.clientX - r.left);
         const dr = Math.max(0, r.right - e.clientX);
         if (dl < EDGE) bd.scrollLeft -= Math.ceil((EDGE - dl) / 3);

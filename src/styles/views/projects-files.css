@@ -91,6 +91,12 @@
   width: 24px;
   height: 24px;
 }
+/* a button brought into view with `nearest` ends flush with the box that scrolls it: the margin keeps its 3px focus ring from being cut there */
+.pbcard .pmove,
+.pboard .bcol.collapsed,
+.pboard .bcol-h .ibtn {
+  scroll-margin: 4px;
+}
 .pboard .bcol.collapsed {
   justify-content: flex-start;
   padding-bottom: 8px;
@@ -149,9 +155,9 @@
     height: 32px;
   }
 }
-/* On a phone the columns are as tall as their cards and the page scrolls: a column with its own scroll (and a height cut to the screen)
-   would end under the bottom nav. An empty one keeps a little height to drop on. */
-@media (max-width: 640px) {
+/* On a phone (a landscape one too: 375 to 430px tall) the columns are as tall as their cards and the page scrolls: a column with its own
+   scroll (and a height cut to the screen) would end under the bottom nav, or show about one card. An empty one keeps a little height to drop on. */
+@media (max-width: 640px), (max-height: 520px) {
   .pboard .bcol {
     max-height: none;
     min-height: 120px;
