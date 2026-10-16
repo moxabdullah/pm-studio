@@ -37,7 +37,7 @@ export function tcell(t, c) {
       return `<td class="cellbtn num" data-a="pop" data-pop="date" data-field="start" data-id="${esc(t.id)}">${t.start ? fmtDate(t.start) : '<span class="faint">—</span>'}</td>`;
     case 'labels': {
       const ls = shownLabels(t);
-      return `<td class="cellbtn" data-a="pop" data-pop="labels" data-id="${esc(t.id)}"><span class="row lblcell" style="gap:4px">${ls.length ? lblPills(ls) : '<span class="faint">—</span>'}</span></td>`;
+      return `<td class="cellbtn" data-a="pop" data-pop="labels" data-id="${esc(t.id)}"><span class="row lblcell" style="gap:4px">${ls.length ? `<span class="lblpills">${lblPills(ls)}</span>` : '<span class="faint">—</span>'}</span></td>`;
     }
     case 'deps':
       return `<td class="cellbtn" data-a="pop" data-pop="deps" data-id="${esc(t.id)}">${t.deps.map(d => (task(d) ? `<span class="depchip" title="${esc(task(d).title)}">${esc(task(d).key)}</span>` : '')).join('') || '<span class="faint">—</span>'}</td>`;

@@ -33,7 +33,7 @@ export function cellDue(t) {
 }
 export function cellLabels(t) {
   const ls = shownLabels(t);
-  return `<button class="pillbtn lblcell ${ls.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${esc(t.id)}" aria-label="Labels" style="gap:4px;overflow:hidden">${ls.length ? lblPills(ls.slice(0, 2)) + (ls.length > 2 ? `<span class="faint" style="font-size:11px">+${ls.length - 2}</span>` : '') : `${ic('tag', 13)}<span>Add</span>`}</button>`;
+  return `<button class="pillbtn lblcell ${ls.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${esc(t.id)}" aria-label="Labels" style="gap:4px">${ls.length ? `<span class="lblpills">${lblPills(ls.slice(0, 2))}</span>` + (ls.length > 2 ? `<span class="faint lblmore">+${ls.length - 2}</span>` : '') : `${ic('tag', 13)}<span>Add</span>`}</button>`;
 }
 export function cellProject(t) {
   const p = proj(t.project);
