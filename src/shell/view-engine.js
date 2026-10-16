@@ -190,7 +190,7 @@ export function filterChips(key) {
     .map((f, i) => {
       const F = FIELDS[f.f];
       const opts = F.opts();
-      const names = f.v.map(id => opts.find(o => o.id === id)?.name || F.gone || id);
+      const names = f.v.map(id => opts.find(o => o.id === id)?.name ?? F.gone ?? id);
       const val = names.length ? (names.length > 2 ? `${names.length} selected` : names.join(', ')) : 'any';
       return `${i ? '<span>and</span>' : ''}<span class="chip"><button data-a="pop" data-pop="fvals" data-key="${esc(key)}" data-i="${i}" style="display:inline-flex;gap:5px;align-items:center">${ic(F.icon, 12)}<b>${F.name}</b> ${f.op === 'not' ? 'is not' : 'is'} <span>${esc(val)}</span></button><button class="ibtn" data-a="rmFilter" data-key="${esc(key)}" data-i="${i}" aria-label="Remove filter">${ic('x', 12)}</button></span>`;
     })

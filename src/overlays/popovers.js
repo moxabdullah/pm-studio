@@ -6,6 +6,7 @@ import {
   D,
   S,
   allTasks,
+  canManageLabels,
   canSee,
   isAdmin,
   isFinished,
@@ -85,7 +86,12 @@ export function closePop() {
 export function tgt(p) {
   return p.id === '__form' ? S.ui.form : task(p.id);
 }
+/* What the label picker and a Labels filter show when the workspace's list is empty (not the "No matches" of a search that found nothing). */
+const noLabels = () =>
+  `<div class="mi faint" style="cursor:default;display:block;height:auto;white-space:normal;line-height:1.5">No labels in this workspace.<br>${canManageLabels() ? 'Add them' : 'Admins and managers can add them'} in Settings › Labels.</div>`;
+/* `opt.none`: markup shown instead of the list and its search box, when there is nothing to list at all. */
 export function popList(items, opt = {}) {
+  if (opt.none) return opt.none;
   const q = (S.ui.pop.q || '').toLowerCase();
   const list = items.filter(it => !q || it.name.toLowerCase().includes(q));
   return `${opt.search ? `<div class="pin"><input data-pop-q data-in="popQ" id="pop-q" placeholder="${opt.search}" value="${esc(S.ui.pop.q || '')}" aria-label="${esc(opt.search)}"></div>` : ''}
@@ -151,18 +157,20 @@ export function popHtml(p) {
         { search: 'Assign to…' },
       );
       break;
-    case 'labels':
+    case 'labels': {
+      const list = labelsOf(taskWs(t));
       inner = popList(
-        labelsOf(taskWs(t)).map(l => ({
+        list.map(l => ({
           id: l.id,
           name: l.name,
           html: `<span class="pdot" style="--c:${STAGE_COLORS[l.color]}"></span>`,
           on: t?.labels.includes(l.id),
           act: 'popToggleLabel',
         })),
-        { search: 'Filter labels…' },
+        { search: 'Filter labels…', none: list.length ? '' : noLabels() },
       );
       break;
+    }
     case 'project':
       inner = popList(
         visibleProjects()
@@ -369,15 +377,7 @@ export function popHtml(p) {
       const v = peekView(p.key);
       const f = v.filters[p.i];
       if (!f) break;
-      inner =
-        `<div class="mh">${FIELDS[f.f].name} ${f.op === 'not' ? 'is not' : 'is'}</div>` +
-        FIELDS[f.f]
-          .opts()
-          .map(
-            o =>
-              `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${esc(p.key)}" data-i="${p.i}" data-v="${esc(o.id)}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`,
-          )
-          .join('');
+      inner = `<div class="mh">${FIELDS[f.f].name} ${f.op === 'not' ? 'is not' : 'is'}</div>` + filterVals(p.key, p.i, f);
       break;
     }
     case 'daylist': {
@@ -431,13 +431,32 @@ export function popHtml(p) {
   if (!inner) return '';
   return `<div class="pop floating ${cls} ${S.ui.fx.pop ? 'enter' : ''}" role="menu" style="left:${p.x}px;top:${p.y}px;${style}" data-pop-root>${inner}</div>`;
 }
+/* The tick list of a filter's values: its options, a ticked "Deleted label" row for each value chosen that the options lack (a label
+   removed from the list), so it can be unticked here, and the note when a Labels filter has no options. `st`: more style for a row. */
+function filterVals(key, i, f, st = '') {
+  const F = FIELDS[f.f];
+  const opts = F.opts();
+  const row = (id, name, html, on) =>
+    `<label class="mi" style="cursor:pointer;${st}"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${esc(key)}" data-i="${i}" data-v="${esc(id)}" ${on ? 'checked' : ''}>${html || ''}${esc(name)}</label>`;
+  const known = new Set(opts.map(o => o.id));
+  return (
+    opts.map(o => row(o.id, o.name, o.html, f.v.includes(o.id))).join('') +
+    (F.gone
+      ? f.v
+          .filter(id => !known.has(id))
+          .map(id => row(id, F.gone, '', true))
+          .join('')
+      : '') +
+    (f.f === 'labels' && !opts.length ? noLabels() : '')
+  );
+}
 export function filterBuilder(p) {
   const v = peekView(p.key);
   const rows = v.filters
     .map((f, i) => {
       const F = FIELDS[f.f];
       const opts = F.opts();
-      const names = f.v.map(id => opts.find(o => o.id === id)?.name || F.gone || id);
+      const names = f.v.map(id => opts.find(o => o.id === id)?.name ?? F.gone ?? id);
       const open = p.edit === i;
       return `<div class="frow"><span class="conj">${i ? 'and' : 'Where'}</span>
       <select class="select" data-in="fField" data-key="${esc(p.key)}" data-i="${i}" aria-label="Field">${Object.entries(FIELDS)
@@ -446,7 +465,7 @@ export function filterBuilder(p) {
       <select class="select" data-in="fOp" data-key="${esc(p.key)}" data-i="${i}" aria-label="Operator"><option value="is" ${f.op === 'is' ? 'selected' : ''}>is</option><option value="not" ${f.op === 'not' ? 'selected' : ''}>is not</option></select>
       <button class="valbtn" data-a="fEdit" data-i="${i}" aria-expanded="${open}"><span class="trunc grow">${names.length ? esc(names.join(', ')) : '<span class="faint">Select…</span>'}</span>${ic('chevron-down', 12)}</button>
       <button class="ibtn ibtn-xs" data-a="rmFilter" data-key="${esc(p.key)}" data-i="${i}" aria-label="Remove filter">${ic('trash-2', 13)}</button></div>
-      ${open ? `<div style="margin-left:50px;border:1px solid var(--border);border-radius:var(--r);padding:4px;max-height:200px;overflow:auto">${opts.map(o => `<label class="mi" style="cursor:pointer;min-height:28px"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${esc(p.key)}" data-i="${i}" data-v="${esc(o.id)}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`).join('')}</div>` : ''}`;
+      ${open ? `<div style="margin-left:50px;border:1px solid var(--border);border-radius:var(--r);padding:4px;max-height:200px;overflow:auto">${filterVals(p.key, i, f, 'min-height:28px')}</div>` : ''}`;
     })
     .join('');
   return `<div class="mh fb-h">Filter by${v.filters.length ? `<button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${esc(p.key)}">Clear all</button>` : ''}</div>
