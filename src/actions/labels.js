@@ -9,7 +9,7 @@ import { LABELS_MAX, LABEL_NAME_MAX, STAGE_COLORS } from '../core/constants.js';
 import { D, S, canManageLabels, canSee, labelsOf, listsOf, proj } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
-import { lbRowName, openModal } from '../overlays/modals.js';
+import { lbRowName, lbRowTitle, openModal } from '../overlays/modals.js';
 import { A, IN, confirmDlg, isTop, needWorkspace } from './actions.js';
 
 const COLORS = Object.keys(STAGE_COLORS);
@@ -55,9 +55,12 @@ IN.lbRow = el => {
     return;
   }
   l.name = el.value;
-  // the row's buttons are named by it (no re-render: the focus stays in the field)
+  // the row's group, its field and its buttons are named by it (no re-render: the focus stays in the field)
   const n = lbRowName(l, +el.dataset.i);
   const g = el.closest('[role="group"]');
+  const title = lbRowTitle(l, +el.dataset.i);
+  g?.setAttribute('aria-label', title);
+  el.setAttribute('aria-label', `${title} name`);
   g?.querySelector('[data-v="up"]')?.setAttribute('aria-label', `Move ${n} up`);
   g?.querySelector('[data-v="down"]')?.setAttribute('aria-label', `Move ${n} down`);
   g?.querySelector('[data-a="lbRemove"]')?.setAttribute('aria-label', `Remove ${n}`);

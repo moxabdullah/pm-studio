@@ -218,8 +218,10 @@ export function stageSetModal(m, H) {
    S.ui.lbform; what a click or a save refuses is under S.ui.errors.lblist, which is under the label lbrow is about, or under the list when
    lbrow is -1. Laid out as the stage set's rows are (they wrap on a phone). data-keep: the body scrolls, and a move or a removal
    re-renders it. */
-/* What a row's buttons call it: the label's name as typed, else its place in the list. */
+/* What a row's buttons call it: the label's name as typed, else its place in the list. The row's group and its name field are called the
+   same, capitalised ("Label 2", "Label 2 name"), and follow the name as it is typed (actions/labels.js). */
 export const lbRowName = (l, i) => l.name.trim() || `label ${i + 1}`;
+export const lbRowTitle = (l, i) => l.name.trim() || `Label ${i + 1}`;
 export function labelsModal(H) {
   const f = S.ui.lbform;
   const e = S.ui.errors;
@@ -228,9 +230,9 @@ export function labelsModal(H) {
     msg ? `<span class="err" id="${id}" role="alert"${st ? ` style="${st}"` : ''}>${ic('circle-alert', 12)}${esc(msg)}</span>` : '';
   const last = f.labels.length - 1;
   const full = f.labels.length >= LABELS_MAX;
-  const row = (l, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="Label ${i + 1}" style="gap:6px 8px;flex-wrap:wrap">
+  const row = (l, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="${esc(lbRowTitle(l, i))}" style="gap:6px 8px;flex-wrap:wrap">
       <span class="pdot" style="--c:${STAGE_COLORS[l.color]};border-radius:50%;width:10px;height:10px" aria-hidden="true"></span>
-      <input class="input ${bad === i ? 'is-error' : ''}" id="lb-name-${i}" data-in="lbRow" data-i="${i}" data-f="name" value="${esc(l.name)}" maxlength="${LABEL_NAME_MAX}" placeholder="Label name" ${i === 0 ? 'autofocus ' : ''}aria-label="Label ${i + 1} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="lb-row-err"' : ''} style="flex:1;min-width:140px">
+      <input class="input ${bad === i ? 'is-error' : ''}" id="lb-name-${i}" data-in="lbRow" data-i="${i}" data-f="name" value="${esc(l.name)}" maxlength="${LABEL_NAME_MAX}" placeholder="Label name" ${i === 0 ? 'autofocus ' : ''}aria-label="${esc(lbRowTitle(l, i))} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="lb-row-err"' : ''} style="flex:1;min-width:140px">
       <select class="select" data-in="lbRow" data-i="${i}" data-f="color" aria-label="Label ${i + 1} color" style="width:auto">${Object.keys(STAGE_COLORS)
         .map(k => `<option value="${k}" ${l.color === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)}</option>`)
         .join('')}</select>
