@@ -132,10 +132,12 @@ export const STAGES_MAX = 30;
 export const STAGE_NAME_MAX = 40;
 export const STAGE_SET_NAME_MAX = 80;
 export const STAGE_HISTORY_MAX = 200;
-/* How many labels a workspace's list holds and the longest label name (the editor stops typing there). normalize.js cuts what the
-   server holds to the same numbers (a copy of them, as with the stage limits above): change both together. */
+/* How many labels a workspace's list holds, the longest label name (the editor stops typing there) and the longest label id (the ids
+   the app makes are 15 characters, the built-in ones at most 15). normalize.js cuts what the server holds to the same numbers (a copy
+   of them, as with the stage limits above): change both together. */
 export const LABELS_MAX = 50;
 export const LABEL_NAME_MAX = 30;
+export const LABEL_ID_MAX = 32;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },

@@ -134,22 +134,25 @@ const stagesOf = v => {
   }
   return out;
 };
-/* Workspace lists. LABELS_MAX and LABEL_NAME_MAX are copies of the numbers in constants.js (and the colours are STAGE_COLOR_KEYS above):
-   change both together, or a list is cut on reading and stays pending for ever. The doc may hold other lists (the project fields), and
-   they pass through untouched. `labels` is optional: a record without the key means the built-in labels, and `[]` means none, so the
-   key is coerced only when it is there. Task labels are not checked against the list (this module cannot see it); a task keeps the id
-   of a label that has gone, and it shows as nothing. */
+/* Workspace lists. LABELS_MAX, LABEL_NAME_MAX and LABEL_ID_MAX are copies of the numbers in constants.js (and the colours are
+   STAGE_COLOR_KEYS above): change both together, or a list is cut on reading and stays pending for ever. The doc may hold other lists
+   (the project fields), and they pass through untouched. `labels` is optional: a record without the key means the built-in labels, and
+   `[]` means none, so the key is coerced only when it is there. Task labels are not checked against the list (this module cannot see
+   it); a task keeps the id of a label that has gone, and it shows as nothing. */
 const LABELS_MAX = 50;
 const LABEL_NAME_MAX = 30;
-/* A list's labels in order. One without an id (or with an id of one before it) is dropped, since tasks point at labels by id. */
+const LABEL_ID_MAX = 32;
+const labelId = v => typeof v === 'string' && v.length > 0 && v.length <= LABEL_ID_MAX;
+/* A list's labels in order. One without an id (or with an id of one before it, or a longer one than the app makes) is dropped, since
+   tasks point at labels by id; one without a name stays, as "Untitled", so the tasks that carry it do not lose it. */
 const labelsOf = v => {
   const seen = new Set();
   const out = [];
   for (const l of arr(v)) {
     if (out.length >= LABELS_MAX) break;
-    if (!isObj(l) || typeof l.id !== 'string' || !l.id || seen.has(l.id)) continue;
+    if (!isObj(l) || !labelId(l.id) || seen.has(l.id)) continue;
     seen.add(l.id);
-    out.push({ id: l.id, name: capped(LABEL_NAME_MAX)(l.name), color: STAGE_COLOR_KEYS.has(l.color) ? l.color : 'gray' });
+    out.push({ id: l.id, name: capped(LABEL_NAME_MAX)(l.name) || 'Untitled', color: STAGE_COLOR_KEYS.has(l.color) ? l.color : 'gray' });
   }
   return out;
 };
