@@ -3,6 +3,7 @@ import { TODAY, diffD, fmtDate, iso, parse, uid } from './utils.js';
 import { DEFAULT_FIELDS, DEFAULT_LABELS, DEFAULT_STAGE_SET, PCOLORS } from './constants.js';
 import { flush } from './sync.js';
 import { DEFAULT_PREFS } from './sync-map.js';
+import { real } from './normalize.js';
 
 /* What a user's notification settings start as (the same defaults seed() uses). */
 export const DEFAULT_NOTIF_PREFS = {
@@ -204,16 +205,19 @@ export const labelOf = (id, wsId) => labelsOf(wsId).find(l => l.id === id);
    Only the editor (actions/fields.js) writes the list; actions.js writes a project's values. */
 export const fieldsOf = wsId => listsOf(wsId)?.fields ?? DEFAULT_FIELDS;
 export const fieldOf = (id, wsId) => fieldsOf(wsId).find(f => f.id === id);
-/* A day as the app stores one, and a real one (2026-02-31 is not): parse() would roll it over into March. */
-export const isDay = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && iso(parse(v)) === v;
+/* A day as the app stores one, and a real one (2026-02-31 is not): the test normalize.js makes of a date, so every year a date input
+   gives (0001 and up) is one. parse() is no help here: it rolls 2026-02-31 over into March, and turns the years 0-99 into 1900-1999. */
+export const isDay = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && real(v);
 /* What project `p` has for field `f`, as text to show; '' when it has no value. A dropdown shows its choice's name ('' for a choice the
    field has since lost). A value of another type than the field's (only a writer outside the app makes one) shows as it is, as text. */
 export function fieldText(p, f) {
   const v = p?.['f_' + f.id];
-  if (typeof v === 'number') return Number.isFinite(v) ? (f.type === 'number' ? v.toLocaleString() : String(v)) : '';
+  // (a number is shown whole: toLocaleString() alone would round 0.0004 to 0)
+  if (typeof v === 'number') return Number.isFinite(v) ? (f.type === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 20 }) : String(v)) : '';
   if (typeof v !== 'string') return '';
   if (f.type === 'select') return (f.options || []).find(o => o.id === v)?.name ?? '';
-  return f.type === 'date' && isDay(v) ? fmtDate(v, true) : v;
+  // fmtDate parses with Date(y, m, d), which makes the year 50 1950: a day before the year 1000 shows as stored
+  return f.type === 'date' && isDay(v) && +v.slice(0, 4) >= 1000 ? fmtDate(v, true) : v;
 }
 /* The workspace a task (or the task form) is in: its project's. */
 export const taskWs = t => proj(t?.project)?.workspace || D().ws.id;

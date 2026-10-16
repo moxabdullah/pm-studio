@@ -49,7 +49,7 @@ const bool = v => v === true;
 /* A calendar day as the app stores it, 'YYYY-MM-DD'. "No date" has two spellings that the app writes and that stay as they are: null
    (a task's due date once cleared) and '' (the project settings form with its date field emptied). Anything else is not a day, and
    neither is a date that does not exist (2025-02-31): parse() would roll it over into March. */
-const real = s => {
+export const real = s => {
   const [y, m, d] = s.split('-').map(Number);
   // in UTC, not local time as parse() builds it: in a zone that skipped a day (Samoa, 2011-12-30) a real date would be dropped
   const t = new Date(0);
