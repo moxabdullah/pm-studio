@@ -274,6 +274,15 @@
   color: var(--text-3);
   cursor: not-allowed;
 }
+/* A value that is shown and not edited, which takes focus (a field's type in the field dialog): the shade of a disabled input, but with
+   its text as readable as any, and no hover border, since nothing happens on click. */
+.input[readonly] {
+  background: var(--surface-2);
+  cursor: default;
+}
+.input[readonly]:hover:not(:focus) {
+  border-color: var(--border-strong);
+}
 .select {
   appearance: none;
   padding-right: 28px;

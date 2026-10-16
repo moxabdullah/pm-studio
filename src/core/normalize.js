@@ -49,7 +49,7 @@ const bool = v => v === true;
 /* A calendar day as the app stores it, 'YYYY-MM-DD'. "No date" has two spellings that the app writes and that stay as they are: null
    (a task's due date once cleared) and '' (the project settings form with its date field emptied). Anything else is not a day, and
    neither is a date that does not exist (2025-02-31): parse() would roll it over into March. */
-const real = s => {
+export const real = s => {
   const [y, m, d] = s.split('-').map(Number);
   // in UTC, not local time as parse() builds it: in a zone that skipped a day (Samoa, 2011-12-30) a real date would be dropped
   const t = new Date(0);
@@ -136,7 +136,7 @@ const stagesOf = v => {
 };
 /* Workspace lists. LABELS_MAX, LABEL_NAME_MAX and LABEL_ID_MAX are copies of the numbers in constants.js (and the colours are
    STAGE_COLOR_KEYS above): change both together, or a list is cut on reading and stays pending for ever. The doc may hold other lists
-   (the project fields), and they pass through untouched. `labels` is optional: a record without the key means the built-in labels, and
+   (the project fields, below), and any other key passes through untouched. `labels` is optional: a record without the key means the built-in labels, and
    `[]` means none, so the key is coerced only when it is there. Task labels are not checked against the list (this module cannot see
    it); a task keeps the id of a label that has gone, and it shows as nothing. */
 const LABELS_MAX = 50;
@@ -153,6 +153,47 @@ const labelsOf = v => {
     if (!isObj(l) || !labelId(l.id) || seen.has(l.id)) continue;
     seen.add(l.id);
     out.push({ id: l.id, name: capped(LABEL_NAME_MAX)(l.name) || 'Untitled', color: STAGE_COLOR_KEYS.has(l.color) ? l.color : 'gray' });
+  }
+  return out;
+};
+/* Project fields, the other list a workspace_lists doc holds. FIELDS_MAX, FIELD_NAME_MAX, FIELD_ID_MAX, FIELD_OPTIONS_MAX,
+   FIELD_OPTION_MAX and FIELD_TEXT_MAX are copies of the numbers in constants.js, and FIELD_TYPE_KEYS the keys of FIELD_TYPES: change
+   both together, or a list is cut on reading and stays pending for ever. `fields` is optional like `labels` (no key: the built-in
+   fields; `[]`: none). A project's values are its `f_<id>` keys (see projectOf); they are not checked against the list either. */
+const FIELDS_MAX = 30;
+const FIELD_NAME_MAX = 40;
+const FIELD_ID_MAX = 32;
+const FIELD_OPTIONS_MAX = 50;
+const FIELD_OPTION_MAX = 40;
+const FIELD_TEXT_MAX = 200;
+const FIELD_TYPE_KEYS = new Set(['text', 'number', 'date', 'select']);
+const FIELD_ID = new RegExp(`^[a-z0-9]{1,${FIELD_ID_MAX}}$`);
+/* A dropdown's choices in order. As with the fields: one without a usable id (or with the id of one before it) is dropped, since projects
+   point at a choice by id; one without a name stays, as "Untitled", so the projects that chose it do not lose it. */
+const optionsOf = v => {
+  const seen = new Set();
+  const out = [];
+  for (const o of arr(v)) {
+    if (out.length >= FIELD_OPTIONS_MAX) break;
+    if (!isObj(o) || typeof o.id !== 'string' || !FIELD_ID.test(o.id) || seen.has(o.id)) continue;
+    seen.add(o.id);
+    out.push({ id: o.id, name: capped(FIELD_OPTION_MAX)(o.name) || 'Untitled' });
+  }
+  return out;
+};
+/* A list's fields in order. A field without a usable id (or with the id of one before it) is dropped; one without a name stays, as
+   "Untitled". Only a dropdown has `options`, and it always has them (maybe none); any other kind has none, whatever the record holds. */
+const fieldDefsOf = v => {
+  const seen = new Set();
+  const out = [];
+  for (const f of arr(v)) {
+    if (out.length >= FIELDS_MAX) break;
+    if (!isObj(f) || typeof f.id !== 'string' || !FIELD_ID.test(f.id) || seen.has(f.id)) continue;
+    seen.add(f.id);
+    const type = FIELD_TYPE_KEYS.has(f.type) ? f.type : 'text';
+    const field = { id: f.id, name: capped(FIELD_NAME_MAX)(f.name) || 'Untitled', type, inTable: f.inTable === true };
+    if (type === 'select') field.options = optionsOf(f.options);
+    out.push(field);
   }
   return out;
 };
@@ -192,6 +233,15 @@ function projectOf(r) {
   const old = typeof r.status === 'string' ? (own(OLD_STATUS, r.status) ? OLD_STATUS[r.status] : ['', 'ok']) : null;
   const out = projectShape(old ? { ...r, stage: r.stage === undefined ? old[0] : r.stage, health: HEALTH_KEYS.has(r.health) ? r.health : old[1] } : r);
   delete out.status;
+  // The values of the workspace's project fields, one key each (f_<id>), so that two people changing different fields do not overwrite
+  // each other. A value is a non-empty text or a number; "no value" is no key (the app deletes it), so anything else is dropped. A key
+  // whose field the workspace no longer has stays: this module cannot see the list. Text is cut, not trimmed: the app trims first.
+  for (const k of Object.keys(out)) {
+    if (!k.startsWith('f_')) continue;
+    const v = out[k];
+    if (typeof v === 'string' && v) out[k] = v.slice(0, FIELD_TEXT_MAX);
+    else if (typeof v !== 'number' || !Number.isFinite(v)) delete out[k];
+  }
   return out;
 }
 
@@ -236,7 +286,7 @@ const KINDS = {
     { workspace: str, updated: num },
   ),
   stageSet: shape({ id: str, name: capped(STAGE_SET_NAME_MAX), stages: stagesOf }, { workspace: str, created: str }),
-  workspaceList: shape({ id: str }, { workspace: str, created: str, labels: labelsOf }),
+  workspaceList: shape({ id: str }, { workspace: str, created: str, labels: labelsOf, fields: fieldDefsOf }),
   workspace: shape({ id: str, name: str, c: str }, { url: str, brand: bool }),
 }; // prettier-ignore
 

@@ -316,6 +316,66 @@
 .kv > dt .i {
   color: var(--text-4);
 }
+/* A project field's row in the overview: the name and the value wrap (a long word breaks anywhere) instead of being cut to one line,
+   and both start at the top of the row, so the name, its icon and the value's first line sit on one line. Padding puts that line where
+   the single line of the other rows is (the middle of 30px). */
+.kv > dt.kv-f {
+  align-self: start;
+  align-items: flex-start;
+  height: auto;
+  min-height: 30px;
+  padding-top: 6px;
+  overflow-wrap: anywhere;
+}
+.kv > dt.kv-f .i {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.kv > dd.kv-f {
+  align-self: start;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+.kv > dd.kv-f .pillbtn {
+  height: auto;
+  min-height: var(--h-sm);
+  padding-block: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* A fade on the edge of a sideways-scrolling panel that has more beyond it (the Projects table: projTableAfter sets .sf-l and .sf-r on this
+   wrapper). It lies over the panel's border box, inside its border and above its scrollbar, and takes no clicks. It has no transition:
+   a render rebuilds the wrapper, which would fade it in again on every keystroke in the search box. */
+.sfade {
+  position: relative;
+}
+.sfade::before,
+.sfade::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  bottom: 11px; /* (the scrollbar is 10px) */
+  width: 28px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+}
+.sfade::before {
+  left: 1px;
+  background: linear-gradient(to right, var(--surface), transparent);
+  border-radius: calc(var(--r-lg) - 1px) 0 0 0;
+}
+.sfade::after {
+  right: 1px;
+  background: linear-gradient(to left, var(--surface), transparent);
+  border-radius: 0 calc(var(--r-lg) - 1px) 0 0;
+}
+.sfade.sf-l::before,
+.sfade.sf-r::after {
+  opacity: 1;
+}
 
 /* files */
 .fgrid {

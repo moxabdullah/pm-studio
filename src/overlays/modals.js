@@ -2,6 +2,11 @@
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import {
+  FIELD_NAME_MAX,
+  FIELD_OPTIONS_MAX,
+  FIELD_OPTION_MAX,
+  FIELD_TEXT_MAX,
+  FIELD_TYPES,
   LABELS_MAX,
   LABEL_NAME_MAX,
   PCOLORS,
@@ -12,7 +17,7 @@ import {
   TEMPLATE_DESC_MAX,
   TEMPLATE_NAME_MAX,
 } from '../core/constants.js';
-import { D, S, canManageTemplates, mem, pColor, proj, shownLabels, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
+import { D, S, canManageTemplates, fieldsOf, mem, pColor, proj, shownLabels, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lblPills, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -65,6 +70,8 @@ export function modalHtml(m) {
       return wrap('', stageSetModal(m, H));
     case 'labels':
       return wrap('', labelsModal(H));
+    case 'field':
+      return wrap('', fieldModal(m, H));
     case 'filePreview':
       return wrap('lg', filePreviewModal(m, H));
     case 'saveView':
@@ -154,10 +161,37 @@ export function projectModal(m, H) {
         .join('')}</select></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}"></div>
     </div>
+    ${projectFields(m, f)}
     ${m.edit ? '' : stageSetPicker(f)}
     ${m.edit ? '' : templatePicker(f)}
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
+}
+/* The message under the input of project field `k` ('f_<id>') that refused its value; actions.js draws the same markup in place. */
+export const fieldErrHtml = (k, msg) => `<span class="err" id="${esc('p-' + k)}-err" role="alert">${ic('circle-alert', 12)}${esc(msg)}</span>`;
+/* The workspace's project fields on the project form (Settings > Project fields), one input each in the list's order: the workspace is the
+   current one for a new project and the project's own when editing, since the project may be open after the workspace was switched. The
+   values are the strings typed, under f_<field id> in S.ui.pform (actions.js turns them into the stored forms on Save); what a field
+   refused is under S.ui.errors.pfields. A workspace with no fields shows no group. */
+function projectFields(m, f) {
+  const list = fieldsOf(m.edit ? proj(m.edit)?.workspace : D().ws.id);
+  if (!list.length) return '';
+  const errs = S.ui.errors.pfields || {};
+  const one = fl => {
+    const k = 'f_' + fl.id;
+    const id = esc('p-' + k);
+    const v = f[k] ?? '';
+    const bad = errs[k];
+    const a = `id="${id}" data-in="pform" data-f="${esc(k)}" aria-invalid="${!!bad}"${bad ? ` aria-describedby="${id}-err"` : ''}`;
+    const ctl =
+      fl.type === 'select'
+        ? `<select class="select" ${a}><option value="" aria-label="No value"${v ? '' : ' selected'}>—</option>${(fl.options || [])
+            .map(o => `<option value="${esc(o.id)}"${v === o.id ? ' selected' : ''}>${esc(o.name)}</option>`)
+            .join('')}</select>`
+        : `<input class="input ${bad ? 'is-error' : ''}" ${a} type="${fl.type === 'number' ? 'number' : fl.type === 'date' ? 'date' : 'text'}"${fl.type === 'number' ? ' step="any"' : ''}${fl.type === 'text' ? ` maxlength="${FIELD_TEXT_MAX}"` : ''} value="${esc(v)}">`;
+    return `<div class="field" style="flex:1;min-width:150px"><label class="label" for="${id}" style="overflow-wrap:anywhere">${esc(fl.name)}</label>${ctl}${bad ? fieldErrHtml(k, bad) : ''}</div>`;
+  };
+  return `<div class="col" role="group" aria-labelledby="p-fields-h" style="gap:10px"><h3 id="p-fields-h" style="margin:0;font-size:13px;font-weight:600">Project fields</h3><div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start">${list.map(one).join('')}</div></div>`;
 }
 /* Which stage set a new project is in; asked only when the workspace has more than one (a project of the only set needs no choice). */
 function stageSetPicker(f) {
@@ -251,6 +285,53 @@ export function labelsModal(H) {
     </div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitLabels">Save changes</button></div>`;
+}
+/* Edit one of the workspace's project fields (Settings > Project fields), new or existing. The form is S.ui.fdform; what a click or a
+   save refuses is under S.ui.errors: fdname (about the name), and fdlist, which is under the option fdrow is about, or under the list of
+   options when fdrow is -1. The options are laid out as the labels' rows are. A field's type is chosen when it is made and shown, not
+   offered, when editing (a read-only input: Tab reaches it and it reads in the normal colour, which a disabled one does not; a native select
+   disabled would also still open, see ui/select.js). data-keep: the body scrolls, and a move or a
+   removal re-renders it. */
+export const fdOptName = (o, i) => o.name.trim() || `option ${i + 1}`;
+export const fdOptTitle = (o, i) => o.name.trim() || `Option ${i + 1}`;
+export function fieldModal(m, H) {
+  const f = S.ui.fdform;
+  const e = S.ui.errors;
+  const bad = e.fdlist ? e.fdrow : -1; // the option the message under the list is about
+  const err = (id, msg, st = '') =>
+    msg ? `<span class="err" id="${id}" role="alert"${st ? ` style="${st}"` : ''}>${ic('circle-alert', 12)}${esc(msg)}</span>` : '';
+  const last = f.options.length - 1;
+  const full = f.options.length >= FIELD_OPTIONS_MAX;
+  const row = (o, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="${esc(fdOptTitle(o, i))}" style="gap:6px 8px;flex-wrap:wrap">
+      <input class="input ${bad === i ? 'is-error' : ''}" id="fd-opt-${i}" data-in="fdOpt" data-i="${i}" value="${esc(o.name)}" maxlength="${FIELD_OPTION_MAX}" placeholder="Option name" aria-label="${esc(fdOptTitle(o, i))} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="fd-list-err"' : ''} style="flex:1;min-width:140px">
+      <span class="row" style="gap:2px;flex-wrap:nowrap;margin-left:auto">
+        <button type="button" class="ibtn ibtn-sm" data-a="fdOptMove" data-i="${i}" data-v="up" ${i === 0 ? 'disabled' : ''} aria-label="Move ${esc(fdOptName(o, i))} up">${ic('arrow-up', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="fdOptMove" data-i="${i}" data-v="down" ${i === last ? 'disabled' : ''} aria-label="Move ${esc(fdOptName(o, i))} down">${ic('arrow-down', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="fdOptRemove" data-i="${i}" aria-label="Remove ${esc(fdOptName(o, i))}">${ic('trash-2', 14)}</button>
+      </span>
+    </div>${bad === i ? err('fd-list-err', e.fdlist, 'margin-top:4px') : ''}</div>`;
+  return `${H(m.edit ? 'Edit field' : 'New field', 'Each project’s value is filled in on its Edit form.')}
+  <form class="modal-b" data-submit="submitField" data-keep="modal-field">
+    <div class="field"><label class="label" for="fd-name">Field name</label><input class="input ${e.fdname ? 'is-error' : ''}" id="fd-name" data-in="fdName" value="${esc(f.name)}" maxlength="${FIELD_NAME_MAX}" placeholder="e.g. Client" autofocus aria-invalid="${!!e.fdname}"${e.fdname ? ' aria-describedby="fd-name-err"' : ''}>${err('fd-name-err', e.fdname)}</div>
+    <div class="field"><label class="label" for="fd-type">Type</label>${
+      m.edit
+        ? `<input class="input" id="fd-type" value="${esc(FIELD_TYPES[f.type])}" readonly aria-describedby="fd-type-note"><span class="hint" id="fd-type-note">A field’s type can’t be changed after it’s created.</span>`
+        : `<select class="select" id="fd-type" data-in="fdType">${Object.entries(FIELD_TYPES)
+            .map(([k, n]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${n}</option>`)
+            .join('')}</select>`
+    }</div>
+    ${
+      f.type === 'select'
+        ? `<div class="field"><span class="label">Options, in order</span>
+      ${f.options.length ? f.options.map(row).join('') : '<p class="faint" style="margin:0 0 12px">No options yet.</p>'}
+      ${bad < 0 ? err('fd-list-err', e.fdlist) : ''}
+      <div class="row" style="gap:8px"><button type="button" class="btn btn-secondary btn-sm" data-a="fdOptAdd" ${full ? 'aria-disabled="true" aria-describedby="fd-cap"' : ''}>${ic('plus', 13)}Add option</button>${full ? `<span class="faint" id="fd-cap" style="font-size:12px">A dropdown can have up to ${FIELD_OPTIONS_MAX} options</span>` : ''}</div>
+    </div>`
+        : ''
+    }
+    <label class="row" style="font-size:13px;gap:8px;cursor:pointer"><input type="checkbox" class="check" id="fd-table" data-in="fdTable" ${f.inTable ? 'checked' : ''}>Show in the Projects table</label>
+  </form>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitField">Save changes</button></div>`;
 }
 /* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
    level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the

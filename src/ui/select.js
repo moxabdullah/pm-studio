@@ -70,7 +70,7 @@ export const selectMenu = {
         if (g) html += `<div class="mh" id="sm-g${i}">${esc(g.label)}</div><div role="group" aria-labelledby="sm-g${i}">`;
         group = g;
       }
-      html += `<button type="button" class="mi" role="option" data-i="${i}" aria-selected="${o.selected}"><span class="trunc grow">${esc(o.text)}</span>${o.selected ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`;
+      html += `<button type="button" class="mi" role="option" data-i="${i}" aria-selected="${o.selected}"${o.getAttribute('aria-label') ? ` aria-label="${esc(o.getAttribute('aria-label'))}"` : ''}><span class="trunc grow">${esc(o.text)}</span>${o.selected ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`;
     });
     menu.innerHTML = html + (group ? '</div>' : '');
     document.body.appendChild(menu);

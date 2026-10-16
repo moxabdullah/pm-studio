@@ -1,8 +1,9 @@
 /* ---------- store ---------- */
-import { TODAY, diffD, iso, parse, uid } from './utils.js';
-import { DEFAULT_LABELS, DEFAULT_STAGE_SET, PCOLORS } from './constants.js';
+import { TODAY, diffD, fmtDate, iso, parse, uid } from './utils.js';
+import { DEFAULT_FIELDS, DEFAULT_LABELS, DEFAULT_STAGE_SET, PCOLORS } from './constants.js';
 import { flush } from './sync.js';
 import { DEFAULT_PREFS } from './sync-map.js';
+import { real } from './normalize.js';
 
 /* What a user's notification settings start as (the same defaults seed() uses). */
 export const DEFAULT_NOTIF_PREFS = {
@@ -135,6 +136,8 @@ export const canManageTemplates = () => ['Admin', 'Manager'].includes(me()?.role
 export const canManageStages = () => canManageTemplates();
 /* Who may edit the workspace's task labels (the rules on `workspace_lists` say the same). */
 export const canManageLabels = () => canManageTemplates();
+/* Who may edit the workspace's project fields (the same record, so the same rules). */
+export const canManageFields = () => canManageTemplates();
 export const mem = id => D().members.find(m => m.id === id);
 export const proj = id => D().projects.find(p => p.id === id);
 export const task = id => D().tasks.find(t => t.id === id);
@@ -193,6 +196,35 @@ export const projectsUsing = (setId, stageId) =>
 export const listsOf = wsId => (D().workspaceLists || []).filter(l => l.workspace === wsId).sort((a, b) => !a.created - !b.created || cmp(a.id, b.id))[0];
 export const labelsOf = wsId => listsOf(wsId)?.labels ?? DEFAULT_LABELS;
 export const labelOf = (id, wsId) => labelsOf(wsId).find(l => l.id === id);
+/* ---------- project fields ----------
+   The same record holds the workspace's project fields (Settings > Project fields), as the `fields` of its doc, and they fall back the
+   same way: no record, or a record whose doc has no `fields` key, reads as DEFAULT_FIELDS (the writer copies them, with their ids, into
+   the first list it saves), and a list that is empty means no fields. A project stores values only, under `f_<field id>`, and keeps the
+   value of a field that was deleted; it shows nowhere. Everything that shows or asks for the values goes through these, with the
+   workspace of the project (p.workspace) rather than the current one, since a project can be open after the workspace was switched.
+   Only the editor (actions/fields.js) writes the list; actions.js writes a project's values. */
+export const fieldsOf = wsId => listsOf(wsId)?.fields ?? DEFAULT_FIELDS;
+export const fieldOf = (id, wsId) => fieldsOf(wsId).find(f => f.id === id);
+/* A day as the app stores one, and a real one (2026-02-31 is not): the test normalize.js makes of a date, so every year a date input
+   gives (0001 and up) is one. parse() is no help here: it rolls 2026-02-31 over into March, and turns the years 0-99 into 1900-1999. */
+export const isDay = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && real(v);
+/* What project `p` has for field `f`, as text to show; '' when it has no value. A dropdown shows its choice's name ('' for a choice the
+   field has since lost). A value of another type than the field's (only a writer outside the app makes one) shows as it is, as text. */
+export function fieldText(p, f) {
+  const v = p?.['f_' + f.id];
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return '';
+    if (f.type !== 'number') return String(v);
+    // (a number is shown whole: toLocaleString() alone would round 0.0004 to 0; and even 20 digits give 0 or -0 for 1e-21, which is shown as JS writes it)
+    const o = { maximumFractionDigits: 20 };
+    const s = v.toLocaleString(undefined, o);
+    return v !== 0 && s === (v < 0 ? -0 : 0).toLocaleString(undefined, o) ? String(v) : s;
+  }
+  if (typeof v !== 'string') return '';
+  if (f.type === 'select') return (f.options || []).find(o => o.id === v)?.name ?? '';
+  // fmtDate parses with Date(y, m, d), which makes the year 50 1950: a day before the year 1000 shows as stored
+  return f.type === 'date' && isDay(v) && +v.slice(0, 4) >= 1000 ? fmtDate(v, true) : v;
+}
 /* The workspace a task (or the task form) is in: its project's. */
 export const taskWs = t => proj(t?.project)?.workspace || D().ws.id;
 /* The labels of a task (or the task form) that its workspace's list still has, as the list's own entries and in the task's order, each

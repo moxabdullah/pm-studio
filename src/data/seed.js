@@ -132,6 +132,9 @@ export function seed() {
         { name: 'Public launch', date: dOff(24) },
       ],
       last: 12,
+      f_client: 'Northwind Traders',
+      f_enduser: 'Northwind customers',
+      f_po: 'PO-2026-0417',
     },
     {
       id: 'p2',
@@ -162,6 +165,8 @@ export function seed() {
         { name: 'App Store submission', date: dOff(45) },
       ],
       last: 48,
+      f_client: 'Contoso Ltd',
+      f_po: 'PO-2026-0392',
     },
     {
       id: 'p3',
@@ -186,6 +191,7 @@ export function seed() {
         { name: 'Campaign live', date: dOff(21) },
       ],
       last: 130,
+      f_client: 'Fabrikam Inc',
     },
     {
       id: 'p4',
