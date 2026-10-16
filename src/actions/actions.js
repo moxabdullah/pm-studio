@@ -52,7 +52,7 @@ import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/to
 import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { dropWsFilters, hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
-import { closeModal, openModal } from '../overlays/modals.js';
+import { closeModal, fieldErrHtml, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { moveProject, setHealth } from './stages.js';
 import { strengthMeter } from '../pages/settings.js';
@@ -1686,7 +1686,7 @@ A.newProject = el => {
   pickTemplate(S.ui.pform, el?.dataset?.tmpl);
   S.ui.errors = {};
   S.ui.pop = null;
-  openModal({ type: 'project' });
+  openModal({ type: 'project', bad: new Set() });
   // Opened with a template chosen: the list may be longer than what it shows, so bring the chosen one into view (after the dialog has focused its first field)
   if (S.ui.pform.tmpl !== 'blank') setTimeout(() => $('.tmpls .opt.on')?.scrollIntoView({ block: 'nearest' }), 40);
 };
@@ -1698,20 +1698,39 @@ A.editProject = el => {
   for (const fl of fieldsOf(p.workspace)) if (p['f_' + fl.id] !== undefined) S.ui.pform['f_' + fl.id] = String(p['f_' + fl.id]);
   S.ui.errors = {};
   // `snap`: each field's string as the form opened with it, and `touched`: the field inputs the person has changed since. Saving writes a
-  // field only if it was touched and now differs from `snap` (fieldValues), so a value that changed elsewhere meanwhile, or one its
-  // input cannot show, is left as it is. They sit on the dialog, not in S.ui.pform, which only holds what the inputs write.
+  // field only if it counts as changed (touched, or holding a value that differs from `snap`) and differs from `snap` (fieldValues), so a
+  // value that changed elsewhere meanwhile, or one its input cannot show, is left as it is. `bad`: see projectDialog. They sit on the
+  // dialog, not in S.ui.pform, which only holds what the inputs write.
   const snap = {};
   for (const fl of fieldsOf(p.workspace)) snap['f_' + fl.id] = S.ui.pform['f_' + fl.id] ?? '';
-  openModal({ type: 'project', edit: p.id, snap, touched: new Set() });
+  openModal({ type: 'project', edit: p.id, snap, touched: new Set(), bad: new Set() });
 };
+/* The project dialog (the top-most one: a question can be on top of it), which keeps two sets of field keys. `touched`: inputs the
+   person changed since it opened (an edit only). `bad`: inputs last seen half typed, text a number or date input cannot read. Such an
+   input has the value '', so the form's state cannot tell it from a box the person emptied, and any render that rebuilds the box
+   (a live update, a name error) shows it empty: a key in `bad` stays an error until the person types a value or empties the box
+   themselves, so the half-typed text is never saved as a clear. `halfTyped` marks the very input that was seen so: a date input that
+   is emptied by hand, segment by segment, fires no event, so the input itself is the only sign that the person did it. */
+const projectDialog = () => {
+  for (let i = S.ui.modals.length - 1; i >= 0; i--) if (S.ui.modals[i].type === 'project') return S.ui.modals[i];
+};
+const halfTyped = new WeakSet();
 IN.pform = el => {
   const k = el.dataset.f;
   S.ui.pform[k] = el.value;
-  if (k.startsWith('f_')) S.ui.modals[S.ui.modals.length - 1]?.touched?.add(k);
+  const half = !!el.validity?.badInput;
+  if (k.startsWith('f_')) {
+    const m = projectDialog();
+    m?.touched?.add(k);
+    if (half) {
+      m?.bad?.add(k);
+      halfTyped.add(el);
+    } else m?.bad?.delete(k);
+  }
   if (k === 'name' && S.ui.errors.pname && el.value.trim()) {
     S.ui.errors.pname = null;
     render();
-  } else if (S.ui.errors.pfields?.[k]) {
+  } else if (S.ui.errors.pfields?.[k] && !half) {
     // A field's message goes without a render: the input being typed in must stay the same element (a date input that is replaced
     // when its first digits make it valid takes the rest of the digits into another segment, a number input loses its caret).
     delete S.ui.errors.pfields[k];
@@ -1822,14 +1841,24 @@ export function createProject(f, tmplId) {
   );
   return p;
 }
+/* Whether a field's text in the form differs from the one it started with: numbers by value (5 and 5.0 are the same number), anything
+   else as trimmed text. */
+const differs = (fl, raw, snap) => {
+  const a = String(raw ?? '').trim();
+  const b = String(snap ?? '').trim();
+  return fl.type === 'number' && a && b ? Number(a) !== Number(b) : a !== b;
+};
 /* The form's values for the fields of workspace `ws`, checked and in the forms a project stores them: { 'f_<id>': value }, where a field
    left empty has the value undefined (the project then has no such key). Read from the inputs, since a number or date that cannot be
    read (half typed) is an empty string in the form's state. A field the form did not show (added since it opened) is left out, so
    saving never clears a value the person could not see. Returns the values and what was refused, { 'f_<id>': message }.
-   Every input is checked, but when editing (`m.edit`) only the fields the person changed are returned: one whose input was touched and
-   now differs from what it held when the form opened (m.snap). The rest are left as the project has them, so a value that someone else
-   changed while the form was open is not overwritten by the stale input, and one the input cannot show (a dropdown's removed option, a
-   date it rejects) is not deleted by an unrelated save. A new project takes every value. */
+   When editing (`m.edit`) only the fields the person changed are returned. A field counts as changed when its input was touched, or
+   holds a value that differs from what it held when the form opened (m.snap: Safari may fire no `change` on a date input before an
+   Enter submit), and is written only if it differs from that value. The rest are left as the project has them, so a value that someone
+   else changed while the form was open is not overwritten by the stale input, and one the input cannot show (a dropdown's removed
+   option, a date it rejects) is neither deleted by an unrelated save nor checked. A new project takes every value.
+   Per field: a half-typed input (see projectDialog) is refused first, changed or not; then an edit skips what was not changed; then the
+   value is checked, and last it is written. */
 function fieldValues(ws, f, m) {
   const vals = {};
   const errs = {};
@@ -1838,21 +1867,53 @@ function fieldValues(ws, f, m) {
     const el = $('#' + CSS.escape('p-' + k));
     if (!el && !(k in f)) continue;
     const raw = String((el ? el.value : f[k]) ?? '').trim();
-    const unread = el?.validity?.badInput; // typed in a number or date input, but not a number or a date
+    const half = !!el?.validity?.badInput; // typed in a number or date input, but not a number or a date
+    // (in `bad` but not half typed now: refused too, unless it is the input that was, which the person has emptied since)
+    if (half || (m.bad?.has(k) && !(el && halfTyped.has(el)))) {
+      errs[k] = fl.type === 'number' ? 'Enter a number' : 'Enter a date';
+      m.bad?.add(k);
+      if (half) halfTyped.add(el);
+      continue;
+    }
+    m.bad?.delete(k);
+    if (m.edit && !(m.touched?.has(k) || (el && raw && differs(fl, raw, m.snap?.[k])))) continue;
     let val;
     if (fl.type === 'number') {
       const n = Number(raw);
-      if (unread || (raw && !Number.isFinite(n))) errs[k] = 'Enter a number';
-      else val = raw ? n + 0 : undefined; // (+ 0: -0 is 0, as it is after a round trip through the server)
+      if (raw && !Number.isFinite(n)) {
+        errs[k] = 'Enter a number';
+        continue;
+      }
+      val = raw ? n + 0 : undefined; // (+ 0: -0 is 0, as it is after a round trip through the server)
     } else if (fl.type === 'date') {
-      if (unread || (raw && !isDay(raw))) errs[k] = 'Enter a date';
-      else val = raw || undefined;
+      if (raw && !isDay(raw)) {
+        errs[k] = 'Enter a date';
+        continue;
+      }
+      val = raw || undefined;
     } else if (fl.type === 'select') val = (fl.options || []).some(o => o.id === raw) ? raw : undefined;
     else val = raw.slice(0, FIELD_TEXT_MAX) || undefined;
-    if (errs[k] || (m.edit && !(m.touched?.has(k) && raw !== String(m.snap?.[k] ?? '').trim()))) continue;
+    if (m.edit && !differs(fl, raw, m.snap?.[k])) continue;
     vals[k] = val;
   }
   return { vals, errs };
+}
+/* What fieldValues refused, shown in the open form without render(): that would rebuild the inputs, and a number or date that is half
+   typed would come back empty. The message, the red border and the aria attributes are those projectFields draws; the fields that
+   are not refused lose theirs. */
+function showFieldErrors(ws, errs) {
+  for (const fl of fieldsOf(ws)) {
+    const k = 'f_' + fl.id;
+    const el = $('#' + CSS.escape('p-' + k));
+    if (!el) continue;
+    document.getElementById(el.id + '-err')?.remove();
+    el.classList.toggle('is-error', !!errs[k]);
+    el.setAttribute('aria-invalid', String(!!errs[k]));
+    if (errs[k]) {
+      el.setAttribute('aria-describedby', el.id + '-err');
+      el.insertAdjacentHTML('afterend', fieldErrHtml(k, errs[k]));
+    } else el.removeAttribute('aria-describedby');
+  }
 }
 A.submitProject = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
@@ -1865,11 +1926,12 @@ A.submitProject = () => {
     $('#p-name')?.focus();
     return;
   }
-  const { vals, errs } = fieldValues(m.edit ? proj(m.edit)?.workspace : D().ws.id, f, m);
+  const ws = m.edit ? proj(m.edit)?.workspace : D().ws.id;
+  const { vals, errs } = fieldValues(ws, f, m);
   const bad = Object.keys(errs)[0];
   S.ui.errors.pfields = bad ? errs : null;
   if (bad) {
-    render();
+    showFieldErrors(ws, errs); // (the name is valid here, or the render above would have drawn them)
     const el = $('#' + CSS.escape('p-' + bad));
     el?.focus();
     // the message under the input, which may be below the fold of the dialog's body (the input itself is just above it)
