@@ -88,6 +88,12 @@ function seedView(key) {
 }
 // For renders: the stored state of the view, or a fresh seed that is NOT stored (a render must not change what is pending).
 export const peekView = key => S.views[key] || seedView(key);
+/* For a change of workspace. The views that are not a project's ('tasks') are the same in every workspace, but a label or project
+   filter names one workspace's own: kept, it would empty the other's page and show as "Deleted label". So those filters go. Two
+   workspaces on the built-in labels share their ids, but each has its own list, so theirs go too. */
+export function dropWsFilters() {
+  for (const [key, v] of Object.entries(S.views)) if (!isProjView(key)) v.filters = v.filters.filter(f => f.f !== 'labels' && f.f !== 'project');
+}
 // For actions that change the view (and then save()), and for nothing else: stores the seed on the first call.
 export function viewOf(key) {
   if (!S.views[key]) S.views[key] = seedView(key);

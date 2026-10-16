@@ -49,7 +49,7 @@ import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
 import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
-import { hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
+import { dropWsFilters, hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { moveProject, setHealth } from './stages.js';
@@ -2212,6 +2212,7 @@ A.setSearch = el => {
 /* workspace, account, and the design-system demo triggers */
 /* Makes `w` (an entry of D().workspaces) the current workspace and remembers the choice in the person's settings. */
 export function setWorkspace(w) {
+  if (w.id !== D().ws.id) dropWsFilters();
   D().ws = { id: w.id, name: w.name, url: w.url || w.name.toLowerCase().replace(/[^a-z0-9]+/g, ''), c: w.c, brand: !!w.brand };
   save();
 }
