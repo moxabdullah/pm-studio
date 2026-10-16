@@ -316,6 +316,24 @@
 .kv > dt .i {
   color: var(--text-4);
 }
+/* A project field's row in the overview: the name and the value wrap (a long word breaks anywhere) instead of being cut to one line. */
+.kv > dt.kv-f {
+  height: auto;
+  min-height: 30px;
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.kv > dt.kv-f .i {
+  flex-shrink: 0;
+}
+.kv > dd.kv-f .pillbtn {
+  height: auto;
+  min-height: var(--h-sm);
+  padding-block: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
 
 /* files */
 .fgrid {

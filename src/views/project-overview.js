@@ -47,7 +47,8 @@ export function projOverview(p) {
           ${fieldsOf(p.workspace)
             .map(fl => {
               const v = fieldText(p, fl);
-              return `<dt title="${esc(fl.name)}">${ic(FIELD_ICON[fl.type] || 'type', 14)}<span class="trunc">${esc(fl.name)}</span></dt><dd>${v ? `<span class="pillbtn" title="${esc(v)}"><span class="trunc">${esc(v)}</span></span>` : '<span class="faint" aria-label="No value">—</span>'}</dd>`;
+              // (the name and the value wrap, a long word anywhere, so neither is cut: see .kv-f in projects-files.css)
+              return `<dt class="kv-f">${ic(FIELD_ICON[fl.type] || 'type', 14)}<span>${esc(fl.name)}</span></dt><dd class="kv-f">${v ? `<span class="pillbtn" title="${esc(v)}">${esc(v)}</span>` : '<span class="faint"><span class="sr">No value</span><span aria-hidden="true">—</span></span>'}</dd>`;
             })
             .join('')}
           <dt>${ic('user-plus', 14)}Members</dt><dd><button class="pillbtn" data-a="share" data-id="${esc(p.id)}">${avStack(p.members, 6)}<span class="faint">${p.members.length}</span></button></dd>
