@@ -238,7 +238,7 @@ export function labelsModal(H) {
         <button type="button" class="ibtn ibtn-sm" data-a="lbRemove" data-i="${i}" aria-label="Remove label ${i + 1}">${ic('trash-2', 14)}</button>
       </span>
     </div>${bad === i ? err('lb-row-err', e.lblist, 'margin-top:4px') : ''}</div>`;
-  return `${H('Edit labels', 'Labels are for sorting a workspace’s tasks. Removing one takes it off every task that has it.')}
+  return `${H('Edit labels', 'Labels are for sorting a workspace’s tasks. Tasks that have a removed label no longer show it.')}
   <form class="modal-b" data-submit="submitLabels" data-keep="modal-labels">
     <div class="field"><span class="label">Labels, in order</span>
       ${f.labels.length ? f.labels.map(row).join('') : '<p class="faint" style="margin:0 0 12px">No labels.</p>'}

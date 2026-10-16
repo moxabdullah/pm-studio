@@ -138,25 +138,34 @@ A.submitLabels = () => {
     tasks++;
     had.forEach(id => used.add(id));
   }
+  // This attempt is the newest one even when the question below is cancelled: an older "Try again" must not save the list it was for.
+  const fresh = latest(m);
   if (!tasks) {
-    saveLabels(m, f.ws, labels);
+    saveLabels(m, f.ws, labels, fresh);
     return;
   }
+  // A few labels are named (in the list's order); more are counted. "it" or "them" follows how many labels go, not how many tasks.
+  const names = labelsOf(f.ws)
+    .filter(l => used.has(l.id))
+    .map(l => l.name);
+  const few = names.length <= 3;
+  const who = few ? plural(tasks, 'task') : tasks === 1 ? 'That task' : 'Those tasks';
   // (Cancel pops this question and leaves the editor as it was)
   confirmDlg({
     wlId: listsOf(f.ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
-    title: `Remove ${plural(used.size, 'label')} used on ${plural(tasks, 'task')}?`,
-    body: `${tasks === 1 ? 'That task loses it' : 'Those tasks lose them'}. Private projects you can't see aren't counted.`,
+    title: few
+      ? `Remove ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]}?`
+      : `Remove ${plural(used.size, 'label')} used on ${plural(tasks, 'task')}?`,
+    body: `${who} no longer ${tasks === 1 ? 'shows' : 'show'} ${used.size === 1 ? 'it' : 'them'}. Private projects you can't see aren't counted.`,
     ok: used.size === 1 ? 'Remove label' : 'Remove labels',
     danger: true,
-    run: () => saveLabels(m, f.ws, labels),
+    run: () => saveLabels(m, f.ws, labels, fresh),
   });
 };
 /* What was validated is saved: the form stays editable after a refusal, so "Try again" must not read it again. The record is looked up
    again in the edit, since another admin may have saved the first list while the dialog was open (then it is updated, not made twice),
    and only `labels` is written, so the other lists in its doc (and anything not sent yet) stay as they are. */
-function saveLabels(m, ws, labels) {
-  const fresh = latest(m);
+function saveLabels(m, ws, labels, fresh) {
   mutate(
     () => {
       const rec = listsOf(ws);
