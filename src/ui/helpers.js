@@ -70,6 +70,9 @@ export const prPill = p => `${prIcon(p)}<span>${PR[p || 'none'].name}</span>`;
 export const lblPill = l => `<span class="lbl" style="--c:${STAGE_COLORS[l.color]}" title="${esc(l.name)}"><i></i><span>${esc(l.name)}</span></span>`;
 /* The pills of the labels shownLabels() gives. */
 export const lblPills = ls => ls.map(lblPill).join('');
+/* What a labels cell is called, for its accessible name and its tooltip: every label it holds (a list cell shows two of them and a table
+   cell may clip some), else "Labels". The names are text: escape the result where it is written. */
+export const lblsName = ls => (ls.length ? `Labels: ${ls.map(l => l.name).join(', ')}` : 'Labels');
 /* A label by its id: one the list does not have, a label that was removed, shows as nothing. No workspace reads the built-in set (the
    design-system page). A task's own labels are shownLabels(t). */
 export const lbl = (id, wsId) => {
