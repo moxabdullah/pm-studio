@@ -8,7 +8,7 @@ import { $, uid } from '../core/utils.js';
 import { LABELS_MAX, LABEL_NAME_MAX, STAGE_COLORS } from '../core/constants.js';
 import { D, S, canManageLabels, canSee, labelsOf, listsOf, proj } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
-import { render } from '../shell/render.js';
+import { go, render } from '../shell/render.js';
 import { lbRowName, lbRowTitle, openModal } from '../overlays/modals.js';
 import { A, IN, confirmDlg, isTop, needWorkspace } from './actions.js';
 
@@ -33,6 +33,14 @@ function mayManage() {
   return false;
 }
 
+/* The button of an empty label list's note (popovers.js noLabels). A task's details close first, or they would cover the list (on a wide
+   screen go() keeps them open); what they show is saved already. */
+A.openLabels = () => {
+  S.ui.drawer = null; // as A.closeDrawer
+  S.ui.drawerFull = false;
+  S.ui.subOpen = null;
+  go('settings', { sec: 'labels' });
+};
 /* ---------- the editor ---------- */
 /* The form is S.ui.lbform: the rows as typed (so a re-render, a move or a live change from the server keeps them), the workspace the
    dialog was opened in, and `was`, a Map of each saved label's name when it opened: a name clash is refused only on a row that was added
