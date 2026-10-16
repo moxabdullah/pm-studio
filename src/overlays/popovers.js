@@ -437,7 +437,7 @@ export function filterBuilder(p) {
     .map((f, i) => {
       const F = FIELDS[f.f];
       const opts = F.opts();
-      const names = f.v.map(id => opts.find(o => o.id === id)?.name || id);
+      const names = f.v.map(id => opts.find(o => o.id === id)?.name || F.gone || id);
       const open = p.edit === i;
       return `<div class="frow"><span class="conj">${i ? 'and' : 'Where'}</span>
       <select class="select" data-in="fField" data-key="${esc(p.key)}" data-i="${i}" aria-label="Field">${Object.entries(FIELDS)
