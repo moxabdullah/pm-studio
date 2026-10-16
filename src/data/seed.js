@@ -328,9 +328,9 @@ export function seed() {
     );
   };
   // Website Redesign
-  t('p1', 'Audit existing navigation', 'done', 'm2', 'high', -12, ['research'], { est: '2d', len: 5, age: 28 });
-  t('p1', 'Summarize stakeholder interviews', 'done', 'm1', 'medium', -9, ['research'], { est: '1d', age: 26 });
-  t('p1', 'Create homepage wireframes', 'review', 'm2', 'high', 1, ['design'], {
+  t('p1', 'Audit existing navigation', 'done', 'm2', 'high', -12, ['electrical'], { est: '2d', len: 5, age: 28 });
+  t('p1', 'Summarize stakeholder interviews', 'done', 'm1', 'medium', -9, ['electrical'], { est: '1d', age: 26 });
+  t('p1', 'Create homepage wireframes', 'review', 'm2', 'high', 1, ['scada'], {
     est: '3d',
     len: 7,
     fav: true,
@@ -346,7 +346,7 @@ export function seed() {
       { id: 'a2', name: 'nav-audit-findings.pdf', type: 'pdf', size: '860 KB', by: 'm2', at: minsAgo(8000) },
     ],
   });
-  t('p1', 'Finalize navigation', 'progress', 'm3', 'high', 0, ['design', 'frontend'], {
+  t('p1', 'Finalize navigation', 'progress', 'm3', 'high', 0, ['scada', 'plc'], {
     est: '2d',
     len: 4,
     subtasks: [
@@ -355,7 +355,7 @@ export function seed() {
       { id: 's7', title: 'Mobile drawer behavior', done: false },
     ],
   });
-  t('p1', 'Design responsive navigation', 'progress', 'm4', 'medium', 3, ['design'], {
+  t('p1', 'Design responsive navigation', 'progress', 'm4', 'medium', 3, ['scada'], {
     est: '3d',
     len: 6,
     subtasks: [
@@ -363,10 +363,10 @@ export function seed() {
       { id: 's9', title: 'Sticky header states', done: false },
     ],
   });
-  t('p1', 'Prepare design system tokens', 'todo', 'm1', 'medium', 6, ['design'], { est: '2d', len: 4 });
-  t('p1', 'Review responsive layouts', 'todo', 'm4', 'medium', 8, ['qa', 'design'], { est: '1d', len: 3 });
-  t('p1', 'Prepare developer handoff', 'todo', 'm2', 'high', 14, ['frontend'], { est: '2d', len: 4, deps: ['t3', 't5'] });
-  t('p1', 'Design mobile onboarding', 'progress', 'm4', 'urgent', -1, ['design'], {
+  t('p1', 'Prepare design system tokens', 'todo', 'm1', 'medium', 6, ['scada'], { est: '2d', len: 4 });
+  t('p1', 'Review responsive layouts', 'todo', 'm4', 'medium', 8, ['site', 'scada'], { est: '1d', len: 3 });
+  t('p1', 'Prepare developer handoff', 'todo', 'm2', 'high', 14, ['plc'], { est: '2d', len: 4, deps: ['t3', 't5'] });
+  t('p1', 'Design mobile onboarding', 'progress', 'm4', 'urgent', -1, ['scada'], {
     est: '3d',
     len: 6,
     subtasks: [
@@ -375,35 +375,35 @@ export function seed() {
       { id: 's12', title: 'Empty states', done: false },
     ],
   });
-  t('p1', 'Write homepage copy', 'backlog', 'm5', 'low', 18, ['content'], { est: '2d' });
-  t('p1', 'Set up analytics events', 'backlog', 'm6', 'medium', 20, ['backend', 'growth'], { est: '1d' });
-  t('p1', 'Accessibility audit of templates', 'backlog', 'm7', 'high', 22, ['qa'], { est: '2d' });
-  t('p1', 'Build hero component', 'todo', 'm3', 'medium', 10, ['frontend'], { est: '2d', len: 3, deps: ['t3'] });
-  t('p1', 'Image optimization pipeline', 'review', 'm6', 'low', 2, ['backend'], { est: '1d', len: 5 });
-  t('p1', 'Weekly design sync notes', 'todo', 'm1', 'low', 2, ['content'], { recur: 'Weekly', est: '30m', len: 0 });
-  t('p1', 'Migrate blog to new CMS', 'backlog', 'm3', 'medium', 28, ['backend'], { est: '5d', len: 8 });
-  t('p1', 'Footer and legal pages', 'done', 'm5', 'low', -5, ['frontend'], { est: '1d' });
-  t('p1', 'Fix broken anchor links on pricing', 'done', 'm3', 'medium', -3, ['bug'], { est: '2h', len: 1 });
+  t('p1', 'Write homepage copy', 'backlog', 'm5', 'low', 18, ['docs'], { est: '2d' });
+  t('p1', 'Set up analytics events', 'backlog', 'm6', 'medium', 20, ['instrumentation', 'panel'], { est: '1d' });
+  t('p1', 'Accessibility audit of templates', 'backlog', 'm7', 'high', 22, ['site'], { est: '2d' });
+  t('p1', 'Build hero component', 'todo', 'm3', 'medium', 10, ['plc'], { est: '2d', len: 3, deps: ['t3'] });
+  t('p1', 'Image optimization pipeline', 'review', 'm6', 'low', 2, ['instrumentation'], { est: '1d', len: 5 });
+  t('p1', 'Weekly design sync notes', 'todo', 'm1', 'low', 2, ['docs'], { recur: 'Weekly', est: '30m', len: 0 });
+  t('p1', 'Migrate blog to new CMS', 'backlog', 'm3', 'medium', 28, ['instrumentation'], { est: '5d', len: 8 });
+  t('p1', 'Footer and legal pages', 'done', 'm5', 'low', -5, ['plc'], { est: '1d' });
+  t('p1', 'Fix broken anchor links on pricing', 'done', 'm3', 'medium', -3, ['snag'], { est: '2h', len: 1 });
   // Mobile App
-  t('p2', 'Onboarding flow prototype', 'progress', 'm4', 'high', 4, ['design'], { est: '3d', len: 6 });
-  t('p2', 'Push notification service', 'progress', 'm6', 'high', 6, ['backend'], { est: '5d', len: 9 });
-  t('p2', 'Offline mode sync', 'todo', 'm3', 'urgent', 5, ['frontend', 'backend'], { est: '8d', len: 10, deps: ['t20'] });
-  t('p2', 'App Store screenshots', 'backlog', 'm5', 'low', 40, ['content'], { est: '1d' });
-  t('p2', 'Crash reporting setup', 'done', 'm6', 'medium', -8, ['backend'], { est: '1d' });
-  t('p2', 'Biometric sign-in', 'review', 'm3', 'high', 2, ['frontend'], { est: '3d', len: 6 });
-  t('p2', 'Settings screen redesign', 'todo', 'm4', 'medium', 9, ['design'], { est: '2d' });
-  t('p2', 'Triage beta tester feedback', 'todo', 'm1', 'medium', 0, ['research'], { est: '4h', len: 1, recur: 'Weekly' });
-  t('p2', 'Crash on Android 12 when rotating', 'todo', 'm3', 'urgent', 1, ['bug'], { est: '1d', len: 1 });
+  t('p2', 'Onboarding flow prototype', 'progress', 'm4', 'high', 4, ['scada'], { est: '3d', len: 6 });
+  t('p2', 'Push notification service', 'progress', 'm6', 'high', 6, ['instrumentation'], { est: '5d', len: 9 });
+  t('p2', 'Offline mode sync', 'todo', 'm3', 'urgent', 5, ['plc', 'instrumentation'], { est: '8d', len: 10, deps: ['t20'] });
+  t('p2', 'App Store screenshots', 'backlog', 'm5', 'low', 40, ['docs'], { est: '1d' });
+  t('p2', 'Crash reporting setup', 'done', 'm6', 'medium', -8, ['instrumentation'], { est: '1d' });
+  t('p2', 'Biometric sign-in', 'review', 'm3', 'high', 2, ['plc'], { est: '3d', len: 6 });
+  t('p2', 'Settings screen redesign', 'todo', 'm4', 'medium', 9, ['scada'], { est: '2d' });
+  t('p2', 'Triage beta tester feedback', 'todo', 'm1', 'medium', 0, ['electrical'], { est: '4h', len: 1, recur: 'Weekly' });
+  t('p2', 'Crash on Android 12 when rotating', 'todo', 'm3', 'urgent', 1, ['snag'], { est: '1d', len: 1 });
   // Marketing Campaign
-  t('p3', 'Campaign brief', 'done', 'm5', 'medium', -6, ['content'], { est: '1d' });
-  t('p3', 'Landing page copy', 'progress', 'm5', 'medium', 4, ['content'], { est: '2d' });
-  t('p3', 'Paid social creatives', 'todo', 'm4', 'high', 7, ['design', 'growth'], { est: '3d', len: 5 });
-  t('p3', 'Email nurture sequence', 'todo', 'm8', 'medium', 9, ['content'], { est: '2d' });
-  t('p3', 'Influencer outreach list', 'backlog', 'm7', 'low', null, ['growth']);
-  t('p3', 'Launch webinar deck', 'todo', 'm1', 'medium', 15, ['content'], { est: '2d' });
+  t('p3', 'Campaign brief', 'done', 'm5', 'medium', -6, ['docs'], { est: '1d' });
+  t('p3', 'Landing page copy', 'progress', 'm5', 'medium', 4, ['docs'], { est: '2d' });
+  t('p3', 'Paid social creatives', 'todo', 'm4', 'high', 7, ['scada', 'panel'], { est: '3d', len: 5 });
+  t('p3', 'Email nurture sequence', 'todo', 'm8', 'medium', 9, ['docs'], { est: '2d' });
+  t('p3', 'Influencer outreach list', 'backlog', 'm7', 'low', null, ['panel']);
+  t('p3', 'Launch webinar deck', 'todo', 'm1', 'medium', 15, ['docs'], { est: '2d' });
   t('p3', 'Budget approval', 'review', 'm1', 'urgent', -2, [], { est: '1h', len: 1 });
   // Product Launch
-  t('p4', 'Launch readiness checklist', 'progress', 'm1', 'urgent', 3, ['qa'], {
+  t('p4', 'Launch readiness checklist', 'progress', 'm1', 'urgent', 3, ['site'], {
     est: '1d',
     len: 10,
     subtasks: [
@@ -413,23 +413,23 @@ export function seed() {
       { id: 's23', title: 'Status page updated', done: true },
     ],
   });
-  t('p4', 'Pricing page update', 'todo', 'm2', 'high', 6, ['design', 'frontend'], { est: '2d' });
-  t('p4', 'Press release draft', 'review', 'm5', 'medium', 1, ['content'], { est: '1d' });
-  t('p4', 'Sales enablement docs', 'todo', 'm7', 'medium', 8, ['content'], { est: '2d' });
-  t('p4', 'Release notes', 'backlog', 'm3', 'low', 11, ['content'], { est: '4h' });
+  t('p4', 'Pricing page update', 'todo', 'm2', 'high', 6, ['scada', 'plc'], { est: '2d' });
+  t('p4', 'Press release draft', 'review', 'm5', 'medium', 1, ['docs'], { est: '1d' });
+  t('p4', 'Sales enablement docs', 'todo', 'm7', 'medium', 8, ['docs'], { est: '2d' });
+  t('p4', 'Release notes', 'backlog', 'm3', 'low', 11, ['docs'], { est: '4h' });
   t('p4', 'Go / no-go meeting', 'todo', 'm1', 'high', 11, [], { est: '1h', len: 0 });
   // Design System
-  t('p5', 'Color tokens v2', 'done', 'm2', 'high', -4, ['design'], { est: '3d' });
-  t('p5', 'Button component audit', 'progress', 'm2', 'medium', 5, ['design', 'frontend'], { est: '2d' });
-  t('p5', 'Form field states', 'todo', 'm4', 'medium', 12, ['design'], { est: '3d' });
-  t('p5', 'Icon library cleanup', 'backlog', 'm4', 'low', null, ['design']);
-  t('p5', 'Documentation site', 'todo', 'm3', 'medium', 20, ['frontend'], { est: '5d', len: 8 });
-  t('p5', 'Dark mode palette', 'review', 'm2', 'high', 2, ['design'], { est: '2d' });
+  t('p5', 'Color tokens v2', 'done', 'm2', 'high', -4, ['scada'], { est: '3d' });
+  t('p5', 'Button component audit', 'progress', 'm2', 'medium', 5, ['scada', 'plc'], { est: '2d' });
+  t('p5', 'Form field states', 'todo', 'm4', 'medium', 12, ['scada'], { est: '3d' });
+  t('p5', 'Icon library cleanup', 'backlog', 'm4', 'low', null, ['scada']);
+  t('p5', 'Documentation site', 'todo', 'm3', 'medium', 20, ['plc'], { est: '5d', len: 8 });
+  t('p5', 'Dark mode palette', 'review', 'm2', 'high', 2, ['scada'], { est: '2d' });
   // Marketing Website (complete)
-  t('p7', 'Launch site QA', 'done', 'm3', 'high', -20, ['qa']);
-  t('p7', 'Spring release hero video', 'done', 'm5', 'medium', -24, ['content']);
+  t('p7', 'Launch site QA', 'done', 'm3', 'high', -20, ['site']);
+  t('p7', 'Spring release hero video', 'done', 'm5', 'medium', -24, ['docs']);
   // Customer portal (restricted)
-  t('p6', 'Billing API contract', 'todo', 'm6', 'high', 30, ['backend']);
+  t('p6', 'Billing API contract', 'todo', 'm6', 'high', 30, ['instrumentation']);
 
   const tk = id => T.find(x => x.id === id);
   // completed metadata
