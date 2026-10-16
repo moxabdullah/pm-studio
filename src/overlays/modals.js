@@ -12,9 +12,9 @@ import {
   TEMPLATE_DESC_MAX,
   TEMPLATE_NAME_MAX,
 } from '../core/constants.js';
-import { D, S, canManageTemplates, mem, pColor, proj, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
+import { D, S, canManageTemplates, mem, pColor, proj, shownLabels, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
-import { FT, av, filePrev, nameOf, prPill, stPill, taskLbls } from '../ui/helpers.js';
+import { FT, av, filePrev, lblPills, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
 
@@ -81,6 +81,7 @@ export function formChip(pop, html, label) {
 export function taskModal(m, H) {
   const f = S.ui.form;
   const p = proj(f.project);
+  const ls = shownLabels(f);
   const err = S.ui.errors.title;
   return `${H(m.edit ? 'Edit task' : 'New task', m.edit ? `<span class="mono">${esc(task(m.edit)?.key)}</span>` : '')}
   <form class="modal-b" data-submit="submitTask" style="gap:12px">
@@ -93,7 +94,7 @@ export function taskModal(m, H) {
       ${formChip('priority', prPill(f.priority), 'Priority')}
       ${formChip('date', `${ic('calendar', 13)}${f.due ? 'Due ' + fmtDate(f.due) : 'Due date'}`, 'due')}
       ${formChip('date', `${ic('calendar-arrow-up', 13)}${f.start ? 'Starts ' + fmtDate(f.start) : 'Start date'}`, 'start')}
-      ${formChip('labels', f.labels.length ? taskLbls(f) : `${ic('tag', 13)}Labels`, 'Labels')}
+      ${formChip('labels', ls.length ? lblPills(ls) : `${ic('tag', 13)}Labels`, 'Labels')}
       ${formChip('recur', `${ic('repeat', 13)}${esc(f.recur || 'Repeat')}`, 'Repeat')}
     </div>
     <div class="field"><span class="label">Subtasks</span>

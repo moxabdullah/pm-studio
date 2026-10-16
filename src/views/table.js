@@ -1,8 +1,8 @@
 /* ---------- TABLE ---------- */
 import { esc, fmtDate, iso } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { S, isOver, mem, pColor, proj, task } from '../core/store.js';
-import { av, dueHtml, empty, prPill, stIcon, stPill, taskLbls } from '../ui/helpers.js';
+import { S, isOver, mem, pColor, proj, shownLabels, task } from '../core/store.js';
+import { av, dueHtml, empty, lblPills, prPill, stIcon, stPill } from '../ui/helpers.js';
 import { groupTasks, hiddenCols, peekView } from '../shell/view-engine.js';
 
 export const TCOLS = [
@@ -35,8 +35,10 @@ export function tcell(t, c) {
       return `<td class="cellbtn num ${isOver(t) ? '' : ''}" data-a="pop" data-pop="date" data-field="due" data-id="${esc(t.id)}" style="${isOver(t) ? 'color:var(--red)' : ''}">${t.due ? fmtDate(t.due) : '<span class="faint">—</span>'}</td>`;
     case 'start':
       return `<td class="cellbtn num" data-a="pop" data-pop="date" data-field="start" data-id="${esc(t.id)}">${t.start ? fmtDate(t.start) : '<span class="faint">—</span>'}</td>`;
-    case 'labels':
-      return `<td class="cellbtn" data-a="pop" data-pop="labels" data-id="${esc(t.id)}"><span class="row" style="gap:4px">${taskLbls(t) || '<span class="faint">—</span>'}</span></td>`;
+    case 'labels': {
+      const ls = shownLabels(t);
+      return `<td class="cellbtn" data-a="pop" data-pop="labels" data-id="${esc(t.id)}"><span class="row lblcell" style="gap:4px">${ls.length ? lblPills(ls) : '<span class="faint">—</span>'}</span></td>`;
+    }
     case 'deps':
       return `<td class="cellbtn" data-a="pop" data-pop="deps" data-id="${esc(t.id)}">${t.deps.map(d => (task(d) ? `<span class="depchip" title="${esc(task(d).title)}">${esc(task(d).key)}</span>` : '')).join('') || '<span class="faint">—</span>'}</td>`;
     case 'estimate':

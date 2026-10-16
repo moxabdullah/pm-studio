@@ -195,6 +195,13 @@ export const labelsOf = wsId => listsOf(wsId)?.labels ?? DEFAULT_LABELS;
 export const labelOf = (id, wsId) => labelsOf(wsId).find(l => l.id === id);
 /* The workspace a task (or the task form) is in: its project's. */
 export const taskWs = t => proj(t?.project)?.workspace || D().ws.id;
+/* The labels of a task (or the task form) that its workspace's list still has, as the list's own entries and in the task's order. A
+   task keeps the id of a removed label, so t.labels is not what is shown: the empty state, the "+N" and the pills all come from this,
+   which looks the workspace and its list up once. */
+export const shownLabels = t => {
+  const list = labelsOf(taskWs(t));
+  return (t?.labels || []).map(id => list.find(l => l.id === id)).filter(Boolean);
+};
 export const allTasks = () =>
   D().tasks.filter(t => {
     const p = proj(t.project);

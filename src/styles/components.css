@@ -560,6 +560,19 @@
   height: 6px;
   border-radius: 2px;
   background: var(--c);
+  flex: none;
+}
+/* In a list or table cell a long name is cut (the whole name is the pill's title). The ellipsis is on the name's span: text straight
+   in a flex container is not cut with one. */
+.lblcell .lbl {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+}
+.lblcell .lbl span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chip {
   display: inline-flex;

@@ -3,7 +3,7 @@ import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { HEALTH, PR, ST, STAGE_COLORS } from '../core/constants.js';
 import { lookup, safeColor, sanitizeHtml } from '../core/safe.js';
-import { D, isFinished, labelOf, mem, pColor, stageOf, taskWs } from '../core/store.js';
+import { D, isFinished, labelOf, mem, pColor, stageOf } from '../core/store.js';
 
 /* Hardening for stored data lives in core/safe.js; the render helpers re-export what templates need. */
 export { safeColor, sanitizeHtml };
@@ -65,15 +65,17 @@ export function prIcon(p, s = 14) {
 }
 export const stPill = st => `${stIcon(st)}<span>${ST[st].name}</span>`;
 export const prPill = p => `${prIcon(p)}<span>${PR[p || 'none'].name}</span>`;
-/* A label of a workspace's list (its name comes from whoever made the list; the colour is a key, resolved here). An id the list does not
-   have, a label that was removed, shows as nothing; no workspace reads the built-in set (the design-system page). Not for .map(lbl):
-   the index would land in wsId, use taskLbls. */
+/* A label of a workspace's list as a pill (its name comes from whoever made the list; the colour is a key, resolved here). The title
+   gives the whole name where a cell cuts it. */
+export const lblPill = l => `<span class="lbl" style="--c:${STAGE_COLORS[l.color]}" title="${esc(l.name)}"><i></i><span>${esc(l.name)}</span></span>`;
+/* The pills of the labels shownLabels() gives. */
+export const lblPills = ls => ls.map(lblPill).join('');
+/* A label by its id: one the list does not have, a label that was removed, shows as nothing. No workspace reads the built-in set (the
+   design-system page). A task's own labels are shownLabels(t). */
 export const lbl = (id, wsId) => {
   const l = labelOf(id, wsId);
-  return l ? `<span class="lbl" style="--c:${STAGE_COLORS[l.color]}"><i></i>${esc(l.name)}</span>` : '';
+  return l ? lblPill(l) : '';
 };
-/* The labels of a task (or the task form), or just `ids` of them, in the list of the workspace it is in. */
-export const taskLbls = (t, ids = t.labels) => ids.map(id => lbl(id, taskWs(t))).join('');
 export const pIcon = (p, cls = '', s = 15) => `<span class="picon ${cls}" style="--c:${pColor(p)}">${ic(p.icon, s)}</span>`;
 /* A project's stage (its name comes from whoever made the set; the colour is a key, resolved here) and its health, which shows only
    when it is not "On track". `tail` is markup inside the pill after the text: the chevron of a pill that opens a picker. */

@@ -4,8 +4,8 @@
 import { ago, esc, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
-import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
-import { FORMER, av, dueHtml, empty, nameOf, prIcon, prPill, stIcon, stPill, taskLbls } from '../ui/helpers.js';
+import { D, S, commentsOf, isOver, mem, pColor, proj, shownLabels, task } from '../core/store.js';
+import { FORMER, av, dueHtml, empty, lblPills, nameOf, prIcon, prPill, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { peekView } from '../shell/view-engine.js';
 
@@ -32,7 +32,8 @@ export function cellDue(t) {
   return `<button class="pillbtn ${t.due ? (isOver(t) ? 'over' : '') : 'empty'}" data-a="pop" data-pop="date" data-field="due" data-id="${esc(t.id)}" aria-label="Due date">${t.due ? `${ic('calendar', 13)}<span class="num">${relDate(t.due)}</span>` : `${ic('calendar', 13)}<span>Set date</span>`}</button>`;
 }
 export function cellLabels(t) {
-  return `<button class="pillbtn ${t.labels.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${esc(t.id)}" aria-label="Labels" style="gap:4px;overflow:hidden">${t.labels.length ? taskLbls(t, t.labels.slice(0, 2)) + (t.labels.length > 2 ? `<span class="faint" style="font-size:11px">+${t.labels.length - 2}</span>` : '') : `${ic('tag', 13)}<span>Add</span>`}</button>`;
+  const ls = shownLabels(t);
+  return `<button class="pillbtn lblcell ${ls.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${esc(t.id)}" aria-label="Labels" style="gap:4px;overflow:hidden">${ls.length ? lblPills(ls.slice(0, 2)) + (ls.length > 2 ? `<span class="faint" style="font-size:11px">+${ls.length - 2}</span>` : '') : `${ic('tag', 13)}<span>Add</span>`}</button>`;
 }
 export function cellProject(t) {
   const p = proj(t.project);

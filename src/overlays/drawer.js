@@ -3,9 +3,9 @@
    ===================================================================== */
 import { MOD, TODAY, ago, diffD, esc, fmtDate, parse, relDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
+import { D, S, commentsOf, isOver, mem, pColor, proj, shownLabels, task } from '../core/store.js';
 import { fileOf } from '../core/files.js';
-import { FT, av, filePrev, fileType, fmtComment, nameOf, progBar, safely, sanitizeHtml, taskLbls } from '../ui/helpers.js';
+import { FT, av, filePrev, fileType, fmtComment, lblPills, nameOf, progBar, safely, sanitizeHtml } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { cellAssignee, cellDue, cellPrio, cellProject, cellStatus } from '../components/task-list.js';
 import { modalHtml } from './modals.js';
@@ -38,6 +38,7 @@ export function drawerHtml(t) {
   const u = S.ui;
   const cs = commentsOf(t.id);
   const sd = t.subtasks.filter(s => s.done).length;
+  const ls = shownLabels(t);
   const acts = D().activity.filter(a => a.task === t.id);
   const tab = u.drawerTab;
   const prop = (icon, label, val) => `<dt>${ic(icon, 14)}${label}</dt><dd>${val}</dd>`;
@@ -76,7 +77,7 @@ export function drawerHtml(t) {
         ${prop('calendar', 'Due date', cellDue(t))}
         ${prop('calendar-arrow-up', 'Start date', `<button class="pillbtn ${t.start ? '' : 'empty'}" data-a="pop" data-pop="date" data-field="start" data-id="${esc(t.id)}">${ic('calendar', 13)}${t.start ? fmtDate(t.start) : 'Set date'}</button>`)}
         ${prop('folder', 'Project', cellProject(t))}
-        ${prop('tag', 'Labels', `<button class="pillbtn ${t.labels.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${esc(t.id)}" style="flex-wrap:wrap;height:auto;min-height:26px;padding:3px 7px">${t.labels.length ? taskLbls(t) : ic('tag', 13) + 'Add labels'}</button>`)}
+        ${prop('tag', 'Labels', `<button class="pillbtn ${ls.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${esc(t.id)}" style="flex-wrap:wrap;height:auto;min-height:26px;padding:3px 7px">${ls.length ? lblPills(ls) : ic('tag', 13) + 'Add labels'}</button>`)}
         ${prop('repeat', 'Repeat', `<button class="pillbtn ${t.recur ? '' : 'empty'}" data-a="pop" data-pop="recur" data-id="${esc(t.id)}">${ic('repeat', 13)}${esc(t.recur || 'Does not repeat')}</button>`)}
         ${prop('timer', 'Estimate', `<button class="pillbtn ${t.estimate ? '' : 'empty'}" data-a="pop" data-pop="estimate" data-id="${esc(t.id)}">${ic('timer', 13)}${t.estimate ? esc(t.estimate) : 'Add estimate'}</button>`)}
         ${prop('git-branch', 'Blocked by', `<button class="pillbtn ${t.deps.length ? '' : 'empty'}" data-a="pop" data-pop="deps" data-id="${esc(t.id)}" style="height:auto;min-height:26px;flex-wrap:wrap">${t.deps.length ? t.deps.map(d => (task(d) ? `<span class="depchip mono" style="font-size:11px;padding:1px 5px;border-radius:4px;background:var(--surface-3)">${esc(task(d).key)}</span><span class="trunc" style="max-width:160px">${esc(task(d).title)}</span>` : '')).join('') : ic('git-branch', 13) + 'None'}</button>`)}
