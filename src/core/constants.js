@@ -39,9 +39,9 @@ export const HEALTH = lookup(
   },
   { name: 'On track', c: 'var(--green)' },
 );
-/* The colours a stage can have. A stage stores the key only; the CSS value comes from here, so a stage written through the API
-   cannot put its own CSS into a style attribute. An unknown key reads as gray. normalize.js keeps a copy of the keys: change both
-   together. */
+/* The colours a stage can have, and a label too (a label is a name and one of these keys). A stage or label stores the key only; the
+   CSS value comes from here, so one written through the API cannot put its own CSS into a style attribute. An unknown key reads as
+   gray. normalize.js keeps a copy of the keys: change both together. */
 export const STAGE_COLORS = lookup(
   {
     gray: 'var(--gray)',
@@ -78,6 +78,21 @@ export const DEFAULT_STAGE_SET = Object.freeze({
     ].map(([id, name, color, finished]) => Object.freeze({ id, name, color, finished })),
   ),
 });
+/* The task labels a workspace has until its admins save a list of their own (Settings > Labels, a workspace_lists record). An id is
+   what a task stores; `color` is a key of STAGE_COLORS. A saved list replaces this one whole: an empty list means no labels. */
+export const DEFAULT_LABELS = Object.freeze(
+  [
+    ['electrical', 'Electrical', 'amber'],
+    ['mechanical', 'Mechanical', 'gray'],
+    ['plc', 'PLC', 'blue'],
+    ['scada', 'SCADA', 'violet'],
+    ['instrumentation', 'Instrumentation', 'teal'],
+    ['panel', 'Panel build', 'orange'],
+    ['site', 'Site works', 'green'],
+    ['docs', 'Documentation', 'rose'],
+    ['snag', 'Snag / punch', 'red'],
+  ].map(([id, name, color]) => Object.freeze({ id, name, color })),
+);
 export const PCOLORS = lookup({
   indigo: '#5A67D8',
   blue: '#3B82C4',
@@ -128,6 +143,10 @@ export const STAGES_MAX = 30;
 export const STAGE_NAME_MAX = 40;
 export const STAGE_SET_NAME_MAX = 80;
 export const STAGE_HISTORY_MAX = 200;
+/* How many labels a workspace's list holds and the longest label name (the editor stops typing there). normalize.js cuts what the
+   server holds to the same numbers (a copy of them, as with the stage limits above): change both together. */
+export const LABELS_MAX = 50;
+export const LABEL_NAME_MAX = 30;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },

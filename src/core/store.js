@@ -35,6 +35,7 @@ export function emptyData() {
     teams: [],
     templates: [],
     stageSets: [],
+    workspaceLists: [],
     projOrder: [],
     savedViews: [],
     recentSearches: [],
