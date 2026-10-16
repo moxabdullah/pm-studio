@@ -17,7 +17,7 @@
    role is the one on the requester's account (`@request.auth.role`), the same field the other rules read.
 
    Limits that keep a record written through the API small: a `doc` of up to 256 KB. The count of labels (50), the length of a label
-   name (30) and the colour keys are the app's: it cuts a list to those on reading it (normalize.js). A record cannot be moved to
+   name (30) and of a label id (32) and the colour keys are the app's: it cuts a list to those on reading it (normalize.js). A record cannot be moved to
    another workspace: an update may name the workspace only if it is the one the record already has. Whether a label still has tasks
    is the app's to check; the server does not look (tasks keep their labels in their doc). */
 
