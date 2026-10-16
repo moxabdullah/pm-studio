@@ -43,7 +43,7 @@ export function projOverview(p) {
           <dt>${ic('user', 14)}Lead</dt><dd><span class="pillbtn">${av(p.lead, 'sm', false)}${esc(mem(p.lead)?.name)}</span></dd>
           <dt>${ic('users', 14)}Team</dt><dd><button class="pillbtn" data-a="go" data-r="team" data-id="${esc(p.team)}">${ic(TM[p.team].icon, 13)}${esc(TM[p.team].name)}</button></dd>
           <dt>${ic('calendar', 14)}Start</dt><dd><span class="pillbtn num">${fmtDate(p.start, true)}</span></dd>
-          <dt>${ic('flag', 14)}Due</dt><dd><span class="pillbtn num">${p.due ? fmtDate(p.due, true) : '<span class="faint">None</span>'}</span></dd>
+          <dt>${ic('flag', 14)}Due</dt><dd>${p.due ? `<span class="pillbtn num">${fmtDate(p.due, true)}</span>` : '<span class="pillbtn empty"><span class="sr">No target date</span><span aria-hidden="true">—</span></span>'}</dd>
           ${fieldsOf(p.workspace)
             .map(fl => {
               const v = fieldText(p, fl);
