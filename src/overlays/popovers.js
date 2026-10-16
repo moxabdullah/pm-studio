@@ -159,12 +159,13 @@ export function popHtml(p) {
       break;
     case 'labels': {
       const list = labelsOf(taskWs(t));
+      const has = new Set(t?.labels);
       inner = popList(
         list.map(l => ({
           id: l.id,
           name: l.name,
           html: `<span class="pdot" style="--c:${STAGE_COLORS[l.color]}"></span>`,
-          on: t?.labels.includes(l.id),
+          on: has.has(l.id),
           act: 'popToggleLabel',
         })),
         { search: 'Filter labels…', none: list.length ? '' : noLabels() },
