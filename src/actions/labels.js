@@ -6,7 +6,7 @@
    ===================================================================== */
 import { $, uid } from '../core/utils.js';
 import { LABELS_MAX, LABEL_NAME_MAX, STAGE_COLORS } from '../core/constants.js';
-import { D, S, canManageLabels, labelsOf, listsOf, proj } from '../core/store.js';
+import { D, S, canManageLabels, canSee, labelsOf, listsOf, proj } from '../core/store.js';
 import { latest, mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
@@ -121,7 +121,7 @@ A.submitLabels = () => {
     return;
   }
   // Labels the list has now and this one lacks go from every task of the workspace that carries them. Counted over the tasks that are
-  // loaded: a private project the person cannot open is not.
+  // loaded, as allTasks() lists them but for the workspace the dialog was opened in: a private project the person cannot open is not.
   const keep = new Set(labels.map(l => l.id));
   const gone = new Set(
     labelsOf(f.ws)
@@ -131,7 +131,8 @@ A.submitLabels = () => {
   const used = new Set();
   let tasks = 0;
   for (const t of D().tasks) {
-    if (t.archived || proj(t.project)?.workspace !== f.ws) continue;
+    const p = proj(t.project);
+    if (t.archived || p?.workspace !== f.ws || !canSee(p)) continue;
     const had = t.labels.filter(id => gone.has(id));
     if (!had.length) continue;
     tasks++;
