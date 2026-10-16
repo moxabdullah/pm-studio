@@ -121,6 +121,38 @@ function pipeBoard(ps, set, st) {
     </section>`);
   return `${other ? `<p class="faint" style="font-size:12px;margin:0 0 8px">${other} ${other === 1 ? 'project in another stage set' : 'projects in other stage sets'}</p>` : ''}<div class="board pboard" data-keep="pboard:${esc(set.id)}">${cols.join('')}</div>`;
 }
+/* The Projects table scrolls sideways when it has more columns than fit. After each render (render.js), and when the panel or the table
+   changes size or is scrolled, this marks the wrapper (.sfade) with the edges that have more beyond them (.sf-l, .sf-r: a fade, see
+   projects-files.css) and makes the panel a tab stop, so the keyboard can scroll it, only while it scrolls: a wide screen gets no extra
+   stop. The panel is rendered with the tab stop and loses it here, since render() puts focus back by id before this runs; one that has
+   focus keeps it (focus would drop to the page) and is looked at again when it loses it. */
+const tableSize = new ResizeObserver(() => projTableFade());
+export function projTableAfter() {
+  const el = document.getElementById('proj-table');
+  tableSize.disconnect(); // (observing starts with one report, so this is not repeated from the report)
+  if (!el) return;
+  tableSize.observe(el);
+  tableSize.observe(el.firstElementChild);
+  el.onscroll = projTableFade;
+  el.onblur = () => setTimeout(projTableFade, 0); // (a window that loses focus keeps the panel focused: it stays a tab stop)
+  projTableFade();
+}
+function projTableFade() {
+  const el = document.getElementById('proj-table');
+  if (!el) return;
+  const over = el.scrollWidth > el.clientWidth + 1;
+  el.parentElement.classList.toggle('sf-l', over && el.scrollLeft > 1);
+  el.parentElement.classList.toggle('sf-r', over && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  if (!over && document.activeElement === el) return;
+  for (const [k, v] of [
+    ['tabindex', '0'],
+    ['role', 'region'],
+    ['aria-label', 'Projects table'],
+  ]) {
+    if (over) el.setAttribute(k, v);
+    else el.removeAttribute(k);
+  }
+}
 export function pageProjects() {
   const u = S.ui;
   const q = (u.projQ || '').toLowerCase();
@@ -149,9 +181,10 @@ export function pageProjects() {
   else if (view === 'board') body = pipeBoard(ps, set, st);
   else {
     // a column for each project field marked for the table, straight after the project's name (so they are in view without scrolling); the
-    // table is wider by a fixed amount for each, and the panel scrolls. The panel is a focusable region, so the keyboard can scroll it.
+    // table is wider by a fixed amount for each, and the panel scrolls. While it does (projTableAfter), a fade on the edge with more columns
+    // beyond it says so, and the panel is a focusable region, so the keyboard can scroll it.
     const cols = fieldsOf(D().ws.id).filter(fl => fl.inTable);
-    body = `<div class="panel" id="proj-table" data-keep="proj-table" tabindex="0" role="region" aria-label="Projects table" style="overflow-x:auto"><table class="perm-t" style="min-width:${860 + 120 * cols.length}px"><thead><tr><th style="padding-left:14px">Project</th>${cols.map(fl => `<th style="text-align:left" title="${esc(fl.name)}"><span class="trunc" style="display:block;max-width:180px">${esc(fl.name)}</span></th>`).join('')}<th style="text-align:left">Stage</th><th style="text-align:left">Lead</th><th style="text-align:left">Team</th><th style="text-align:left;width:16%">Progress</th><th>Tasks</th><th style="text-align:left">Start</th><th style="text-align:left">Due</th><th style="text-align:left">Last activity</th><th></th></tr></thead><tbody>
+    body = `<div class="sfade"><div class="panel" id="proj-table" data-keep="proj-table" tabindex="0" role="region" aria-label="Projects table" style="overflow-x:auto"><table class="perm-t" style="min-width:${860 + 120 * cols.length}px"><thead><tr><th style="padding-left:14px">Project</th>${cols.map(fl => `<th style="text-align:left" title="${esc(fl.name)}"><span class="trunc" style="display:block;max-width:180px">${esc(fl.name)}</span></th>`).join('')}<th style="text-align:left">Stage</th><th style="text-align:left">Lead</th><th style="text-align:left">Team</th><th style="text-align:left;width:16%">Progress</th><th>Tasks</th><th style="text-align:left">Start</th><th style="text-align:left">Due</th><th style="text-align:left">Last activity</th><th></th></tr></thead><tbody>
     ${ps
       .map(p => {
         const ts = tasksOf(p.id);
@@ -165,7 +198,7 @@ export function pageProjects() {
         return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td>${extra}<td style="text-align:left">${pStatuses(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
       })
       .join('')}
-    </tbody></table></div>`;
+    </tbody></table></div></div>`;
   }
   return `<div class="page wide">
     <div class="ph"><div><h1>Projects</h1><p>${visibleProjects().filter(p => !isFinished(p)).length} active · ${visibleProjects().filter(isFinished).length} finished</p></div><div class="acts"><button class="btn btn-primary" data-a="newProject">${ic('plus', 14)}New project</button></div></div>
