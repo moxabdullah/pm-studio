@@ -86,7 +86,7 @@ export function pageProjects() {
     body = `<div class="panel" style="overflow:hidden">${ps
       .map(p => {
         const pr = progressOf(p.id);
-        return `<div class="mini" style="min-height:52px;gap:12px" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project">${pIcon(p)}<div class="grow" style="min-width:0"><div class="row" style="gap:6px"><b style="font-weight:500">${esc(p.name)}</b>${p.private ? ic('lock', 12) : ''}</div><div class="trunc faint" style="font-size:12px">${esc(p.desc)}</div></div><span class="hide-m">${pStatuses(p)}</span><span class="row hide-m" style="width:140px">${progBar(pr)}<span class="num faint" style="font-size:11.5px">${pr}%</span></span><span class="num muted hide-m" style="width:70px;font-size:12px">${fmtDate(p.due)}</span>${avStack(p.members, 3)}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`;
+        return `<div class="mini" style="min-height:52px;gap:12px" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project">${pIcon(p)}<div class="grow" style="min-width:0"><div class="row" style="gap:6px"><b style="font-weight:500">${esc(p.name)}</b>${p.private ? ic('lock', 12) : ''}</div><div class="trunc faint" style="font-size:12px">${esc(p.desc)}</div></div><span class="hide-m">${pStatuses(p)}</span><span class="row hide-m" style="width:140px">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px">${pr}%</span></span><span class="num muted hide-m" style="width:70px;font-size:12px">${fmtDate(p.due)}</span>${avStack(p.members, 3)}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`;
       })
       .join('')}</div>`;
   else
@@ -95,7 +95,7 @@ export function pageProjects() {
       .map(p => {
         const ts = tasksOf(p.id);
         const pr = progressOf(p.id);
-        return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td><td style="text-align:left">${pStatuses(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr)}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
+        return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td><td style="text-align:left">${pStatuses(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
       })
       .join('')}
     </tbody></table></div>`;
@@ -103,7 +103,7 @@ export function pageProjects() {
     <div class="ph"><div><h1>Projects</h1><p>${visibleProjects().filter(p => !isFinished(p)).length} active · ${visibleProjects().filter(isFinished).length} finished</p></div><div class="acts"><button class="btn btn-primary" data-a="newProject">${ic('plus', 14)}New project</button></div></div>
     <div class="row" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="proj-q" data-in="projQ" placeholder="Search projects" value="${esc(u.projQ || '')}" aria-label="Search projects"></div>
-      <select class="select" style="height:26px;width:auto;font-size:12px" data-in="projStatus" aria-label="Filter by stage">${filterOptions(st)}</select>
+      <select class="select" style="height:26px;width:auto;font-size:12px" data-in="projStatus" aria-label="Filter projects">${filterOptions(st)}</select>
       <select class="select" style="height:26px;width:auto;font-size:12px" data-in="projSort" aria-label="Sort">${[
         ['recent', 'Recently active'],
         ['name', 'Name'],

@@ -11,7 +11,7 @@ Turn PM Space from a single-browser demo into a shared app that about 20 Sam Eng
 ## Not in this phase
 
 - Department roles and permission rules beyond "signed in" and "private projects": Phase 2.
-- Sam Engineering fields and labels: Phase 3. (Templates and project stages were built ahead of it: each workspace keeps its own templates and stage sets, see `templates` and `stage_sets` below. A project's stage, stage set, health and stage history are keys in its `doc`.)
+- Sam Engineering stages, fields and labels: Phase 3. Its first part, project stages, is in: each workspace keeps its own stage sets, see `stage_sets` below, and a project's stage, stage set, health and stage history are keys in its `doc`. (Templates were built ahead of it: each workspace keeps its own, see `templates` below.)
 - Service contracts, SLA tickets and timers: Phase 4.
 - Microsoft 365 sign-in. This phase only checks that it is possible; see the spike below.
 

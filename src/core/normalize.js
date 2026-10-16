@@ -136,11 +136,18 @@ const stagesOf = v => {
 };
 /* The dates are kept as written (new Date().toISOString()): turning them into dates and back would not be a fixed point. */
 const ISO_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
-const historyOf = v =>
-  arr(v)
-    .filter(e => isObj(e) && stageId(e.stage) && typeof e.at === 'string' && ISO_AT.test(e.at) && !Number.isNaN(Date.parse(e.at)))
-    .map(e => ({ stage: e.stage, at: e.at }))
-    .slice(-STAGE_HISTORY_MAX);
+/* The newest STAGE_HISTORY_MAX entries that are well formed, oldest first. It reads from the end and stops once it has them, so a
+   longer history (the app writes at most the cap) is not read whole. */
+const historyOf = v => {
+  const a = arr(v);
+  const out = [];
+  for (let i = a.length - 1; i >= 0 && out.length < STAGE_HISTORY_MAX; i--) {
+    const e = a[i];
+    if (isObj(e) && stageId(e.stage) && typeof e.at === 'string' && ISO_AT.test(e.at) && !Number.isNaN(Date.parse(e.at)))
+      out.push({ stage: e.stage, at: e.at });
+  }
+  return out.reverse();
+};
 /* What a project's old `status` becomes: [stage id, health]. A record from before stages has no `stage` and keeps its status. */
 const OLD_STATUS = { planning: ['tender', 'ok'], active: ['design', 'ok'], complete: ['closed', 'ok'], risk: ['design', 'risk'], hold: ['design', 'hold'] };
 
