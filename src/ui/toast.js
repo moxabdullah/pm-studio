@@ -5,6 +5,12 @@ import { S, save } from '../core/store.js';
 import { retryNow, sessionGen } from '../core/sync.js';
 import { render } from '../shell/render.js';
 
+/* The height of the stack of toasts, for the page's scroll-padding on a phone (responsive.css). On the root, not on the page: render
+   replaces what is inside #app. Written whenever a toast comes or goes, and at once (not on a frame), so that a focus scroll that follows
+   in the same task already clears the toast that was just shown. */
+function setToastsH() {
+  document.documentElement.style.setProperty('--toasts-h', ($('#toasts')?.offsetHeight || 0) + 'px');
+}
 export function toast(msg, opt = {}) {
   const host = $('#toasts');
   if (!host) return;
@@ -15,7 +21,10 @@ export function toast(msg, opt = {}) {
   el.innerHTML = `${icon}<span class="grow">${esc(msg)}</span>${opt.action ? `<button class="ta">${esc(opt.action)}</button>` : ''}<button class="ibtn ibtn-xs" aria-label="Dismiss" style="color:inherit;opacity:.6">${ic('x', 13)}</button>`;
   const kill = () => {
     el.classList.add('out');
-    setTimeout(() => el.remove(), 160);
+    setTimeout(() => {
+      el.remove();
+      setToastsH();
+    }, 160);
   };
   if (opt.action)
     el.querySelector('.ta').onclick = () => {
@@ -28,6 +37,7 @@ export function toast(msg, opt = {}) {
   if (opt.sticky) el.dataset.sticky = '1';
   if (opt.replaces) host.querySelectorAll(`.toast[data-key="${opt.replaces}"]`).forEach(t => t.querySelector('.ibtn').onclick());
   host.appendChild(el);
+  setToastsH();
   if (!opt.sticky) setTimeout(kill, opt.ms || 4200); // `sticky`: it stays until it is dismissed, another toast takes its place or the session ends
 }
 /* Removes the toasts that stay until dismissed: they tell of the session that is ending, and must not be shown on the sign-in page
@@ -36,6 +46,7 @@ export function clearStickyToasts() {
   $('#toasts')
     ?.querySelectorAll('.toast[data-sticky]')
     .forEach(t => t.remove());
+  setToastsH();
 }
 /* guarded mutation: refuses edits while the server cannot be reached. "Try again" reconnects, and applies the edit if that works.
    Not everything goes through here: inline editing (a description, a subtask's note), view settings (sort, group, filters, columns),

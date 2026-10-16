@@ -11,6 +11,7 @@ import { moveProject } from './stages.js';
 const EDGE = 56; // px from the Board's left or right edge within which a card being dragged scrolls it
 const GUTTER = 24; // px past either edge where it still does (the page's gutter), but not past the page itself: the sidebar never scrolls the Board
 export let DRAG = null;
+let pickerClosed = false; // dragstart closed a picker without drawing: dragend draws
 export function clearDropMarks() {
   $$('.drop-line').forEach(x => x.remove());
   $$('.over').forEach(x => x.classList.remove('over'));
@@ -47,16 +48,23 @@ document.addEventListener('dragstart', e => {
     } catch {
       /* not supported here; safe to skip */
     }
-  S.ui.pop = null;
   // not drawn (that would detach the card being dragged), so an open picker is taken off the page here: it would cover a part of a column and take its drops
-  $$('.pop.floating').forEach(x => x.remove());
+  const floating = $$('.pop.floating');
+  pickerClosed = !!S.ui.pop || floating.length > 0;
+  S.ui.pop = null;
+  floating.forEach(x => x.remove());
   setTimeout(() => vis.classList.add('dragging'), 0);
 });
 document.addEventListener('dragend', () => {
   DRAG = null;
   clearDropMarks();
-  // dragstart closed the picker (S.ui.pop) without drawing; a drag that wrote nothing left it on screen, its items with nothing behind them
-  if (!S.ui.pop && $('.pop.floating')) render();
+  // dragstart closed the picker without drawing, so the page still holds what it knew of it: the overlay state render keeps, and the
+  // focus, which was in the picker and is now on the page, not on the button that opened it. A drag that wrote nothing draws nothing
+  // else; one that did has drawn already, and this is one more draw.
+  if (pickerClosed) {
+    pickerClosed = false;
+    render();
+  }
 });
 /* A drag that carries files from the computer. Where nothing in the app takes them the browser would open the first one in this
    very tab, in place of the app (and whatever was being typed or edited with it). So everywhere outside the places that do take
@@ -256,7 +264,9 @@ document.addEventListener('drop', e => {
     );
   } else if (d.type === 'pcard') {
     // The column is the one under the pointer now. moveProject renders (through mutate) and says nothing when the card is dropped on
-    // the stage it is in. The set is checked since sync can have moved the project to another set while it was dragged.
+    // the stage it is in. The set is checked since sync can have moved the project to another set while it was dragged; moveProject
+    // takes the project's set as it is now, so a "Try again" (offline) after another tab moved it does nothing. The column's set is
+    // not passed as `setId`: that writes the set too, and would move the project back to it.
     const col = e.target.closest?.('[data-drop-stage]');
     const pr = proj(d.id);
     if (col && pr && setOf(pr).id === col.dataset.set) moveProject(d.id, col.dataset.dropStage);

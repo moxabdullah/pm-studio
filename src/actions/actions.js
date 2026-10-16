@@ -405,9 +405,12 @@ A.popPick = el => {
       pickedSet = shown?.id;
     }
     render();
-    // On the Board the picker's own stage button is where focus comes back to, or the column the card went to (focusMoved).
+    // On the Board view of the projects page the picker's own stage button is where focus comes back to, or the column the card went to
+    // (focusMoved). Not asked of the DOM for `.pboard`: under a stage filter the last card leaving shows an empty state instead, with no
+    // Board and no such button, and focus would be left on the page. The route is checked too: projView is kept across routes, and the
+    // picker is also opened from the header of one project, which has no Board.
     // Elsewhere "On track" takes the header's health pill away, and its button with it: focus goes to the stage button beside it, not to the page.
-    if (p.type === 'pstage' && $('.pboard')) focusMoved(id, v, pickedSet);
+    if (p.type === 'pstage' && S.ui.route === 'projects' && S.ui.projView === 'board') focusMoved(id, v, pickedSet);
     else if (!document.activeElement || document.activeElement === document.body)
       $(`[data-pop="pstage"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     return;
@@ -1506,11 +1509,26 @@ A.toggleCol = el => {
   delete S.ui.collapsedCols[el.dataset.ck];
   render();
 };
+const pipeColScroll = {}; // scrollTop of a collapsed Board column's body by collapse key (`pipe:<set>:<stage>`): not saved, not in S.ui
 /* A column of the projects Board (`pipe:<set>:<stage>`): collapsed or expanded, kept either way, since the default depends on the stage
    (a finished stage starts collapsed). `data-to` is the state the button asks for. */
 A.togglePipeCol = el => {
-  S.ui.collapsedCols[el.dataset.key] = el.dataset.to === 'collapse';
+  const key = el.dataset.key;
+  const collapse = el.dataset.to === 'collapse';
+  // Collapsing takes the column's body, and the scroll it kept (data-keep), off the page; its scroll is held here, per tab, for expanding.
+  if (collapse) {
+    const body = el.closest('.bcol')?.querySelector('.bcol-b');
+    if (body) pipeColScroll[key] = body.scrollTop;
+  }
+  S.ui.collapsedCols[key] = collapse;
   render();
+  if (!collapse && key in pipeColScroll) {
+    const body = $(`[data-a="togglePipeCol"][data-key="${CSS.escape(key)}"]`)
+      ?.closest('.bcol')
+      ?.querySelector('.bcol-b');
+    if (body) body.scrollTop = pipeColScroll[key];
+    delete pipeColScroll[key];
+  }
   // focus comes back to the button that took the place of this one (render does that, without scrolling), which can be off screen;
   // only to that one: a click that did not focus it (Safari) leaves focus on some card's button in another column, which is not to be scrolled to
   const f = document.activeElement;

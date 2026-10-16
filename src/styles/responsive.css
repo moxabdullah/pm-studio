@@ -124,10 +124,11 @@
   .bottomnav button.on {
     color: var(--text);
   }
-  /* What lies over the page's foot: the nav (57px and the safe area), and over it a toast (#toasts, 76px up, a line of it 40px high),
-     and 8px more. A focused button or card that the browser scrolls into view stops above them, not under. */
+  /* What lies over the page's foot: the nav (57px and the safe area), and over it the toasts (#toasts, 76px up), and 8px more. A focused
+     button or card that the browser scrolls into view stops above them, not under. Toasts wrap and stack, so their height is taken
+     from the page (toast.js writes --toasts-h); one line of one, 40px, is the least that is kept clear. */
   .content {
-    scroll-padding-bottom: calc(76px + 40px + 8px);
+    scroll-padding-bottom: calc(76px + max(40px, var(--toasts-h, 0px)) + 8px);
   }
   .bottomnav .bdot {
     position: absolute;
