@@ -2,7 +2,7 @@
 import { ago, esc, fmtDate, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { STAGE_COLORS } from '../core/constants.js';
-import { D, S, TM, canSee, isFinished, mem, progressOf, setOf, stageOf, stageSetsOf, tasksOf, visibleProjects } from '../core/store.js';
+import { D, S, TM, canSee, fieldText, fieldsOf, isFinished, mem, progressOf, setOf, stageOf, stageSetsOf, tasksOf, visibleProjects } from '../core/store.js';
 import { av, avStack, empty, pHealth, pIcon, pStatuses, progBar, progClass } from '../ui/helpers.js';
 
 export function projectCard(p) {
@@ -147,16 +147,25 @@ export function pageProjects() {
       })
       .join('')}</div>`;
   else if (view === 'board') body = pipeBoard(ps, set, st);
-  else
-    body = `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:860px"><thead><tr><th style="padding-left:14px">Project</th><th style="text-align:left">Stage</th><th style="text-align:left">Lead</th><th style="text-align:left">Team</th><th style="text-align:left;width:16%">Progress</th><th>Tasks</th><th style="text-align:left">Start</th><th style="text-align:left">Due</th><th style="text-align:left">Last activity</th><th></th></tr></thead><tbody>
+  else {
+    // a column for each project field marked for the table, after the data columns; the table is wider by a fixed amount for each, and the panel scrolls
+    const cols = fieldsOf(D().ws.id).filter(fl => fl.inTable);
+    body = `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:${860 + 140 * cols.length}px"><thead><tr><th style="padding-left:14px">Project</th><th style="text-align:left">Stage</th><th style="text-align:left">Lead</th><th style="text-align:left">Team</th><th style="text-align:left;width:16%">Progress</th><th>Tasks</th><th style="text-align:left">Start</th><th style="text-align:left">Due</th><th style="text-align:left">Last activity</th>${cols.map(fl => `<th style="text-align:left" title="${esc(fl.name)}"><span class="trunc" style="display:block;max-width:180px">${esc(fl.name)}</span></th>`).join('')}<th></th></tr></thead><tbody>
     ${ps
       .map(p => {
         const ts = tasksOf(p.id);
         const pr = progressOf(p.id);
-        return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td><td style="text-align:left">${pStatuses(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
+        const extra = cols
+          .map(fl => {
+            const v = fieldText(p, fl);
+            return `<td style="text-align:left" class="muted"${v ? ` title="${esc(v)}"` : ''}><span class="trunc" style="display:block;max-width:180px">${esc(v)}</span></td>`;
+          })
+          .join('');
+        return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<span style="font-weight:500">${esc(p.name)}</span>${p.private ? `<span class="faint" data-tip="Private project">${ic('lock', 12)}</span>` : ''}</span></td><td style="text-align:left">${pStatuses(p)}</td><td style="text-align:left"><span class="row">${av(p.lead, 'sm')}${esc(mem(p.lead)?.name)}</span></td><td style="text-align:left" class="muted">${esc(TM[p.team]?.name)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px">${pr}%</span></span></td><td class="num">${ts.length}</td><td style="text-align:left" class="num muted">${fmtDate(p.start)}</td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:left" class="muted">${ago(minsAgo(p.last))}</td>${extra}<td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Options">${ic('ellipsis', 14)}</button></td></tr>`;
       })
       .join('')}
     </tbody></table></div>`;
+  }
   return `<div class="page wide">
     <div class="ph"><div><h1>Projects</h1><p>${visibleProjects().filter(p => !isFinished(p)).length} active · ${visibleProjects().filter(isFinished).length} finished</p></div><div class="acts"><button class="btn btn-primary" data-a="newProject">${ic('plus', 14)}New project</button></div></div>
     <div class="row" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">

@@ -5,6 +5,7 @@ import {
   FIELD_NAME_MAX,
   FIELD_OPTIONS_MAX,
   FIELD_OPTION_MAX,
+  FIELD_TEXT_MAX,
   FIELD_TYPES,
   LABELS_MAX,
   LABEL_NAME_MAX,
@@ -16,7 +17,7 @@ import {
   TEMPLATE_DESC_MAX,
   TEMPLATE_NAME_MAX,
 } from '../core/constants.js';
-import { D, S, canManageTemplates, mem, pColor, proj, shownLabels, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
+import { D, S, canManageTemplates, fieldsOf, mem, pColor, proj, shownLabels, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
 import { FT, av, filePrev, lblPills, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -160,10 +161,35 @@ export function projectModal(m, H) {
         .join('')}</select></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}"></div>
     </div>
+    ${projectFields(m, f)}
     ${m.edit ? '' : stageSetPicker(f)}
     ${m.edit ? '' : templatePicker(f)}
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
+}
+/* The workspace's project fields on the project form (Settings > Project fields), one input each in the list's order: the workspace is the
+   current one for a new project and the project's own when editing, since the project may be open after the workspace was switched. The
+   values are the strings typed, under f_<field id> in S.ui.pform (actions.js turns them into the stored forms on Save); what a field
+   refused is under S.ui.errors.pfields. A workspace with no fields shows no group. */
+function projectFields(m, f) {
+  const list = fieldsOf(m.edit ? proj(m.edit)?.workspace : D().ws.id);
+  if (!list.length) return '';
+  const errs = S.ui.errors.pfields || {};
+  const one = fl => {
+    const k = 'f_' + fl.id;
+    const id = esc('p-' + k);
+    const v = f[k] ?? '';
+    const bad = errs[k];
+    const a = `id="${id}" data-in="pform" data-f="${esc(k)}" aria-invalid="${!!bad}"${bad ? ` aria-describedby="${id}-err"` : ''}`;
+    const ctl =
+      fl.type === 'select'
+        ? `<select class="select" ${a}><option value="" aria-label="No value"${v ? '' : ' selected'}>—</option>${(fl.options || [])
+            .map(o => `<option value="${esc(o.id)}"${v === o.id ? ' selected' : ''}>${esc(o.name)}</option>`)
+            .join('')}</select>`
+        : `<input class="input ${bad ? 'is-error' : ''}" ${a} type="${fl.type === 'number' ? 'number' : fl.type === 'date' ? 'date' : 'text'}"${fl.type === 'number' ? ' step="any"' : ''}${fl.type === 'text' ? ` maxlength="${FIELD_TEXT_MAX}"` : ''} value="${esc(v)}">`;
+    return `<div class="field" style="flex:1;min-width:150px"><label class="label trunc" for="${id}" title="${esc(fl.name)}">${esc(fl.name)}</label>${ctl}${bad ? `<span class="err" id="${id}-err" role="alert">${ic('circle-alert', 12)}${esc(bad)}</span>` : ''}</div>`;
+  };
+  return `<div class="col" role="group" aria-labelledby="p-fields-h" style="gap:10px"><h3 id="p-fields-h" style="margin:0;font-size:13px;font-weight:600">Project fields</h3><div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start">${list.map(one).join('')}</div></div>`;
 }
 /* Which stage set a new project is in; asked only when the workspace has more than one (a project of the only set needs no choice). */
 function stageSetPicker(f) {

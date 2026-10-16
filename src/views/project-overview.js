@@ -2,11 +2,15 @@
 import { TODAY, dayBucket, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { STAGE_COLORS, STATUSES } from '../core/constants.js';
-import { D, TM, isOver, mem, pColor, progressOf, setOf, stageOf, task, tasksOf } from '../core/store.js';
+import { D, TM, fieldText, fieldsOf, isOver, mem, pColor, progressOf, setOf, stageOf, task, tasksOf } from '../core/store.js';
 import { av, avStack, empty, pHealth, pStage, stIcon } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
 
+/* The icon of a project field's row in Details, by the field's type. */
+const FIELD_ICON = { text: 'type', number: 'hash', date: 'calendar', select: 'list' };
+/* The project's own workspace's fields (not the current one's: the project may be open after the workspace was switched), in the
+   list's order, after Due. A value is read-only here (the Edit button of About is how it changes) and is cut to the width of the panel. */
 export function projOverview(p) {
   const ts = tasksOf(p.id);
   const pr = progressOf(p.id);
@@ -40,6 +44,12 @@ export function projOverview(p) {
           <dt>${ic('users', 14)}Team</dt><dd><button class="pillbtn" data-a="go" data-r="team" data-id="${esc(p.team)}">${ic(TM[p.team].icon, 13)}${esc(TM[p.team].name)}</button></dd>
           <dt>${ic('calendar', 14)}Start</dt><dd><span class="pillbtn num">${fmtDate(p.start, true)}</span></dd>
           <dt>${ic('flag', 14)}Due</dt><dd><span class="pillbtn num">${fmtDate(p.due, true)}</span></dd>
+          ${fieldsOf(p.workspace)
+            .map(fl => {
+              const v = fieldText(p, fl);
+              return `<dt title="${esc(fl.name)}">${ic(FIELD_ICON[fl.type] || 'type', 14)}<span class="trunc">${esc(fl.name)}</span></dt><dd>${v ? `<span class="pillbtn" title="${esc(v)}"><span class="trunc">${esc(v)}</span></span>` : '<span class="faint" aria-label="No value">—</span>'}</dd>`;
+            })
+            .join('')}
           <dt>${ic('user-plus', 14)}Members</dt><dd><button class="pillbtn" data-a="share" data-id="${esc(p.id)}">${avStack(p.members, 6)}<span class="faint">${p.members.length}</span></button></dd>
         </dl></div></section>
         <section class="panel"><div class="panel-h"><h2>Stage history</h2></div><div class="panel-b">${stageHistory(p)}</div></section>

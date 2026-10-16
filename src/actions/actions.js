@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { DEFAULT_STAGE_SET, PCOLORS, PICONS, PR, PRIOS, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
+import { DEFAULT_STAGE_SET, FIELD_TEXT_MAX, PCOLORS, PICONS, PR, PRIOS, ST, TEMPLATE_TASKS_MAX } from '../core/constants.js';
 import { lookup, sanitizeHtml } from '../core/safe.js';
 import {
   D,
@@ -10,7 +10,9 @@ import {
   allTasks,
   canSee,
   commentsOf,
+  fieldsOf,
   isAdmin,
+  isDay,
   labelsOf,
   logAct,
   me,
@@ -1692,13 +1694,19 @@ A.editProject = el => {
   const p = proj(el.dataset.id);
   S.ui.pop = null;
   S.ui.pform = { name: p.name, desc: p.desc, icon: p.icon, color: p.color, team: p.team, lead: p.lead, due: p.due, tmpl: 'blank' };
+  // the values of the project's fields, as the strings the inputs hold (the project's own workspace's fields, not the current one's)
+  for (const fl of fieldsOf(p.workspace)) if (p['f_' + fl.id] !== undefined) S.ui.pform['f_' + fl.id] = String(p['f_' + fl.id]);
   S.ui.errors = {};
   openModal({ type: 'project', edit: p.id });
 };
 IN.pform = el => {
-  S.ui.pform[el.dataset.f] = el.value;
-  if (el.dataset.f === 'name' && S.ui.errors.pname && el.value.trim()) {
+  const k = el.dataset.f;
+  S.ui.pform[k] = el.value;
+  if (k === 'name' && S.ui.errors.pname && el.value.trim()) {
     S.ui.errors.pname = null;
+    render();
+  } else if (S.ui.errors.pfields?.[k]) {
+    delete S.ui.errors.pfields[k];
     render();
   }
 };
@@ -1768,6 +1776,9 @@ export function createProject(f, tmplId) {
     milestones: [],
     last: 0,
   };
+  // The values of the project fields (f_<id>): the form's, already in the forms a project stores them, or those of the project being
+  // duplicated, all of them, even for a field the workspace has since lost.
+  for (const k of Object.keys(f)) if (k.startsWith('f_')) p[k] = f[k];
   D().projects.push(p);
   D().projOrder.unshift(p.id);
   pushAct('created project', null, p.id);
@@ -1800,6 +1811,31 @@ export function createProject(f, tmplId) {
   );
   return p;
 }
+/* The form's values for the fields of workspace `ws`, checked and in the forms a project stores them: { 'f_<id>': value }, where a field
+   left empty has the value undefined (the project then has no such key). Read from the inputs, since a number or date that cannot be
+   read (half typed) is an empty string in the form's state. A field the form did not show (added since it opened) is left out, so
+   saving never clears a value the person could not see. Returns the values and what was refused, { 'f_<id>': message }. */
+function fieldValues(ws, f) {
+  const vals = {};
+  const errs = {};
+  for (const fl of fieldsOf(ws)) {
+    const k = 'f_' + fl.id;
+    const el = $('#' + CSS.escape('p-' + k));
+    if (!el && !(k in f)) continue;
+    const raw = String((el ? el.value : f[k]) ?? '').trim();
+    const unread = el?.validity?.badInput; // typed in a number or date input, but not a number or a date
+    if (fl.type === 'number') {
+      const n = Number(raw);
+      if (unread || (raw && !Number.isFinite(n))) errs[k] = 'Enter a number';
+      else vals[k] = raw ? n + 0 : undefined; // (+ 0: -0 is 0, as it is after a round trip through the server)
+    } else if (fl.type === 'date') {
+      if (unread || (raw && !isDay(raw))) errs[k] = 'Enter a date';
+      else vals[k] = raw || undefined;
+    } else if (fl.type === 'select') vals[k] = (fl.options || []).some(o => o.id === raw) ? raw : undefined;
+    else vals[k] = raw.slice(0, FIELD_TEXT_MAX) || undefined;
+  }
+  return { vals, errs };
+}
 A.submitProject = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const f = S.ui.pform;
@@ -1811,10 +1847,22 @@ A.submitProject = () => {
     $('#p-name')?.focus();
     return;
   }
+  const { vals, errs } = fieldValues(m.edit ? proj(m.edit)?.workspace : D().ws.id, f);
+  const bad = Object.keys(errs)[0];
+  S.ui.errors.pfields = bad ? errs : null;
+  if (bad) {
+    render();
+    const el = $('#' + CSS.escape('p-' + bad));
+    el?.focus();
+    el?.scrollIntoView({ block: 'nearest' });
+    return;
+  }
   const fresh = latest(m);
   const still = () => isTop(m) && fresh();
   // What the save applies is copied here, once validated: the form stays editable after an offline refusal, and "Try again" must not pick up what was typed since.
-  const v = { ...f };
+  // The values of the fields are the checked ones (not the strings typed), and only those of fields the workspace has now.
+  const v = Object.fromEntries(Object.entries(f).filter(([k]) => !k.startsWith('f_')));
+  for (const [k, val] of Object.entries(vals)) if (val !== undefined) v[k] = val;
   if (m.edit) {
     const id = m.edit;
     mutate(
@@ -1830,6 +1878,11 @@ A.submitProject = () => {
           due: v.due,
           members: [...new Set([...p.members, v.lead])],
         });
+        // a field left empty has no key; the keys of fields the workspace does not have are not touched
+        for (const [k, val] of Object.entries(vals)) {
+          if (val === undefined) delete p[k];
+          else p[k] = val;
+        }
       },
       () => {
         S.ui.modals.pop();
