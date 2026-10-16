@@ -82,6 +82,20 @@ export const DEFAULT_LABELS = Object.freeze(
     ['snag', 'Snag / punch', 'red'],
   ].map(([id, name, color]) => Object.freeze({ id, name, color })),
 );
+/* The project fields a workspace has until its admins save a list of their own (Settings > Project fields, the `fields` of its
+   workspace_lists record). A field is { id, name, type, inTable, options? }: `type` is a key of FIELD_TYPES, `inTable` says whether the
+   Projects table has a column for it, and a dropdown (type select) carries its choices as `options`, [{ id, name }]. A project stores a
+   field's value under the doc key `f_<id>`: the id of the chosen option for a dropdown, the text, number or YYYY-MM-DD day otherwise,
+   and no key at all when there is no value. A saved list replaces this one whole: an empty list means no fields. */
+export const DEFAULT_FIELDS = Object.freeze(
+  [
+    ['client', 'Client'],
+    ['enduser', 'End user'],
+    ['po', 'PO / contract no.'],
+  ].map(([id, name]) => Object.freeze({ id, name, type: 'text', inTable: true })),
+);
+/* The kinds of field, with the name the editor shows. normalize.js keeps a copy of the keys: change both together. */
+export const FIELD_TYPES = lookup({ text: 'Text', number: 'Number', date: 'Date', select: 'Dropdown' });
 export const PCOLORS = lookup({
   indigo: '#5A67D8',
   blue: '#3B82C4',
@@ -138,6 +152,16 @@ export const STAGE_HISTORY_MAX = 200;
 export const LABELS_MAX = 50;
 export const LABEL_NAME_MAX = 30;
 export const LABEL_ID_MAX = 32;
+/* How many fields a workspace's list holds, the longest field name and option name (the editor stops typing there), the most options a
+   dropdown has, the longest field id (the ids the app makes are 15 characters, the built-in ones at most 7) and the longest text value
+   a project holds. normalize.js cuts what the server holds to the same numbers (a copy of them, as with the label limits above):
+   change both together. */
+export const FIELDS_MAX = 30;
+export const FIELD_NAME_MAX = 40;
+export const FIELD_ID_MAX = 32;
+export const FIELD_OPTIONS_MAX = 50;
+export const FIELD_OPTION_MAX = 40;
+export const FIELD_TEXT_MAX = 200;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },
