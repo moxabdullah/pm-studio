@@ -560,6 +560,38 @@
   height: 6px;
   border-radius: 2px;
   background: var(--c);
+  flex: none;
+}
+/* Labels in a list or table cell. A pill never shrinks, so a short name is never cut; only one name wider than 120px is cut, inside its
+   pill (the whole name is its title, and the ellipsis is on the name's span: text straight in a flex container is not cut with one).
+   The pills sit in .lblpills, which clips at the cell's edge and fades there, so a pill cut by the edge reads as "more" and not as a
+   broken pill. Its right padding is the fade, empty while everything fits. The list's "+N" is outside it and always seen. */
+.lblcell {
+  min-width: 0;
+}
+.lblcell .lblpills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 10px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
+}
+.lblcell .lbl {
+  flex: none;
+  max-width: 120px;
+}
+.lblcell .lbl span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lblcell .lblmore {
+  flex: none;
+  font-size: 11px;
 }
 .chip {
   display: inline-flex;

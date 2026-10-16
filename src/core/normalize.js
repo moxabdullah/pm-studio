@@ -134,6 +134,28 @@ const stagesOf = v => {
   }
   return out;
 };
+/* Workspace lists. LABELS_MAX, LABEL_NAME_MAX and LABEL_ID_MAX are copies of the numbers in constants.js (and the colours are
+   STAGE_COLOR_KEYS above): change both together, or a list is cut on reading and stays pending for ever. The doc may hold other lists
+   (the project fields), and they pass through untouched. `labels` is optional: a record without the key means the built-in labels, and
+   `[]` means none, so the key is coerced only when it is there. Task labels are not checked against the list (this module cannot see
+   it); a task keeps the id of a label that has gone, and it shows as nothing. */
+const LABELS_MAX = 50;
+const LABEL_NAME_MAX = 30;
+const LABEL_ID_MAX = 32;
+const labelId = v => typeof v === 'string' && v.length > 0 && v.length <= LABEL_ID_MAX;
+/* A list's labels in order. One without an id (or with an id of one before it, or a longer one than the app makes) is dropped, since
+   tasks point at labels by id; one without a name stays, as "Untitled", so the tasks that carry it do not lose it. */
+const labelsOf = v => {
+  const seen = new Set();
+  const out = [];
+  for (const l of arr(v)) {
+    if (out.length >= LABELS_MAX) break;
+    if (!isObj(l) || !labelId(l.id) || seen.has(l.id)) continue;
+    seen.add(l.id);
+    out.push({ id: l.id, name: capped(LABEL_NAME_MAX)(l.name) || 'Untitled', color: STAGE_COLOR_KEYS.has(l.color) ? l.color : 'gray' });
+  }
+  return out;
+};
 /* The dates are kept as written (new Date().toISOString()): turning them into dates and back would not be a fixed point. */
 const ISO_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 /* The newest STAGE_HISTORY_MAX entries that are well formed, oldest first. It reads from the end and stops once it has them, so a
@@ -214,18 +236,19 @@ const KINDS = {
     { workspace: str, updated: num },
   ),
   stageSet: shape({ id: str, name: capped(STAGE_SET_NAME_MAX), stages: stagesOf }, { workspace: str, created: str }),
+  workspaceList: shape({ id: str }, { workspace: str, created: str, labels: labelsOf }),
   workspace: shape({ id: str, name: str, c: str }, { url: str, brand: bool }),
 }; // prettier-ignore
 
 /* The keys of S.data (and so of sync-map's COLLECTIONS) name the same kinds in the plural. */
 const KIND_OF = {
   members: 'member', projects: 'project', tasks: 'task', comments: 'comment', activity: 'activity', notifs: 'notif', files: 'file',
-  events: 'event', savedViews: 'savedView', teams: 'team', templates: 'template', stageSets: 'stageSet', workspaces: 'workspace',
+  events: 'event', savedViews: 'savedView', teams: 'team', templates: 'template', stageSets: 'stageSet', workspaceLists: 'workspaceList', workspaces: 'workspace',
 }; // prettier-ignore
 
-/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team, template, stageSet or workspace, or the
-   S.data key of that list (members, projects, tasks, ..., savedViews, teams, templates, stageSets, workspaces), so a caller that knows the
-   collection can pass keyOf(coll). Returns a new object; the argument is not touched. Throws on any other kind. */
+/* One record. `kind` is member, project, task, comment, activity, notif, file, event, savedView, team, template, stageSet, workspaceList or
+   workspace, or the S.data key of that list (members, projects, tasks, ..., savedViews, teams, templates, stageSets, workspaceLists,
+   workspaces), so a caller that knows the collection can pass keyOf(coll). Returns a new object; the argument is not touched. Throws on any other kind. */
 export function normalizeRecord(kind, rec) {
   const name = own(KIND_OF, kind) ? KIND_OF[kind] : kind;
   if (!own(KINDS, name)) throw new Error(`normalize: unknown kind "${kind}"`);
@@ -253,6 +276,7 @@ export function normalizeData(d) {
   if (d.teams !== undefined) each('teams', 'team');
   if (d.templates !== undefined) each('templates', 'template');
   if (d.stageSets !== undefined) each('stageSets', 'stageSet');
+  if (d.workspaceLists !== undefined) each('workspaceLists', 'workspaceList');
   d.projOrder = strs(d.projOrder);
   d.recentSearches = strs(d.recentSearches);
   d.me = str(d.me);

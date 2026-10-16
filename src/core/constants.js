@@ -1,7 +1,7 @@
 import { lookup } from './safe.js';
 
 /* ---------- vocab ---------- */
-/* Lookups keyed by stored values (status, priority, project status, colour name, label id) go through lookup():
+/* Lookups keyed by stored values (status, priority, health, colour name) go through lookup():
    an unknown or hostile key gets a neutral entry (or undefined where there is no fallback) instead of crashing. */
 export const STATUSES = [
   { id: 'backlog', name: 'Backlog' },
@@ -19,17 +19,6 @@ export const PRIOS = [
   { id: 'none', name: 'No priority', w: 0 },
 ];
 export const PR = lookup(Object.fromEntries(PRIOS.map(p => [p.id, p])), PRIOS[4]);
-export const LABELS = [
-  { id: 'design', name: 'Design', c: 'var(--violet)' },
-  { id: 'frontend', name: 'Frontend', c: 'var(--blue)' },
-  { id: 'backend', name: 'Backend', c: 'var(--teal)' },
-  { id: 'research', name: 'Research', c: 'var(--amber)' },
-  { id: 'content', name: 'Content', c: 'var(--rose)' },
-  { id: 'bug', name: 'Bug', c: 'var(--red)' },
-  { id: 'qa', name: 'QA', c: 'var(--green)' },
-  { id: 'growth', name: 'Growth', c: 'var(--orange)' },
-];
-export const LB = lookup(Object.fromEntries(LABELS.map(l => [l.id, l])));
 /* A project's health, a flag apart from its stage (stages are the workspace's own, see DEFAULT_STAGE_SET). */
 export const HEALTH = lookup(
   {
@@ -39,9 +28,9 @@ export const HEALTH = lookup(
   },
   { name: 'On track', c: 'var(--green)' },
 );
-/* The colours a stage can have. A stage stores the key only; the CSS value comes from here, so a stage written through the API
-   cannot put its own CSS into a style attribute. An unknown key reads as gray. normalize.js keeps a copy of the keys: change both
-   together. */
+/* The colours a stage can have, and a label too (a label is a name and one of these keys). A stage or label stores the key only; the
+   CSS value comes from here, so one written through the API cannot put its own CSS into a style attribute. An unknown key reads as
+   gray. normalize.js keeps a copy of the keys: change both together. */
 export const STAGE_COLORS = lookup(
   {
     gray: 'var(--gray)',
@@ -78,6 +67,21 @@ export const DEFAULT_STAGE_SET = Object.freeze({
     ].map(([id, name, color, finished]) => Object.freeze({ id, name, color, finished })),
   ),
 });
+/* The task labels a workspace has until its admins save a list of their own (Settings > Labels, a workspace_lists record). An id is
+   what a task stores; `color` is a key of STAGE_COLORS. A saved list replaces this one whole: an empty list means no labels. */
+export const DEFAULT_LABELS = Object.freeze(
+  [
+    ['electrical', 'Electrical', 'amber'],
+    ['mechanical', 'Mechanical', 'gray'],
+    ['plc', 'PLC', 'blue'],
+    ['scada', 'SCADA', 'violet'],
+    ['instrumentation', 'Instrumentation', 'teal'],
+    ['panel', 'Panel build', 'orange'],
+    ['site', 'Site works', 'green'],
+    ['docs', 'Documentation', 'rose'],
+    ['snag', 'Snag / punch', 'red'],
+  ].map(([id, name, color]) => Object.freeze({ id, name, color })),
+);
 export const PCOLORS = lookup({
   indigo: '#5A67D8',
   blue: '#3B82C4',
@@ -128,6 +132,12 @@ export const STAGES_MAX = 30;
 export const STAGE_NAME_MAX = 40;
 export const STAGE_SET_NAME_MAX = 80;
 export const STAGE_HISTORY_MAX = 200;
+/* How many labels a workspace's list holds, the longest label name (the editor stops typing there) and the longest label id (the ids
+   the app makes are 15 characters, the built-in ones at most 15). normalize.js cuts what the server holds to the same numbers (a copy
+   of them, as with the stage limits above): change both together. */
+export const LABELS_MAX = 50;
+export const LABEL_NAME_MAX = 30;
+export const LABEL_ID_MAX = 32;
 export const ROLES = ['Admin', 'Manager', 'Member'];
 export const TEAMS_SEED = [
   { id: 'design', workspace: 'w1', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },

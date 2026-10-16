@@ -1,10 +1,20 @@
 /* ---------------- MODALS ---------------- */
 import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { PCOLORS, PICONS, STAGE_COLORS, STAGE_NAME_MAX, STAGE_SET_NAME_MAX, TEMPLATE_DESC_MAX, TEMPLATE_NAME_MAX } from '../core/constants.js';
-import { D, S, canManageTemplates, mem, pColor, proj, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
+import {
+  LABELS_MAX,
+  LABEL_NAME_MAX,
+  PCOLORS,
+  PICONS,
+  STAGE_COLORS,
+  STAGE_NAME_MAX,
+  STAGE_SET_NAME_MAX,
+  TEMPLATE_DESC_MAX,
+  TEMPLATE_NAME_MAX,
+} from '../core/constants.js';
+import { D, S, canManageTemplates, mem, pColor, proj, shownLabels, stageSetsOf, task, teamsList, templatesOf } from '../core/store.js';
 import { isRaster } from '../core/files.js';
-import { FT, av, filePrev, lbl, nameOf, prPill, stPill } from '../ui/helpers.js';
+import { FT, av, filePrev, lblPills, nameOf, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
 
@@ -53,6 +63,8 @@ export function modalHtml(m) {
       return wrap('sm', templateModal(m, H));
     case 'stageSet':
       return wrap('', stageSetModal(m, H));
+    case 'labels':
+      return wrap('', labelsModal(H));
     case 'filePreview':
       return wrap('lg', filePreviewModal(m, H));
     case 'saveView':
@@ -69,6 +81,7 @@ export function formChip(pop, html, label) {
 export function taskModal(m, H) {
   const f = S.ui.form;
   const p = proj(f.project);
+  const ls = shownLabels(f);
   const err = S.ui.errors.title;
   return `${H(m.edit ? 'Edit task' : 'New task', m.edit ? `<span class="mono">${esc(task(m.edit)?.key)}</span>` : '')}
   <form class="modal-b" data-submit="submitTask" style="gap:12px">
@@ -81,7 +94,7 @@ export function taskModal(m, H) {
       ${formChip('priority', prPill(f.priority), 'Priority')}
       ${formChip('date', `${ic('calendar', 13)}${f.due ? 'Due ' + fmtDate(f.due) : 'Due date'}`, 'due')}
       ${formChip('date', `${ic('calendar-arrow-up', 13)}${f.start ? 'Starts ' + fmtDate(f.start) : 'Start date'}`, 'start')}
-      ${formChip('labels', f.labels.length ? f.labels.map(lbl).join('') : `${ic('tag', 13)}Labels`, 'Labels')}
+      ${formChip('labels', ls.length ? lblPills(ls) : `${ic('tag', 13)}Labels`, 'Labels')}
       ${formChip('recur', `${ic('repeat', 13)}${esc(f.recur || 'Repeat')}`, 'Repeat')}
     </div>
     <div class="field"><span class="label">Subtasks</span>
@@ -200,6 +213,44 @@ export function stageSetModal(m, H) {
     </div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitStageSet">${m.edit ? 'Save changes' : 'Create stage set'}</button></div>`;
+}
+/* Edit the workspace's task labels (Settings > Labels): each label's name and color, in the order the picker lists them. The form is
+   S.ui.lbform; what a click or a save refuses is under S.ui.errors.lblist, which is under the label lbrow is about, or under the list when
+   lbrow is -1. Laid out as the stage set's rows are (they wrap on a phone). data-keep: the body scrolls, and a move or a removal
+   re-renders it. */
+/* What a row's buttons call it: the label's name as typed, else its place in the list. The row's group and its name field are called the
+   same, capitalised ("Label 2", "Label 2 name"), and follow the name as it is typed (actions/labels.js). */
+export const lbRowName = (l, i) => l.name.trim() || `label ${i + 1}`;
+export const lbRowTitle = (l, i) => l.name.trim() || `Label ${i + 1}`;
+export function labelsModal(H) {
+  const f = S.ui.lbform;
+  const e = S.ui.errors;
+  const bad = e.lblist ? e.lbrow : -1; // the label the message under the list is about
+  const err = (id, msg, st = '') =>
+    msg ? `<span class="err" id="${id}" role="alert"${st ? ` style="${st}"` : ''}>${ic('circle-alert', 12)}${esc(msg)}</span>` : '';
+  const last = f.labels.length - 1;
+  const full = f.labels.length >= LABELS_MAX;
+  const row = (l, i) => `<div style="margin-bottom:12px"><div class="row" role="group" aria-label="${esc(lbRowTitle(l, i))}" style="gap:6px 8px;flex-wrap:wrap">
+      <span class="pdot" style="--c:${STAGE_COLORS[l.color]};border-radius:50%;width:10px;height:10px" aria-hidden="true"></span>
+      <input class="input ${bad === i ? 'is-error' : ''}" id="lb-name-${i}" data-in="lbRow" data-i="${i}" data-f="name" value="${esc(l.name)}" maxlength="${LABEL_NAME_MAX}" placeholder="Label name" ${i === 0 ? 'autofocus ' : ''}aria-label="${esc(lbRowTitle(l, i))} name" aria-invalid="${bad === i}"${bad === i ? ' aria-describedby="lb-row-err"' : ''} style="flex:1;min-width:140px">
+      <select class="select" data-in="lbRow" data-i="${i}" data-f="color" aria-label="Label ${i + 1} color" style="width:auto">${Object.keys(STAGE_COLORS)
+        .map(k => `<option value="${k}" ${l.color === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)}</option>`)
+        .join('')}</select>
+      <span class="row" style="gap:2px;flex-wrap:nowrap;margin-left:auto">
+        <button type="button" class="ibtn ibtn-sm" data-a="lbMove" data-i="${i}" data-v="up" ${i === 0 ? 'disabled' : ''} aria-label="Move ${esc(lbRowName(l, i))} up">${ic('arrow-up', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="lbMove" data-i="${i}" data-v="down" ${i === last ? 'disabled' : ''} aria-label="Move ${esc(lbRowName(l, i))} down">${ic('arrow-down', 14)}</button>
+        <button type="button" class="ibtn ibtn-sm" data-a="lbRemove" data-i="${i}" aria-label="Remove ${esc(lbRowName(l, i))}">${ic('trash-2', 14)}</button>
+      </span>
+    </div>${bad === i ? err('lb-row-err', e.lblist, 'margin-top:4px') : ''}</div>`;
+  return `${H('Edit labels', 'Labels are for sorting a workspace’s tasks. Tasks that have a removed label no longer show it.')}
+  <form class="modal-b" data-submit="submitLabels" data-keep="modal-labels">
+    <div class="field"><span class="label">Labels, in order</span>
+      ${f.labels.length ? f.labels.map(row).join('') : '<p class="faint" style="margin:0 0 12px">No labels.</p>'}
+      ${bad < 0 ? err('lb-list-err', e.lblist) : ''}
+      <div class="row" style="gap:8px"><button type="button" class="btn btn-secondary btn-sm" data-a="lbAdd" ${f.labels.length ? '' : 'autofocus '}${full ? 'aria-disabled="true" aria-describedby="lb-cap"' : ''}>${ic('plus', 13)}Add label</button>${full ? `<span class="faint" id="lb-cap" style="font-size:12px">A workspace can have up to ${LABELS_MAX} labels</span>` : ''}</div>
+    </div>
+  </form>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitLabels">Save changes</button></div>`;
 }
 /* Who may open a project is decided on the server by `private` and `members` (the project access rules in server/pb_migrations). The
    level of access per person is not enforced anywhere yet (roles arrive in Phase 2), so the dialog does not offer one: everybody on the

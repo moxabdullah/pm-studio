@@ -131,7 +131,7 @@ function newId(space, old, index) {
   return 'seed' + (/^[a-z0-9]{1,11}$/.test(text) ? text.padStart(11, '0') : createHash('sha1').update(text).digest('hex').slice(0, 11));
 }
 
-/* Rewrites every reference by field, never by searching for strings: task labels like 'design' look like team ids. */
+/* Rewrites every reference by field, never by searching for strings: task labels (plain words like 'plc' or 'site') and stage ids like 'design' can look like team ids. */
 function remap(seedData) {
   const d = structuredClone(seedData);
   d.teams ??= (constants.TEAMS_SEED || []).map(t => ({ ...t }));

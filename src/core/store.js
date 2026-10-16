@@ -1,6 +1,6 @@
 /* ---------- store ---------- */
 import { TODAY, diffD, iso, parse, uid } from './utils.js';
-import { DEFAULT_STAGE_SET, PCOLORS } from './constants.js';
+import { DEFAULT_LABELS, DEFAULT_STAGE_SET, PCOLORS } from './constants.js';
 import { flush } from './sync.js';
 import { DEFAULT_PREFS } from './sync-map.js';
 
@@ -35,6 +35,7 @@ export function emptyData() {
     teams: [],
     templates: [],
     stageSets: [],
+    workspaceLists: [],
     projOrder: [],
     savedViews: [],
     recentSearches: [],
@@ -132,6 +133,8 @@ export const isAdmin = () => me()?.role === 'Admin';
 export const canManageTemplates = () => ['Admin', 'Manager'].includes(me()?.role);
 /* Who may make, edit and delete the workspace's stage sets (the rules on `stage_sets` say the same as those on `templates`). */
 export const canManageStages = () => canManageTemplates();
+/* Who may edit the workspace's task labels (the rules on `workspace_lists` say the same). */
+export const canManageLabels = () => canManageTemplates();
 export const mem = id => D().members.find(m => m.id === id);
 export const proj = id => D().projects.find(p => p.id === id);
 export const task = id => D().tasks.find(t => t.id === id);
@@ -179,6 +182,36 @@ export const isFinished = p => stageOf(p).finished;
    workspace. */
 export const projectsUsing = (setId, stageId) =>
   D().projects.filter(p => inWs(p) && setOf(p).id === setId && (stageId === undefined || stageOf(p).id === stageId));
+/* ---------- task labels ----------
+   A workspace's labels are the `labels` of its workspace_lists record (Settings > Labels). Until it has saved a list, every task is
+   labelled from DEFAULT_LABELS: no record, or a record whose doc has no `labels` key, reads as the built-in set, and a list that is
+   empty means no labels. A task stores label ids only and keeps the id of a label that was removed; the id shows as nothing. Everything
+   that shows or offers labels goes through these, with the workspace of the task (taskWs) rather than the current one, since a task
+   can be open (the drawer) after the workspace was switched. Only the editor (actions/labels.js) writes the list. */
+/* The workspace's record. Two can be loaded for a moment (the server refuses the second, and the app takes its own back): the one the
+   server has stored (it has `created`) wins, then the lowest id. */
+export const listsOf = wsId => (D().workspaceLists || []).filter(l => l.workspace === wsId).sort((a, b) => !a.created - !b.created || cmp(a.id, b.id))[0];
+export const labelsOf = wsId => listsOf(wsId)?.labels ?? DEFAULT_LABELS;
+export const labelOf = (id, wsId) => labelsOf(wsId).find(l => l.id === id);
+/* The workspace a task (or the task form) is in: its project's. */
+export const taskWs = t => proj(t?.project)?.workspace || D().ws.id;
+/* The labels of a task (or the task form) that its workspace's list still has, as the list's own entries and in the task's order, each
+   once. A task keeps the id of a removed label, so t.labels is not what is shown: the empty state, the "+N" and the pills all come from
+   this, which looks the workspace and its list up once. The list goes into a Map and each id found comes out of it, so a repeated id
+   finds nothing, the walk stops once every entry is found, and the cost is the task's ids plus the list, however long t.labels is. */
+export const shownLabels = t => {
+  const left = new Map(labelsOf(taskWs(t)).map(l => [l.id, l]));
+  const out = [];
+  if (!left.size) return out;
+  for (const id of t?.labels || []) {
+    const l = left.get(id);
+    if (!l) continue;
+    out.push(l);
+    left.delete(id);
+    if (!left.size) break;
+  }
+  return out;
+};
 export const allTasks = () =>
   D().tasks.filter(t => {
     const p = proj(t.project);

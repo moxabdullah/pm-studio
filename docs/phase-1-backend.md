@@ -11,7 +11,7 @@ Turn PM Space from a single-browser demo into a shared app that about 20 Sam Eng
 ## Not in this phase
 
 - Department roles and permission rules beyond "signed in" and "private projects": Phase 2.
-- Sam Engineering stages, fields and labels: Phase 3. Its first part, project stages, is in: each workspace keeps its own stage sets, see `stage_sets` below, and a project's stage, stage set, health and stage history are keys in its `doc`. (Templates were built ahead of it: each workspace keeps its own, see `templates` below.)
+- Sam Engineering stages, fields and labels: Phase 3. Its first part, project stages, is in: each workspace keeps its own stage sets, see `stage_sets` below, and a project's stage, stage set, health and stage history are keys in its `doc`. Task labels are in too: each workspace keeps its list of them in one `workspace_lists` record, see below. (Templates were built ahead of it: each workspace keeps its own, see `templates` below.)
 - Service contracts, SLA tickets and timers: Phase 4.
 - Microsoft 365 sign-in. This phase only checks that it is possible; see the spike below.
 
@@ -38,22 +38,23 @@ All of this lives in a new module, `src/core/sync.js`. `store.js` calls into it,
 
 Each collection gets a few real columns that PocketBase needs for filtering and permission rules, plus one `doc` JSON field holding the rest of the app object as-is. This keeps the mapping small and stops new UI fields from breaking sync.
 
-| Collection     | Real columns                                                                                                    | In `doc`                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `users` (auth) | email, name, title, color, status, role (`admin`, `manager`, `member`); role is stored now, enforced in Phase 2 | tz, other profile fields                                                       |
-| `workspaces`   | name, color                                                                                                     | brand flags                                                                    |
-| `teams`        | workspace, name                                                                                                 | icon, colour, description                                                      |
-| `projects`     | workspace, team, lead, private, members (relation to users), archived, order                                    | key, name, icon, stage, stageSet, health, stageHistory, dates, everything else |
-| `tasks`        | project, status, assignee, archived                                                                             | title, priority, due, labels, est, subtasks, deps, recur, etc.                 |
-| `comments`     | task, author                                                                                                    | body, reactions                                                                |
-| `activity`     | project, task, workspace, by                                                                                    | verb, extra                                                                    |
-| `notifs`       | recipient                                                                                                       | everything else                                                                |
-| `files`        | project, uploaded_by, file (real upload)                                                                        | display name, type                                                             |
-| `events`       | project                                                                                                         | title, date, time                                                              |
-| `saved_views`  | project, owner                                                                                                  | name, type, filters                                                            |
-| `templates`    | workspace, name                                                                                                 | description, icon, colour, tasks (title, status, dates, ...)                   |
-| `stage_sets`   | workspace, name                                                                                                 | stages (id, name, colour key, finished), in order                              |
-| `user_prefs`   | user (unique)                                                                                                   | prefs, views, collapsed, notifPrefs, recentSearches                            |
+| Collection        | Real columns                                                                                                    | In `doc`                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `users` (auth)    | email, name, title, color, status, role (`admin`, `manager`, `member`); role is stored now, enforced in Phase 2 | tz, other profile fields                                                       |
+| `workspaces`      | name, color                                                                                                     | brand flags                                                                    |
+| `teams`           | workspace, name                                                                                                 | icon, colour, description                                                      |
+| `projects`        | workspace, team, lead, private, members (relation to users), archived, order                                    | key, name, icon, stage, stageSet, health, stageHistory, dates, everything else |
+| `tasks`           | project, status, assignee, archived                                                                             | title, priority, due, labels, est, subtasks, deps, recur, etc.                 |
+| `comments`        | task, author                                                                                                    | body, reactions                                                                |
+| `activity`        | project, task, workspace, by                                                                                    | verb, extra                                                                    |
+| `notifs`          | recipient                                                                                                       | everything else                                                                |
+| `files`           | project, uploaded_by, file (real upload)                                                                        | display name, type                                                             |
+| `events`          | project                                                                                                         | title, date, time                                                              |
+| `saved_views`     | project, owner                                                                                                  | name, type, filters                                                            |
+| `templates`       | workspace, name                                                                                                 | description, icon, colour, tasks (title, status, dates, ...)                   |
+| `stage_sets`      | workspace, name                                                                                                 | stages (id, name, colour key, finished), in order                              |
+| `workspace_lists` | workspace (unique)                                                                                              | labels (id, name, colour key), in order; later the project fields              |
+| `user_prefs`      | user (unique)                                                                                                   | prefs, views, collapsed, notifPrefs, recentSearches                            |
 
 **IDs.** Change `uid()` to produce 15-character lowercase IDs that PocketBase accepts, and send them as the record `id` on create. The app can then keep creating objects synchronously, exactly as it does now. Store an optional prefix such as `t` in `doc` if anything depends on it.
 

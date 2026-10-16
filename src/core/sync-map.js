@@ -10,7 +10,7 @@
    COLLECTIONS   ordered list of { key, coll, updateOnly?, optional? } for the array-backed collections: `key` is the property on S.data, `coll`
                  the PocketBase collection. Parents come first, so creating in this order and deleting in reverse satisfies every relation.
                    members->users (first; the app only ever UPDATES users: admins create accounts in PocketBase),
-                   workspaces, teams, projects, tasks, comments, activity, notifs, files, events, savedViews->saved_views, templates, stageSets->stage_sets
+                   workspaces, teams, projects, tasks, comments, activity, notifs, files, events, savedViews->saved_views, templates, stageSets->stage_sets, workspaceLists->workspace_lists
    USER_PREFS    'user_prefs': the one composite collection, see buildUserPrefs/applyUserPrefs. Not an array on S.data.
    keyOf(coll)   app key for a PocketBase collection name ('saved_views' -> 'savedViews'); null if not synced
    collOf(key)   PocketBase collection name for an app key
@@ -31,7 +31,7 @@
    fromRecord(coll, rec)        -> app object: { id, ...columns, ...rec.doc } (columns win over doc). Also a fresh copy.
      System fields (collectionId, collectionName, created, updated, expand, ...) are ignored; the app's own created/updated/at
      numbers live inside doc and are untouched. Empty relations come back as null for assignee, lead and activity.project/task/workspace/by,
-     comments.by and files.by, and as '' for team and for the workspace of a project, team, template or stage set. Extras: members keep `email` ('' when the account hides it);
+     comments.by and files.by, and as '' for team and for the workspace of a project, team, template, stage set or workspace list. Extras: members keep `email` ('' when the account hides it);
      files get `file`, the stored file name for download URLs (see fileUrl in pb.js). Not restored: `fav` (call applyFavs / applyUserPrefs).
      Members get defaults for what a dashboard-created account leaves blank (MEMBER_DEFAULTS, one table shared with normalize.js):
      c '#6B7280', status 'active', role 'Member', title '', team '', tz '\u2014' (an em dash), last null, and name = the email's local
@@ -184,6 +184,16 @@ const SPECS = {
     readOnly: [['created', 'created']],
     skip: ['created'],
   },
+  workspaceLists: {
+    key: 'workspaceLists',
+    coll: 'workspace_lists',
+    // Read as none when the server has no such collection, like templates above (1791849608). Can go once every server has it.
+    optional: true,
+    cols: [['workspace', 'workspace', ONE('')]],
+    // `created` picks the record when two are loaded for one workspace (store.js listsOf): it is read back, kept out of the doc and never sent.
+    readOnly: [['created', 'created']],
+    skip: ['created'],
+  },
   projects: {
     key: 'projects',
     coll: 'projects',
@@ -277,6 +287,7 @@ const ORDER = [
   'savedViews',
   'templates',
   'stageSets',
+  'workspaceLists',
 ];
 export const COLLECTIONS = Object.freeze(
   ORDER.map(k => {
