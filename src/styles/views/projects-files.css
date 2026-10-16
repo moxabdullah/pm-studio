@@ -346,7 +346,8 @@
 }
 
 /* A fade on the edge of a sideways-scrolling panel that has more beyond it (the Projects table: projTableAfter sets .sf-l and .sf-r on this
-   wrapper). It lies over the panel's border box, inside its border, and takes no clicks. */
+   wrapper). It lies over the panel's border box, inside its border and above its scrollbar, and takes no clicks. It has no transition:
+   a render rebuilds the wrapper, which would fade it in again on every keystroke in the search box. */
 .sfade {
   position: relative;
 }
@@ -355,22 +356,21 @@
   content: '';
   position: absolute;
   top: 1px;
-  bottom: 1px;
-  width: 40px;
+  bottom: 11px; /* (the scrollbar is 10px) */
+  width: 28px;
   z-index: 1;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--dur);
 }
 .sfade::before {
   left: 1px;
   background: linear-gradient(to right, var(--surface), transparent);
-  border-radius: calc(var(--r-lg) - 1px) 0 0 calc(var(--r-lg) - 1px);
+  border-radius: calc(var(--r-lg) - 1px) 0 0 0;
 }
 .sfade::after {
   right: 1px;
   background: linear-gradient(to left, var(--surface), transparent);
-  border-radius: 0 calc(var(--r-lg) - 1px) calc(var(--r-lg) - 1px) 0;
+  border-radius: 0 calc(var(--r-lg) - 1px) 0 0;
 }
 .sfade.sf-l::before,
 .sfade.sf-r::after {

@@ -1876,7 +1876,9 @@ function fieldValues(ws, f, m) {
       continue;
     }
     m.bad?.delete(k);
-    if (m.edit && !(m.touched?.has(k) || (el && raw && differs(fl, raw, m.snap?.[k])))) continue;
+    // (a date filled in with no event, which Safari may not send before a Ctrl+Enter, counts too; only a date: a text input shows some stored
+    // values changed, a stored line break for one, and that must not count as the person's edit)
+    if (m.edit && !(m.touched?.has(k) || (fl.type === 'date' && el && raw && differs(fl, raw, m.snap?.[k])))) continue;
     let val;
     if (fl.type === 'number') {
       const n = Number(raw);

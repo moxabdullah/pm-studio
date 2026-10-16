@@ -323,7 +323,7 @@ A.submitField = () => {
   confirmDlg({
     wlId: listsOf(f.ws)?.id, // so a live deletion of the list closes this question (forgetUi in sync.js)
     title: one ? `Remove the option “${[...dropped.values()][0]}” from ${c.name}?` : `Remove ${dropped.size} options from ${c.name}?`,
-    body: `${countOf(ps)} ${ps.length === 1 ? 'uses' : 'use'} ${one ? 'it' : 'them'}. ${ps.length === 1 ? 'Its value stops' : 'Their values stop'} showing. Private projects you can't see aren't counted.`,
+    body: `${countOf(ps)} ${ps.length === 1 ? 'uses' : 'use'} ${one ? 'it' : ps.length === 1 ? 'one of them' : 'them'}. ${ps.length === 1 ? 'Its value stops' : 'Their values stop'} showing. Private projects you can't see aren't counted.`,
     ok: one ? 'Remove option' : 'Remove options',
     danger: true,
     run: () => saveField(m, f.ws, c, fresh),
