@@ -60,7 +60,8 @@ export function openPop(el, extra = {}) {
       q.focus();
       return;
     }
-    const first = $('.pop.floating .mi[aria-checked="true"]') || $('.pop.floating .mi, .pop.floating button, .pop.floating input');
+    const first =
+      $('.pop.floating [data-pop-first]') || $('.pop.floating .mi[aria-checked="true"]') || $('.pop.floating .mi, .pop.floating button, .pop.floating input');
     first?.focus({ preventScroll: true });
   }, 10);
 }
@@ -86,9 +87,13 @@ export function closePop() {
 export function tgt(p) {
   return p.id === '__form' ? S.ui.form : task(p.id);
 }
-/* What the label picker and a Labels filter show when the workspace's list is empty (not the "No matches" of a search that found nothing). */
+/* What the label picker and a Labels filter show when the workspace's list is empty (not the "No matches" of a search that found nothing).
+   It is not a menu item (no hover): admins and managers get the way to the list, anyone else the sentence, which takes focus so it is
+   read out when the popover opens. `data-pop-first` is where openPop puts the focus. */
 const noLabels = () =>
-  `<div class="mi faint" style="cursor:default;display:block;height:auto;white-space:normal;line-height:1.5">No labels in this workspace.<br>${canManageLabels() ? 'Add them' : 'Admins and managers can add them'} in Settings › Labels.</div>`;
+  canManageLabels()
+    ? `<div class="pnote pnote-act"><p>No labels in this workspace.</p><button type="button" class="btn btn-secondary btn-sm" data-a="go" data-r="settings" data-sec="labels" data-pop-first>Open Settings › Labels</button></div>`
+    : `<p class="pnote" id="pop-note" tabindex="-1" data-pop-first>No labels in this workspace.<br>Admins and managers can add them in Settings › Labels.</p>`;
 /* `opt.none`: markup shown instead of the list and its search box, when there is nothing to list at all. */
 export function popList(items, opt = {}) {
   if (opt.none) return opt.none;
