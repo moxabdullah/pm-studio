@@ -347,10 +347,11 @@ A.popPickSet = el => {
   $('.pop.floating [data-a="popPick"]')?.focus({ preventScroll: true }); // the first stage, not "Back"
 };
 /* Focus an element of the Board and bring it into view: the board scrolls inside itself, and so do its columns, so a focus that is
-   only put there can sit off screen. */
+   only put there can sit off screen. A card's button brings its whole card into view (a button at the card's edge would leave the name
+   of the card out of sight); the focus stays on the button. */
 function focusShown(el) {
   el.focus({ preventScroll: true });
-  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  (el.closest('.pbcard') || el).scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 /* Where focus goes after a stage is picked on the Board: the card's own stage button when it is still on it (it is in another column
    now, maybe out of view); else the column the card went to (its strip, or the collapse button of the open column); else the Board

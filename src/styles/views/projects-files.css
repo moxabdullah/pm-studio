@@ -91,7 +91,9 @@
   width: 24px;
   height: 24px;
 }
-/* a button brought into view with `nearest` ends flush with the box that scrolls it: the margin keeps its 3px focus ring from being cut there */
+/* what is brought into view with `nearest` (a card, or the button that takes the focus) ends flush with the box that scrolls it: the margin
+   keeps its edge, or the 3px focus ring of a button, from being cut there */
+.pbcard,
 .pbcard .pmove,
 .pboard .bcol.collapsed,
 .pboard .bcol-h .ibtn {
