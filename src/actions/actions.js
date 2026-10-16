@@ -1420,12 +1420,17 @@ A.addFilter = el => {
   }
   save();
   render();
+  focusValsNote();
 };
 A.fEdit = el => {
   const p = S.ui.pop;
   p.edit = p.edit === +el.dataset.i ? null : +el.dataset.i;
   render();
+  if (p.edit !== null) focusValsNote();
 };
+// A filter's values opened in the builder, when they are the note of an empty label list (it has no options to tick): the note takes
+// the focus, as it does in the values popover (openPop), so it is read out and its button is the next key press. A list leaves it.
+const focusValsNote = () => $('.pop.floating .fb-rows [data-pop-first]')?.focus({ preventScroll: true });
 A.fToggleVal = el => {
   const f = viewOf(el.dataset.key).filters[+el.dataset.i];
   const x = el.dataset.v;
