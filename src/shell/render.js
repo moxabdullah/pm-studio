@@ -76,7 +76,7 @@ export function go(route, params = {}, opt = {}) {
   S.ui.pop = null;
   S.ui.composer = null;
   S.ui.editCell = null;
-  if (!opt.keepDrawer && S.ui.drawer && innerWidth < 900) S.ui.drawer = null;
+  if (!opt.keepDrawer && S.ui.drawer && sideIsDrawer()) S.ui.drawer = null;
   // Pages render instantly; motion (not a fake wait) carries the transition.
   clearTimeout(go._t);
   S.ui.loading = false;
