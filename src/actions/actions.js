@@ -49,7 +49,7 @@ import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessa
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
-import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render, sideIsDrawer, tryFocus } from '../shell/render.js';
+import { ROUTE_NAMES, autosize, focusKey, fxSet, go, openerKey, render, sideIsDrawer, tryFocus } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { dropWsFilters, hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { closeModal, fieldErrHtml, openModal } from '../overlays/modals.js';
@@ -346,6 +346,7 @@ A.ctxBtn = el => {
     closePop();
     return;
   }
+  S.ui.popOpener = focusKey(el);
   S.ui.pop = { type: 'ctx', ctx: d.ctx, id: d.id, key: d.key, vid: d.vid, x: r.left, y: r.bottom + 4, top: r.top, w: r.width };
   render();
 };
@@ -508,7 +509,7 @@ A.openTask = el => {
     toast("You don't have access to that task", { kind: 'err' });
     return;
   }
-  if (!S.ui.drawer || !document.activeElement?.closest?.('.drawer')) S.ui.drawerOpener = el.isConnected ? focusKey(el) : S.ui.drawerOpener;
+  if (!S.ui.drawer || !document.activeElement?.closest?.('.drawer')) S.ui.drawerOpener = el.isConnected ? openerKey(el) : S.ui.drawerOpener;
   S.ui.drawer = id;
   S.ui.drawerFull = S.prefs.openTasks === 'full' || (S.ui.drawerFull && S.ui.drawer === id);
   S.ui.pop = null;
@@ -997,13 +998,13 @@ A.rmAttach = el => {
 A.filePreview = el => {
   const t = task(el.dataset.tid);
   const att = t?.attachments.find(a => a.id === el.dataset.aid);
-  if (att) openFilePreview(fileOf(t, att) || att, t.id);
+  if (att) return openFilePreview(fileOf(t, att) || att, t.id); // returned: the dialog opens after an await, and the click is not over until it has
 };
 A.previewFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
   S.ui.pop = null;
-  if (f) openFilePreview(f, f.task);
-  else render();
+  if (f) return openFilePreview(f, f.task);
+  render();
 };
 /* The preview modal. An image gets a real <img> with a file URL (its token lasts a few minutes; the error handler below renews a stale
    one), anything else keeps the icon preview and offers a download. Nothing a person uploaded is ever put in an iframe, object or embed,
@@ -1429,6 +1430,7 @@ A.addFilter = el => {
   if (S.ui.pop?.type === 'filter') S.ui.pop.edit = v.filters.length - 1;
   else {
     const r = el.getBoundingClientRect();
+    if (!S.ui.pop) S.ui.popOpener = focusKey(el);
     S.ui.pop = { type: 'filter', key: el.dataset.key, x: r.left, y: r.bottom + 4, edit: v.filters.length - 1 };
   }
   save();
@@ -2346,9 +2348,14 @@ A.openNotif = el => {
 /* search & palette */
 /* The palette shuts an open sidebar (the phone's drawer), so what held focus in it, or the popover item that opened the palette from it, is
    hidden or gone when the palette closes: focus goes back to what opened the sidebar. Not when a dialog is open over the sidebar (one of its
-   "+" buttons opens it): the palette is over the dialog, the sidebar under it stays, and Esc returns to the control of the dialog that had focus. */
+   "+" buttons opens it): the palette is over the dialog, the sidebar under it stays, and Esc returns to the control of the dialog that had focus.
+   The button that opened the sidebar may not be shown (More is the phone's: from 641 px the sidebar is opened from the top bar's): that one it is. */
 const drawerOnTop = () => S.ui.mnav && !S.ui.modals.length;
-const palOpenerKey = () => (drawerOnTop() ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement));
+const palOpenerKey = () => {
+  if (!drawerOnTop()) return openerKey(document.activeElement);
+  const b = S.ui.mnavOpener && $(S.ui.mnavOpener);
+  return b && b.offsetParent !== null ? S.ui.mnavOpener : '#mnav-btn';
+};
 A.openPalette = () => {
   S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'cmd', scope: 'all', hl: 0 };

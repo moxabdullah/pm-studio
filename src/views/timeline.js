@@ -94,7 +94,7 @@ export function timelineHtml(ts, key, p) {
       const w = Math.max(dw, (diffD(parse(t.due), parse(s)) + 1) * dw);
       const c = g === 'status' || g === 'none' ? pColor(pp) : `var(--st-${typeof t.status === 'string' && t.status in ST ? t.status : 'backlog'})`;
       const inside = w > 110;
-      return `<div class="tl-rowbg" style="top:${y}px"></div><div class="bar ${t.status === 'done' ? 'done' : ''}" style="--c:${c};left:${x}px;top:${y + 7}px;width:${w}px" data-bar="${esc(t.id)}" data-dw="${dw}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task" title="${esc(t.title)} · ${fmtDate(s)} → ${fmtDate(t.due)}"><span class="pf" style="width:${+taskProg(t) || 0}%"></span>${inside ? `${av(t.assignee, 'sm', false)}<span class="trunc">${esc(t.title)}</span>` : ''}</div>${inside ? '' : `<div class="bar-lbl" style="left:${x + w + 8}px;top:${y + 10}px">${esc(t.title)}</div>`}`;
+      return `<div class="tl-rowbg" style="top:${y}px"></div><div class="bar ${t.status === 'done' ? 'done' : ''}" style="--c:${c};left:${x}px;top:${y + 7}px;width:${w}px" data-bar="${esc(t.id)}" data-dw="${dw}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task" title="${esc(t.title)} · ${fmtDate(s)} → ${fmtDate(t.due)}"><span class="pf" style="width:${+taskProg(t) || 0}%"></span>${inside ? `${av(t.assignee, 'sm', false, false)}<span class="trunc">${esc(t.title)}</span>` : ''}</div>${inside ? '' : `<div class="bar-lbl" style="left:${x + w + 8}px;top:${y + 10}px">${esc(t.title)}</div>`}`;
     })
     .join('');
   // dependency paths

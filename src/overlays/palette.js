@@ -2,7 +2,7 @@
 import { MOD, clamp, esc } from '../core/utils.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { D, S, allTasks, pColor, proj, save, stageOf, task } from '../core/store.js';
-import { FT, av, hl, stIcon } from '../ui/helpers.js';
+import { FT, av, hl, nameOf, stIcon } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { go, render, sideIsDrawer } from '../shell/render.js';
 import { sortTasks } from '../shell/view-engine.js';
@@ -153,9 +153,12 @@ export function paletteItems() {
   if (sc === 'all' || sc === 'comments')
     groups.push({
       name: 'Comments',
-      items: r.comments
-        .slice(0, lim)
-        .map(c => ({ html: av(c.by, 'sm', false), name: c.text, sub: 'on ' + task(c.task).title, run: () => A.openTask({ dataset: { id: c.task } }) })),
+      items: r.comments.slice(0, lim).map(c => ({
+        html: av(c.by, 'sm', false),
+        name: c.text,
+        sub: `${nameOf(c.by)} on ${task(c.task).title}`,
+        run: () => A.openTask({ dataset: { id: c.task } }),
+      })),
     });
   const out = groups.filter(g => g.items.length);
   out.push({

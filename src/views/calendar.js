@@ -25,7 +25,7 @@ export function calendarHtml(ts, opt = {}) {
     }
     const t = it.t;
     const p = proj(t.project);
-    return `<button class="cev ${t.status === 'done' ? 'done' : ''}${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${esc(t.id)}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task" title="${esc(t.title)}">${t.status === 'done' ? stIcon('done', 11) : prIcon(t.priority, 11)}<span class="trunc">${esc(t.title)}</span>${av(t.assignee, '', false)}</button>`;
+    return `<button class="cev ${t.status === 'done' ? 'done' : ''}${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${esc(t.id)}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task" title="${esc(t.title)}">${t.status === 'done' ? stIcon('done', 11) : prIcon(t.priority, 11)}<span class="trunc">${esc(t.title)}</span>${av(t.assignee, '', false, false)}</button>`;
   };
   let label, body;
   if (mode === 'month') {
@@ -67,7 +67,7 @@ export function calendarHtml(ts, opt = {}) {
               }
               const t = it.t;
               const p = proj(t.project);
-              return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${esc(t.id)}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p?.name)}</span>${av(t.assignee, 'sm', false)}</span></button>`;
+              return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${esc(t.id)}" data-a="openTask" data-id="${esc(t.id)}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p?.name)}</span>${av(t.assignee, 'sm', false, false)}</span></button>`;
             })
             .join('') || '<span class="faint" style="font-size:12px;padding:4px">No tasks</span>'
         }</div></div>`;

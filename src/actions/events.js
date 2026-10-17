@@ -3,8 +3,9 @@
    ===================================================================== */
 import { $, $$ } from '../core/utils.js';
 import { S } from '../core/store.js';
-import { render, sideCollapsed } from '../shell/render.js';
-import { remoteRender } from '../shell/remote-render.js';
+import { focusKey, render, sideCollapsed } from '../shell/render.js';
+import { remoteRenderNow } from '../shell/remote-render.js';
+import { activate } from '../overlays/modals.js';
 import { A, BLUR, DBL, IN } from './actions.js';
 
 document.addEventListener(
@@ -17,6 +18,8 @@ document.addEventListener(
     }
     const el = e.target.closest('[data-a]');
     const inPop = e.target.closest('[data-pop-root]');
+    const opener = S.ui.popOpener;
+    let dropped = false; // this click closes the popover
     if (S.ui.pop && !inPop) {
       const trig = el && (el.dataset.a === 'pop' || el.dataset.a === 'ctxBtn' || el.dataset.a === 'addFilter');
       if (!trig) {
@@ -25,6 +28,8 @@ document.addEventListener(
           render();
           return;
         }
+        dropped = true;
+        S.ui.popOpener = null; // the control clicked is not of the popover: nothing it opens may take the popover's opener for its own
       }
     }
     if (S.ui.mention && !e.target.closest('.cbox') && !(el && el.dataset.a === 'pickMention')) {
@@ -36,7 +41,14 @@ document.addEventListener(
     const fn = A[el.dataset.a];
     if (fn) {
       e.stopPropagation();
-      fn(el, e);
+      activate(el, () => fn(el, e));
+    }
+    // An action that draws nothing (a click on a dialog's blank area) leaves the popover that was dropped above on screen, with the Tab trap
+    // and the popover's keys off: it is drawn away, the focus going back to what opened it.
+    if (dropped && render._ov?.pop && !S.ui.pop) {
+      S.ui.popOpener = opener;
+      render();
+      S.ui.popOpener = null;
     }
   },
   false,
@@ -49,6 +61,7 @@ document.addEventListener('contextmenu', e => {
   const el = e.target.closest('[data-ctx]');
   if (!el || e.target.closest('input,textarea,[contenteditable]')) return;
   e.preventDefault();
+  S.ui.popOpener = focusKey(el);
   S.ui.pop = { type: 'ctx', ctx: el.dataset.ctx, id: el.dataset.id, key: el.dataset.key, vid: el.dataset.vid, x: e.clientX, y: e.clientY, top: e.clientY };
   if (el.dataset.ctx === 'column') S.ui.pop.key = el.dataset.key;
   render();
@@ -83,28 +96,33 @@ document.addEventListener('mouseover', e => {
   $$('.pi.hl').forEach(x => x.classList.remove('hl'));
   el.classList.add('hl');
 });
-addEventListener('resize', () => {
+// A popover was placed for the width it opened at.
+const closePopOnResize = () => {
   if (S.ui.pop) {
     S.ui.pop = null;
     render();
   }
-});
+};
+addEventListener('resize', closePopOnResize);
 try {
   // Across 900 px the sidebar turns from a column of the page into a drawer or back. Only two things in the markup follow it, the collapsed
   // rail (a column's only, sideCollapsed()) and the open drawer (its scrim and the inert page); the rest is CSS, which has switched already
-  // when this fires. Those two classes are put right here, at once: the redraw below waits for a pressed pointer, and the shell must not be
-  // the wrong one meanwhile (the collapsed grid in a window too narrow for it, or a drawer shown that S.ui.mnav says is shut, with nothing
-  // inert and Esc doing nothing). The page is then drawn again only for what is left (the rail's tooltips and toggle buttons, the drawer's
-  // inert page and scrim), and not with render(): a window drag, a rotation or a zoom near 900 px crosses it again and again, and render()
-  // would empty a field the user is typing in and let its blur save what is half typed. remoteRender() keeps both, at the price of drawing
-  // a moment later.
-  // Focus is moved here, at once, before that. Widened with the drawer open, it is shut (not through closeMnav, as the sidebar's own item is
+  // when this fires. The page is drawn again for them at once, in this task (remoteRenderNow()), so the class and the markup change together
+  // and no frame shows one without the other. It is not drawn with render(): a window drag, a rotation or a zoom near 900 px crosses it again
+  // and again, and render() would empty a field the user is typing in and let its blur save what is half typed. remoteRender() keeps both.
+  // But it waits for a pressed pointer, a drag or a composition, as it always does. The shell must not be the wrong one meanwhile (the
+  // collapsed grid in a window too narrow for it, or a drawer shown that S.ui.mnav says is shut, with nothing inert and Esc doing nothing),
+  // so the two classes are put right here as well; the redraw then only makes them again, with the markup that follows them.
+  // The resize event comes before this one in some browsers and after it in others: the popover it shuts is shut here as well, before the
+  // focus is read, so the order does not matter.
+  // Focus is moved here, at once, before the redraw. Widened with the drawer open, it is shut (not through closeMnav, as the sidebar's own item is
   // shown and keeps its focus); the close button has no copy on the desktop, and the page is inert until it is drawn again, so that is lifted
-  // for the focus. Narrowed, all of the sidebar is hidden, and the key of the item that had focus may match a control of the page (a link to
-  // Projects) that a later render() would give the focus to. Focus on <body> (a popover's opener in the sidebar, closed by the resize that
+  // for the focus. Narrowed, all of the sidebar is hidden, and the key of the item that had focus is the bottom nav's too (they share keys),
+  // whose visible copy a later render() would give the focus to. Focus on <body> (a popover's opener in the sidebar, closed by the resize that
   // came first) goes to the page too, at its top, unless a dialog, the command menu or a full task panel is open: focus is on <body> there
   // because the user clicked something in it that cannot hold focus (a heading), and it is not the page's to take.
   matchMedia('(max-width: 900px)').addEventListener('change', e => {
+    closePopOnResize();
     const a = document.activeElement;
     const lost = !a || a === document.body;
     const inSide = !!$('.side')?.contains(a);
@@ -118,7 +136,7 @@ try {
     }
     const over = S.ui.modals.length || S.ui.palette || (S.ui.drawer && S.ui.drawerFull);
     if ((lost && !over) || (inSide && (e.matches || a.offsetParent === null))) $('#main-content')?.focus({ preventScroll: true });
-    if (S.ui.collapsed || shut) remoteRender();
+    if (S.ui.collapsed || shut) remoteRenderNow();
   });
 } catch {
   /* not supported here; safe to skip */

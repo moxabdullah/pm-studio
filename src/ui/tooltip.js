@@ -140,9 +140,10 @@ export function initRailTip() {
   document.addEventListener('focusout', () => {
     focus = null;
     // Not at once: a render that takes the focused item away (Chrome fires this on the removal) gives the focus back to the new one before it
-    // ends, and the tip must not be hidden and shown again, nor the dismissal forgotten, in between. If no focus came back, it was left.
+    // ends, and the tip must not be hidden and shown again, nor the dismissal forgotten, in between. If no focus came back, it was left, unless
+    // it went to another window: the item keeps it for when the window is back, and that is not a new focus (Esc's dismissal stays).
     queueMicrotask(() => {
-      if (!focus) fkey = null;
+      if (!focus && document.hasFocus()) fkey = null;
       syncRailTip();
     });
   });

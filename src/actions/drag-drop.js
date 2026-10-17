@@ -83,12 +83,12 @@ document.addEventListener('dragover', e => {
     const dz = e.target.closest?.(DROP_TARGETS);
     if (dz) {
       e.preventDefault();
-      $$('.dropzone.drop-over').forEach(x => x !== dz && x.classList.remove('drop-over'));
+      $$('.drop-over').forEach(x => x !== dz && x.classList.remove('drop-over'));
       dz.classList?.add('drop-over');
     } else {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'none';
-      $$('.dropzone.drop-over').forEach(x => x.classList.remove('drop-over'));
+      $$('.drop-over').forEach(x => x.classList.remove('drop-over'));
     }
     return;
   }
@@ -166,7 +166,7 @@ document.addEventListener('dragover', e => {
   }
 });
 document.addEventListener('dragleave', e => {
-  const dz = e.target.closest?.('.dropzone');
+  const dz = e.target.closest?.(DROP_TARGETS);
   if (dz && !dz.contains(e.relatedTarget)) dz.classList.remove('drop-over');
 });
 document.addEventListener('drop', e => {

@@ -23,9 +23,42 @@ import { FT, av, filePrev, lblPills, nameOf, prPill, stPill } from '../ui/helper
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
 
+/* The control the user is activating, from its click to the end of the action it runs, an await in it included: a dialog that action opens after
+   one (a flush, a file's URL) is asked for by this control, and window.event is gone by then. It is not kept past that: a dialog nobody asked for
+   (a timer, the sync engine) has no control, and takes the focus as it is. The popover it was in is read now, as the action may close it. */
+let activated = null;
+export function activate(el, run) {
+  const a = document.activeElement;
+  const viaPop = !!render._ov?.pop && !!el.closest('[data-pop-root]');
+  const rec = { el, viaPop, key: viaPop ? S.ui.popOpener : focusKey(el.contains(a) ? a : el) };
+  const done = () => {
+    if (activated === rec) activated = null;
+  };
+  let out;
+  activated = rec;
+  try {
+    out = run();
+  } finally {
+    if (typeof out?.finally === 'function') out.finally(done);
+    else done();
+  }
+  return out;
+}
+// A key or a press after it is the user acting elsewhere (a Tab away, another control): a dialog the action still opens takes the focus as it is.
+for (const type of ['keydown', 'pointerdown']) document.addEventListener(type, () => (activated = null), true);
 export function openModal(m) {
   S.ui.modalOpeners = S.ui.modalOpeners || [];
-  S.ui.modalOpeners[S.ui.modals.length] = S.ui.popOpener && S.ui.pop ? S.ui.popOpener : focusKey(document.activeElement);
+  // What opens a dialog gets the focus back when it closes. When it is asked for from a popover's control, that is what opened the popover: the
+  // popover is closed by the dialog, and the caller has usually cleared S.ui.pop already (or a sync has), so what was drawn is read (render._ov).
+  // The control is the one clicked, not the focused element: Safari does not focus a button it was clicked on, and then focus may be on a
+  // focusable ancestor (#main-content). It is the focused element when that is the control or inside it. A control that is gone (the command
+  // menu's item, when the menu has closed and drawn the page first) cannot be returned to: the focus is where the render put it, then.
+  const rec = activated;
+  const target = window.event?.target;
+  const viaPop = render._ov?.pop && !!target?.closest?.('[data-pop-root]');
+  S.ui.modalOpeners[S.ui.modals.length] =
+    (rec && (rec.viaPop || rec.el.isConnected) && rec.key) ||
+    (viaPop ? S.ui.popOpener : focusKey(document.activeElement) || focusKey(target?.closest?.('[data-a]')));
   S.ui.modals.push(m);
   S.ui.pop = null;
   render();

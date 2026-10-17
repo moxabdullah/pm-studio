@@ -24,22 +24,28 @@ export const FORMER = 'Former member';
 export const nameOf = id => mem(id)?.name || FORMER;
 
 /* `tip` shows the name on hover. A string is what the empty avatar says instead of "Unassigned" (pass FORMER where a person wrote something).
-   `hidden` takes the avatar out of the accessibility tree, for where the name is printed next to it. */
-export function av(id, cls = '', tip = true, hidden = false) {
+   An avatar is an image named for the person, unless `hidden`: that takes it out of the accessibility tree, for where the name is printed next
+   to it. Without a tooltip an avatar is taken to have its name next to it (hidden); pass `hidden` (false) where it stands alone without one,
+   or true where it has a tooltip and the name next to it. An empty name has nothing to say: such an avatar is hidden too. */
+export function av(id, cls = '', tip = true, hidden = !tip) {
   const m = mem(id);
-  const hid = hidden ? ' aria-hidden="true"' : '';
-  if (!m) return `<span class="av empty ${cls}" ${tip ? `data-tip="${esc(typeof tip === 'string' ? tip : 'Unassigned')}"` : ''}${hid}>${ic('user', 11)}</span>`;
+  const a11y = label => (hidden || !String(label).trim() ? ' aria-hidden="true"' : ` role="img" aria-label="${esc(label)}"`);
+  if (!m) {
+    const none = typeof tip === 'string' ? tip : 'Unassigned';
+    return `<span class="av empty ${cls}" ${tip ? `data-tip="${esc(none)}"` : ''}${a11y(none)}>${ic('user', 11)}</span>`;
+  }
   const name = String(m.name ?? '');
   const ini = name
     .split(' ')
     .map(x => x[0])
     .join('')
     .slice(0, 2);
-  return `<span class="av ${cls}" style="--c:${safeColor(m.c)}" ${tip ? `data-tip="${esc(name)}"` : ''} aria-label="${esc(name)}"${hid}>${esc(ini)}</span>`;
+  return `<span class="av ${cls}" style="--c:${safeColor(m.c)}" ${tip ? `data-tip="${esc(name)}"` : ''}${a11y(name)}>${esc(ini)}</span>`;
 }
-export function avStack(ids, max = 4, cls = 'sm') {
+// `hidden` (true) inside a control whose label names the people already: the avatars are not read one by one as well.
+export function avStack(ids, max = 4, cls = 'sm', hidden = false) {
   const v = ids.slice(0, max);
-  return `<span class="avs">${v.map(i => av(i, cls)).join('')}${ids.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)">+${ids.length - max}</span>` : ''}</span>`;
+  return `<span class="avs">${v.map(i => av(i, cls, true, hidden)).join('')}${ids.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)"${hidden ? ' aria-hidden="true"' : ''}>+${ids.length - max}</span>` : ''}</span>`;
 }
 export function stIcon(st, s = 14) {
   if (!(typeof st === 'string' && st in ST)) st = 'backlog'; // an unknown status is stored data; draw the neutral one
