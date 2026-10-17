@@ -19,6 +19,10 @@ export function clearDropMarks() {
   $$('.dragging').forEach(x => x.classList.remove('dragging'));
 }
 document.addEventListener('dragstart', e => {
+  // A drop whose render detaches the dragged element sends its dragend to the detached node, never to the document, so the flag can still be
+  // set from the drag before. Every drag starts clear of it, the ones that are not the app's own (text, a link) included: they return below
+  // and their dragend would draw once more for nothing.
+  pickerClosed = false;
   const card = e.target.closest?.('[data-drag-card]'),
     row = e.target.closest?.('[data-drag-row]'),
     cal = e.target.closest?.('[data-drag-cal]'),
