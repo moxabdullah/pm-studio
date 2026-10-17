@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, $$ } from '../core/utils.js';
 import { S } from '../core/store.js';
-import { render } from '../shell/render.js';
+import { render, sideCollapsed } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { A, BLUR, DBL, IN } from './actions.js';
 
@@ -92,9 +92,12 @@ addEventListener('resize', () => {
 try {
   // Across 900 px the sidebar turns from a column of the page into a drawer or back. Only two things in the markup follow it, the collapsed
   // rail (a column's only, sideCollapsed()) and the open drawer (its scrim and the inert page); the rest is CSS, which has switched already
-  // when this fires. So the page is drawn again only for those, and not with render(): a window drag, a rotation or a zoom near 900 px
-  // crosses it again and again, and render() would empty a field the user is typing in and let its blur save what is half typed. remoteRender()
-  // keeps both, at the price of drawing a moment later.
+  // when this fires. Those two classes are put right here, at once: the redraw below waits for a pressed pointer, and the shell must not be
+  // the wrong one meanwhile (the collapsed grid in a window too narrow for it, or a drawer shown that S.ui.mnav says is shut, with nothing
+  // inert and Esc doing nothing). The page is then drawn again only for what is left (the rail's tooltips and toggle buttons, the drawer's
+  // inert page and scrim), and not with render(): a window drag, a rotation or a zoom near 900 px crosses it again and again, and render()
+  // would empty a field the user is typing in and let its blur save what is half typed. remoteRender() keeps both, at the price of drawing
+  // a moment later.
   // Focus is moved here, at once, before that. Widened with the drawer open, it is shut (not through closeMnav, as the sidebar's own item is
   // shown and keeps its focus); the close button has no copy on the desktop, and the page is inert until it is drawn again, so that is lifted
   // for the focus. Narrowed, all of the sidebar is hidden, and the key of the item that had focus may match a control of the page (a link to
@@ -105,9 +108,12 @@ try {
     const lost = !a || a === document.body;
     const inSide = !!$('.side')?.contains(a);
     const shut = !e.matches && S.ui.mnav;
+    $('.shell')?.classList.toggle('collapsed', sideCollapsed());
     if (shut) {
       S.ui.mnav = false;
       $$('[inert]').forEach(x => x.removeAttribute('inert'));
+      $('.shell')?.classList.remove('mnav');
+      $('.side-scrim')?.remove();
     }
     if (lost || (inSide && (e.matches || a.offsetParent === null))) $('#main-content')?.focus({ preventScroll: true });
     if (S.ui.collapsed || shut) remoteRender();

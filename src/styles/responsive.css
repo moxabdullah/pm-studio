@@ -14,7 +14,9 @@
   }
 }
 @media (max-width: 900px) {
-  .shell {
+  /* The drawer is not a column, collapsed or not: a stale "collapsed" (the page is drawn again a moment after a crossing) must not keep its grid. */
+  .shell,
+  .shell.collapsed {
     grid-template-columns: minmax(0, 1fr);
   }
   .side {
