@@ -1,11 +1,13 @@
 /* ============================================================
    OVERLAYS: MODAL / DRAWER / POPOVER / MENU / PALETTE / TOAST
    ============================================================ */
+/* A dialog is over the phone's open sidebar (z-index 69 and 70, responsive.css), which can open one (New project, New team), and under the
+   popovers (80). Stacked dialogs go up by two each; the inline z-index of the layer (drawer.js) is these values plus that. */
 .scrim {
   position: fixed;
   inset: 0;
   background: var(--overlay);
-  z-index: 60;
+  z-index: 71;
 }
 .scrim.enter {
   animation: fade 0.18s ease both;
@@ -13,7 +15,7 @@
 .modal-wrap {
   position: fixed;
   inset: 0;
-  z-index: 61;
+  z-index: 72;
   display: flex;
   align-items: flex-start;
   justify-content: center;

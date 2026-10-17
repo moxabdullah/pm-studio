@@ -24,7 +24,7 @@ export function renderLayer() {
     const en = u.fx.modal === i + 1;
     h += safely(
       () =>
-        `<div class="scrim${en ? ' enter' : ''}" data-a="closeModal" style="z-index:${60 + i * 2}"></div><div class="modal-wrap" data-a="closeModalBg" style="z-index:${61 + i * 2}">${en ? modalHtml(m).replace('class="modal ', 'class="modal enter ') : modalHtml(m)}</div>`,
+        `<div class="scrim${en ? ' enter' : ''}" data-a="closeModal" style="z-index:${71 + i * 2}"></div><div class="modal-wrap" data-a="closeModalBg" style="z-index:${72 + i * 2}">${en ? modalHtml(m).replace('class="modal ', 'class="modal enter ') : modalHtml(m)}</div>`,
     );
   });
   if (u.palette) h += safely(() => `<div class="scrim" data-a="closePalette" style="z-index:89"></div>${paletteHtml()}`);
