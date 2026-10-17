@@ -20,7 +20,7 @@ const pocketbaseVm = {
 };
 
 export default [
-  { ignores: ['dist/', 'server/pb_public/', 'server/pb_data/'] },
+  { ignores: ['dist/', 'server/pb_public/', 'server/pb_data/', 'qa/out/'] },
   js.configs.recommended,
   {
     files: ['**/*.js'],
@@ -29,6 +29,15 @@ export default [
   {
     files: ['vite.config.js', 'eslint.config.js', 'scripts/**/*.js'],
     languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // QA kits run under Node and hand code to the browser (page.evaluate), so both sets of globals apply.
+    files: ['qa/**/*.{js,mjs,cjs}'],
+    languageOptions: { ecmaVersion: 'latest', globals: { ...globals.node, ...globals.browser } },
+  },
+  {
+    files: ['qa/**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
   },
   {
     // Not ES modules: the JS VM runs these files as plain scripts.

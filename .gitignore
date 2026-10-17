@@ -13,3 +13,8 @@ server/pocketbase.exe
 server/.get-pocketbase.*
 server/pb_data/
 server/pb_public/
+
+# QA kit runs: screenshots, logs and throwaway PocketBase data.
+qa/out/
+# a PocketBase data folder anywhere else (a qa run with PM_OUT inside the repo): database, signing secrets, superuser hash
+pb_data/
