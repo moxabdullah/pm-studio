@@ -2345,20 +2345,22 @@ A.openNotif = el => {
 
 /* search & palette */
 /* The palette shuts an open sidebar (the phone's drawer), so what held focus in it, or the popover item that opened the palette from it, is
-   hidden or gone when the palette closes: focus goes back to what opened the sidebar. */
-const palOpenerKey = () => (S.ui.mnav ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement));
+   hidden or gone when the palette closes: focus goes back to what opened the sidebar. Not when a dialog is open over the sidebar (one of its
+   "+" buttons opens it): the palette is over the dialog, the sidebar under it stays, and Esc returns to the control of the dialog that had focus. */
+const drawerOnTop = () => S.ui.mnav && !S.ui.modals.length;
+const palOpenerKey = () => (drawerOnTop() ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement));
 A.openPalette = () => {
   S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'cmd', scope: 'all', hl: 0 };
   S.ui.pop = null;
-  S.ui.mnav = false;
+  if (drawerOnTop()) S.ui.mnav = false;
   render();
 };
 A.openSearch = () => {
   S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'search', scope: 'all', hl: 0 };
   S.ui.pop = null;
-  S.ui.mnav = false;
+  if (drawerOnTop()) S.ui.mnav = false;
   render();
 };
 A.closePalette = () => {
