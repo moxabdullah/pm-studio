@@ -25,20 +25,15 @@
     width: 280px;
     z-index: 70;
     transform: translateX(-100%);
-    /* Off the screen is also out of the Tab order and the reading order: hidden, but only once the slide-out is over (the delay). */
+    /* Off the screen is also out of the Tab order and the reading order. Every change of mnav draws the whole shell again (render() replaces
+       #app), so the sidebar is drawn open or shut at once, where it is: it does not slide, and nothing is left to wait for with a delayed hide. */
     visibility: hidden;
-    transition:
-      transform 0.22s var(--ease),
-      visibility 0s linear 0.22s;
+    transition: transform 0.22s var(--ease);
     box-shadow: var(--shadow-pop);
   }
-  /* Open, it is visible at once (no delay), so it is there for the slide-in. */
   .shell.mnav .side {
     transform: none;
     visibility: visible;
-    transition:
-      transform 0.22s var(--ease),
-      visibility 0s;
   }
   /* First in the sidebar for the focus order, shown at its end for the eye (the workspace menu takes the room). */
   .side .side-close {

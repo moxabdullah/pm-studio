@@ -82,10 +82,10 @@ export function go(route, params = {}, opt = {}) {
   S.ui.loading = false;
   if (!same) fxSet(opt.tab ? { tab: true, tabs: true } : { route: true, tabs: true });
   render();
-  // The drawer that was open is shut: a link of it that held focus is hidden now (or still sliding out, where Tab would start in its
-  // list), so focus goes to the page. That the link had it is read before the render: its key can match a visible control of the page (the
-  // bottom nav's Projects), which render() gives the focus to instead. Not asked of a sidebar that is a column: there the link keeps
-  // focus, as it should.
+  // The drawer that was open is shut: a link of it that held focus is hidden now, which cannot hold focus, so it is lost, and the next Tab
+  // would start where the link was, in the sidebar's list. Focus goes to the page. That the link had it is read before the render: its key
+  // can match a visible control of the page (the bottom nav's Projects), which render() gives the focus to instead. Not asked of a sidebar
+  // that is a column: there the link keeps focus, as it should.
   const a = document.activeElement;
   if (drawer && (inSide || !a || a === document.body)) $('#main-content')?.focus({ preventScroll: true });
   const c = $('.content');
