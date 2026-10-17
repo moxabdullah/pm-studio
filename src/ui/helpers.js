@@ -23,17 +23,19 @@ export function safely(fn, fallback = '') {
 export const FORMER = 'Former member';
 export const nameOf = id => mem(id)?.name || FORMER;
 
-/* `tip` shows the name on hover. A string is what the empty avatar says instead of "Unassigned" (pass FORMER where a person wrote something). */
-export function av(id, cls = '', tip = true) {
+/* `tip` shows the name on hover. A string is what the empty avatar says instead of "Unassigned" (pass FORMER where a person wrote something).
+   `hidden` takes the avatar out of the accessibility tree, for where the name is printed next to it. */
+export function av(id, cls = '', tip = true, hidden = false) {
   const m = mem(id);
-  if (!m) return `<span class="av empty ${cls}" ${tip ? `data-tip="${esc(typeof tip === 'string' ? tip : 'Unassigned')}"` : ''}>${ic('user', 11)}</span>`;
+  const hid = hidden ? ' aria-hidden="true"' : '';
+  if (!m) return `<span class="av empty ${cls}" ${tip ? `data-tip="${esc(typeof tip === 'string' ? tip : 'Unassigned')}"` : ''}${hid}>${ic('user', 11)}</span>`;
   const name = String(m.name ?? '');
   const ini = name
     .split(' ')
     .map(x => x[0])
     .join('')
     .slice(0, 2);
-  return `<span class="av ${cls}" style="--c:${safeColor(m.c)}" ${tip ? `data-tip="${esc(name)}"` : ''} aria-label="${esc(name)}">${esc(ini)}</span>`;
+  return `<span class="av ${cls}" style="--c:${safeColor(m.c)}" ${tip ? `data-tip="${esc(name)}"` : ''} aria-label="${esc(name)}"${hid}>${esc(ini)}</span>`;
 }
 export function avStack(ids, max = 4, cls = 'sm') {
   const v = ids.slice(0, max);

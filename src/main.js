@@ -65,6 +65,7 @@ import { openLink } from './actions/links.js';
 import { ROUTE_NAMES, render, go } from './shell/render.js';
 import { remoteRender } from './shell/remote-render.js';
 import { toast } from './ui/toast.js';
+import { initRailTip } from './ui/tooltip.js';
 
 /* Boot. The app's data comes from the server, so what happens first depends on whether there is a stored session:
    none -> the sign-in page; one -> the shell with skeletons while the session is refreshed and the data loads, then the page. */
@@ -77,6 +78,7 @@ import { toast } from './ui/toast.js';
     l.setAttribute('aria-live', 'polite');
     document.body.appendChild(l);
   }
+  initRailTip();
   sync.bindSync({ render: remoteRender, toast, loggedOut: showLogin });
   if (!pb.authStore.isValid) {
     S.ui.auth = 'login';
