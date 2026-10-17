@@ -132,6 +132,7 @@ function templatePicker(f) {
 export function projectModal(m, H) {
   const f = S.ui.pform;
   const err = S.ui.errors.pname;
+  const dueErr = S.ui.errors.pfields?.due; // (the Target date refused as half typed or not a date; actions.js draws the same markup in place)
   // data-keep: the body scrolls (the dialog is capped at 80vh), and picking a template, an icon or a colour re-renders it
   return `${H(m.edit ? 'Project settings' : 'New project', m.edit ? '' : 'Projects hold tasks, files, and conversations for one body of work.')}
   <form class="modal-b" data-submit="submitProject" data-keep="modal-project:${m.edit ? esc(m.edit) : 'new'}">
@@ -151,7 +152,7 @@ export function projectModal(m, H) {
         )
         .join('')}</div></div>
     </div>
-    <div class="row" style="gap:12px;flex-wrap:wrap">
+    <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start">
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-team">Team</label><select class="select" id="p-team" data-in="pform" data-f="team">${teamsList()
         .map(t => `<option value="${esc(t.id)}" ${f.team === t.id ? 'selected' : ''}>${esc(t.name)}</option>`)
         .join('')}</select></div>
@@ -159,7 +160,7 @@ export function projectModal(m, H) {
         .members.filter(x => x.status === 'active')
         .map(x => `<option value="${esc(x.id)}" ${f.lead === x.id ? 'selected' : ''}>${esc(x.name)}</option>`)
         .join('')}</select></div>
-      <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}"></div>
+      <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">Target date</label><input type="date" class="input ${dueErr ? 'is-error' : ''}" id="p-due" data-in="pform" data-f="due" value="${esc(f.due || '')}" aria-invalid="${!!dueErr}"${dueErr ? ' aria-describedby="p-due-err"' : ''}>${dueErr ? fieldErrHtml('due', dueErr) : ''}</div>
     </div>
     ${projectFields(m, f)}
     ${m.edit ? '' : stageSetPicker(f)}
@@ -167,12 +168,14 @@ export function projectModal(m, H) {
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? 'Save changes' : 'Create project'}</button></div>`;
 }
-/* The message under the input of project field `k` ('f_<id>') that refused its value; actions.js draws the same markup in place. */
+/* The message under the input of project form key `k` ('due', or 'f_<id>' for a project field) that refused its value; actions.js draws the
+   same markup in place. */
 export const fieldErrHtml = (k, msg) => `<span class="err" id="${esc('p-' + k)}-err" role="alert">${ic('circle-alert', 12)}${esc(msg)}</span>`;
 /* The workspace's project fields on the project form (Settings > Project fields), one input each in the list's order: the workspace is the
    current one for a new project and the project's own when editing, since the project may be open after the workspace was switched. The
    values are the strings typed, under f_<field id> in S.ui.pform (actions.js turns them into the stored forms on Save); what a field
-   refused is under S.ui.errors.pfields. A workspace with no fields shows no group. */
+   refused is under S.ui.errors.pfields, by the same key (the Target date's, 'due', is drawn by projectModal). A workspace with no
+   fields shows no group. */
 function projectFields(m, f) {
   const list = fieldsOf(m.edit ? proj(m.edit)?.workspace : D().ws.id);
   if (!list.length) return '';

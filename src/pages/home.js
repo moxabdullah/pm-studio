@@ -70,7 +70,7 @@ export function pageHome() {
             .filter(canSee)
             .map(p => {
               const pr = progressOf(p.id);
-              return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="overview"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></span></td><td style="text-align:left">${pStatuses(p)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px;width:30px">${pr}%</span></span></td><td style="text-align:left" class="num muted">${fmtDate(p.due)}</td><td style="text-align:right;padding-right:14px">${avStack(p.members, 3)}</td></tr>`;
+              return `<tr style="cursor:pointer" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="overview"><td style="padding-left:14px"><span class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></span></td><td style="text-align:left">${pStatuses(p)}</td><td><span class="row">${progBar(pr, progClass(p))}<span class="num faint" style="font-size:11.5px;width:30px">${pr}%</span></span></td><td style="text-align:left" class="num muted">${p.due ? fmtDate(p.due) : '<span class="faint"><span class="sr">No target date</span><span aria-hidden="true">—</span></span>'}</td><td style="text-align:right;padding-right:14px">${avStack(p.members, 3)}</td></tr>`;
             })
             .join('')}
           </tbody></table></div>

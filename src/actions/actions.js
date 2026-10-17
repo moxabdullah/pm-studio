@@ -1690,6 +1690,7 @@ A.newProject = el => {
   // Opened with a template chosen: the list may be longer than what it shows, so bring the chosen one into view (after the dialog has focused its first field)
   if (S.ui.pform.tmpl !== 'blank') setTimeout(() => $('.tmpls .opt.on')?.scrollIntoView({ block: 'nearest' }), 40);
 };
+const PROJECT_KEYS = ['name', 'desc', 'icon', 'color', 'team', 'lead', 'due']; // the project's own values on the form, besides its fields
 A.editProject = el => {
   const p = proj(el.dataset.id);
   S.ui.pop = null;
@@ -1697,16 +1698,20 @@ A.editProject = el => {
   // the values of the project's fields, as the strings the inputs hold (the project's own workspace's fields, not the current one's)
   for (const fl of fieldsOf(p.workspace)) if (p['f_' + fl.id] !== undefined) S.ui.pform['f_' + fl.id] = String(p['f_' + fl.id]);
   S.ui.errors = {};
-  // `snap`: each field's string as the form opened with it, and `touched`: the field inputs the person has changed since. Saving writes a
-  // field only if it counts as changed (touched, or holding a value that differs from `snap`) and differs from `snap` (fieldValues), so a
-  // value that changed elsewhere meanwhile, or one its input cannot show, is left as it is. `bad`: see projectDialog. They sit on the
-  // dialog, not in S.ui.pform, which only holds what the inputs write.
+  // `snap`: each input's string as the form opened with it (the project's own keys and its fields), and `touched`: the inputs the person
+  // has changed since (the icon and colour buttons too). Saving writes a key only if it counts as changed (touched, or a date holding a
+  // value that differs from `snap`) and differs from `snap` (submitProject, fieldValues), so a value that changed elsewhere meanwhile, or
+  // one its input cannot show, is left as it is. `bad`: see projectDialog. They sit on the dialog, not in S.ui.pform, which only holds
+  // what the inputs write.
   const snap = {};
+  for (const k of PROJECT_KEYS) snap[k] = String(S.ui.pform[k] ?? '');
   for (const fl of fieldsOf(p.workspace)) snap['f_' + fl.id] = S.ui.pform['f_' + fl.id] ?? '';
   openModal({ type: 'project', edit: p.id, snap, touched: new Set(), bad: new Set() });
 };
-/* The project dialog (the top-most one: a question can be on top of it), which keeps two sets of field keys. `touched`: inputs the
-   person changed since it opened (an edit only). `bad`: inputs last seen half typed, text a number or date input cannot read. Such an
+/* The project dialog (the top-most one: a question can be on top of it), which keeps two sets of form keys (an input's `data-f`: name,
+   desc, team, lead, due, f_<id>; the icon and colour are keys too, set by pformSet). `touched`: inputs the person changed since it
+   opened (an edit only). `bad`: inputs last seen half typed, text a number or date input cannot read (only the Target date and the
+   number and date fields can be). Such an
    input has the value '', so the form's state cannot tell it from a box the person emptied, and any render that rebuilds the box
    (a live update, a name error) shows it empty: a key in `bad` stays an error until the person types a value or empties the box
    themselves, so the half-typed text is never saved as a clear. `halfTyped` marks the very input that was seen so: a date input that
@@ -1719,14 +1724,12 @@ IN.pform = el => {
   const k = el.dataset.f;
   S.ui.pform[k] = el.value;
   const half = !!el.validity?.badInput;
-  if (k.startsWith('f_')) {
-    const m = projectDialog();
-    m?.touched?.add(k);
-    if (half) {
-      m?.bad?.add(k);
-      halfTyped.add(el);
-    } else m?.bad?.delete(k);
-  }
+  const m = projectDialog();
+  m?.touched?.add(k);
+  if (half) {
+    m?.bad?.add(k);
+    halfTyped.add(el);
+  } else m?.bad?.delete(k);
   if (k === 'name' && S.ui.errors.pname && el.value.trim()) {
     S.ui.errors.pname = null;
     render();
@@ -1758,6 +1761,7 @@ A.pformSet = el => {
     f[el.dataset.f] = el.dataset.v;
     if (el.dataset.f === 'icon') f.iconByHand = true;
     if (el.dataset.f === 'color') f.colorByHand = true;
+    projectDialog()?.touched?.add(el.dataset.f); // (these two buttons are no `data-in` input; the template is not saved with a project)
   }
   render();
 };
@@ -1841,6 +1845,7 @@ export function createProject(f, tmplId) {
   );
   return p;
 }
+const TEXT = { type: 'text' }; // (for differs(): the project's own values are compared as trimmed text)
 /* Whether a field's text in the form differs from the one it started with: numbers by value (5 and 5.0 are the same number), anything
    else as trimmed text. */
 const differs = (fl, raw, snap) => {
@@ -1848,6 +1853,21 @@ const differs = (fl, raw, snap) => {
   const b = String(snap ?? '').trim();
   return fl.type === 'number' && a && b ? Number(a) !== Number(b) : a !== b;
 };
+/* Whether the input of form key `k` (`el`, null when the form does not show it) is refused for being half typed, text a number or date
+   input cannot read (see projectDialog): it is half typed now, or `k` is in `bad` and `el` is not the input that was (it was rebuilt
+   empty by a render). Records the verdict in `bad` and `halfTyped`, and a key that is not refused leaves `bad`. Shared by the
+   project fields and the Target date. */
+function refusedHalfTyped(k, el, m) {
+  const half = !!el?.validity?.badInput; // typed in a number or date input, but not a number or a date
+  // (in `bad` but not half typed now: refused too, unless it is the input that was, which the person has emptied since)
+  if (half || (m.bad?.has(k) && !(el && halfTyped.has(el)))) {
+    m.bad?.add(k);
+    if (half) halfTyped.add(el);
+    return true;
+  }
+  m.bad?.delete(k);
+  return false;
+}
 /* The form's values for the fields of workspace `ws`, checked and in the forms a project stores them: { 'f_<id>': value }, where a field
    left empty has the value undefined (the project then has no such key). Read from the inputs, since a number or date that cannot be
    read (half typed) is an empty string in the form's state. A field the form did not show (added since it opened) is left out, so
@@ -1867,15 +1887,10 @@ function fieldValues(ws, f, m) {
     const el = $('#' + CSS.escape('p-' + k));
     if (!el && !(k in f)) continue;
     const raw = String((el ? el.value : f[k]) ?? '').trim();
-    const half = !!el?.validity?.badInput; // typed in a number or date input, but not a number or a date
-    // (in `bad` but not half typed now: refused too, unless it is the input that was, which the person has emptied since)
-    if (half || (m.bad?.has(k) && !(el && halfTyped.has(el)))) {
+    if (refusedHalfTyped(k, el, m)) {
       errs[k] = fl.type === 'number' ? 'Enter a number' : 'Enter a date';
-      m.bad?.add(k);
-      if (half) halfTyped.add(el);
       continue;
     }
-    m.bad?.delete(k);
     // (a date filled in with no event, which Safari may not send before a Ctrl+Enter, counts too; only a date: a text input shows some stored
     // values changed, a stored line break for one, and that must not count as the person's edit)
     if (m.edit && !(m.touched?.has(k) || (fl.type === 'date' && el && raw && differs(fl, raw, m.snap?.[k])))) continue;
@@ -1900,12 +1915,11 @@ function fieldValues(ws, f, m) {
   }
   return { vals, errs };
 }
-/* What fieldValues refused, shown in the open form without render(): that would rebuild the inputs, and a number or date that is half
-   typed would come back empty. The message, the red border and the aria attributes are those projectFields draws; the fields that
-   are not refused lose theirs. */
+/* What the Target date check and fieldValues refused, shown in the open form without render(): that would rebuild the inputs, and a
+   number or date that is half typed would come back empty. The message, the red border and the aria attributes are those projectFields
+   and projectModal draw; the inputs that are not refused lose theirs. */
 function showFieldErrors(ws, errs) {
-  for (const fl of fieldsOf(ws)) {
-    const k = 'f_' + fl.id;
+  for (const k of ['due', ...fieldsOf(ws).map(fl => 'f_' + fl.id)]) {
     const el = $('#' + CSS.escape('p-' + k));
     if (!el) continue;
     document.getElementById(el.id + '-err')?.remove();
@@ -1929,7 +1943,13 @@ A.submitProject = () => {
     return;
   }
   const ws = m.edit ? proj(m.edit)?.workspace : D().ws.id;
-  const { vals, errs } = fieldValues(ws, f, m);
+  // The Target date comes first in the form, so it is first in `errs` (focus and scroll go to it). Read from the input, as the fields
+  // are: half typed, the form's state holds '' for it, and a date filled in with no event is not in the state either.
+  const dueEl = $('#p-due');
+  if (dueEl) f.due = dueEl.value;
+  const dueBad = refusedHalfTyped('due', dueEl, m) || (f.due && !isDay(f.due));
+  const { vals, errs: fieldErrs } = fieldValues(ws, f, m);
+  const errs = { ...(dueBad ? { due: 'Enter a date' } : {}), ...fieldErrs };
   const bad = Object.keys(errs)[0];
   S.ui.errors.pfields = bad ? errs : null;
   if (bad) {
@@ -1940,6 +1960,9 @@ A.submitProject = () => {
     ($('#' + CSS.escape('p-' + bad + '-err')) || el)?.scrollIntoView({ block: 'nearest' });
     return;
   }
+  // Passed: a message drawn by an earlier refusal goes now, not at the next render. Clearing the segments left after a refusal fires no
+  // event, and an offline refusal of the save below keeps the form open for "Try again".
+  showFieldErrors(ws, {});
   const fresh = latest(m);
   const still = () => isTop(m) && fresh();
   // What the save applies is copied here, once validated: the form stays editable after an offline refusal, and "Try again" must not pick up what was typed since.
@@ -1948,19 +1971,23 @@ A.submitProject = () => {
   for (const [k, val] of Object.entries(vals)) if (val !== undefined) v[k] = val;
   if (m.edit) {
     const id = m.edit;
+    // Which of the project's own values this save writes, decided now and once (a "Try again" writes the same). Like the fields: only
+    // what the person changed, so a name, team, date... that someone else changed while the form was open is not overwritten by the stale
+    // input. An input is changed if it was touched and differs from `snap`. Not by value alone: a text input drops a stored line break and
+    // a textarea turns \r\n into \n, so an untouched value would count as changed, and a team the list lacks shows as the first one.
+    // The Target date also counts as changed when it holds a date that differs from `snap`, as a date field does (Safari may send no
+    // `change` before an Enter submit); emptied, it is written as ''.
+    const core = {};
+    for (const k of PROJECT_KEYS) {
+      const now = String(v[k] ?? '');
+      if (differs(TEXT, now, m.snap?.[k]) && (m.touched?.has(k) || (k === 'due' && now))) core[k] = now;
+    }
     mutate(
       () => {
         const p = proj(id); // by id: sync or Undo can replace the project while a refused edit waits for "Try again"
-        Object.assign(p, {
-          name: v.name,
-          desc: v.desc,
-          icon: v.icon,
-          color: v.color,
-          team: v.team,
-          lead: v.lead,
-          due: v.due,
-          members: [...new Set([...p.members, v.lead])],
-        });
+        Object.assign(p, core);
+        // the lead is a member; a lead left as it was is not added again (it may have left the project meanwhile)
+        if (core.lead) p.members = [...new Set([...p.members, core.lead])];
         // a field left empty has no key; only the fields the person changed are here, and the keys of fields the workspace does not have are not touched
         for (const [k, val] of Object.entries(vals)) {
           if (val === undefined) delete p[k];
@@ -2000,6 +2027,7 @@ A.dupProject = el => {
     () => {
       p = proj(id); // by id: a merge while a refused edit waits for "Try again" must not leave the copy with the values from the click
       n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
+      if (!p.due) n.due = ''; // a copy keeps the original's values, so no target date stays none (createProject gives a new project +30 days)
       tasksOf(p.id).forEach(t => createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, project: n.id, status: 'todo' }));
     },
     () => toast(`Duplicated ${p.name}`, { action: 'Open', onAction: () => go('project', { id: n.id }) }),
