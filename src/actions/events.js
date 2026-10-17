@@ -102,7 +102,8 @@ try {
   // shown and keeps its focus); the close button has no copy on the desktop, and the page is inert until it is drawn again, so that is lifted
   // for the focus. Narrowed, all of the sidebar is hidden, and the key of the item that had focus may match a control of the page (a link to
   // Projects) that a later render() would give the focus to. Focus on <body> (a popover's opener in the sidebar, closed by the resize that
-  // came first) goes to the page too, at its top.
+  // came first) goes to the page too, at its top, unless a dialog, the command menu or a full task panel is open: focus is on <body> there
+  // because the user clicked something in it that cannot hold focus (a heading), and it is not the page's to take.
   matchMedia('(max-width: 900px)').addEventListener('change', e => {
     const a = document.activeElement;
     const lost = !a || a === document.body;
@@ -115,7 +116,8 @@ try {
       $('.shell')?.classList.remove('mnav');
       $('.side-scrim')?.remove();
     }
-    if (lost || (inSide && (e.matches || a.offsetParent === null))) $('#main-content')?.focus({ preventScroll: true });
+    const over = S.ui.modals.length || S.ui.palette || (S.ui.drawer && S.ui.drawerFull);
+    if ((lost && !over) || (inSide && (e.matches || a.offsetParent === null))) $('#main-content')?.focus({ preventScroll: true });
     if (S.ui.collapsed || shut) remoteRender();
   });
 } catch {
