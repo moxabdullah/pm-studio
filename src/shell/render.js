@@ -60,6 +60,9 @@ export const ROUTE_ICONS = {
 
 /* At this width and below the sidebar is a drawer from the screen's edge, shut or open (responsive.css), not a column of the page. */
 export const sideIsDrawer = () => matchMedia('(max-width: 900px)').matches;
+/* The collapsed sidebar (S.ui.collapsed, a setting that is kept) is the narrow icon-only rail of the desktop. The drawer is never that rail: it has
+   no room to save and its items would have no names. So the setting is drawn only where the sidebar is a column. */
+export const sideCollapsed = () => S.ui.collapsed && !sideIsDrawer();
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
   if (!opt.back) S.ui.history.push({ route: S.ui.route, params: S.ui.params });

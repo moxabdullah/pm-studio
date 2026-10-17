@@ -1,9 +1,9 @@
 /* =====================================================================
    EVENT WIRING
    ===================================================================== */
-import { $$ } from '../core/utils.js';
+import { $, $$ } from '../core/utils.js';
 import { S } from '../core/store.js';
-import { render, sideIsDrawer } from '../shell/render.js';
+import { render } from '../shell/render.js';
 import { A, BLUR, DBL, IN } from './actions.js';
 
 document.addEventListener(
@@ -83,15 +83,27 @@ document.addEventListener('mouseover', e => {
   el.classList.add('hl');
 });
 addEventListener('resize', () => {
-  // Wider than the phone's, the sidebar is a column of the page again: the open drawer is shut, or its scrim and the inert page behind it
-  // would stay. Focus stays where it is (the sidebar's item is shown), so this does not go through closeMnav.
-  const widened = S.ui.mnav && !sideIsDrawer();
-  if (widened) S.ui.mnav = false;
-  if (S.ui.pop || widened) {
+  if (S.ui.pop) {
     S.ui.pop = null;
     render();
   }
 });
+try {
+  // Across 900 px the sidebar turns from a column of the page into a drawer or back, and is drawn differently (the collapsed rail is the
+  // column's only), so the shell is drawn again. Widened with the drawer open, it is shut, or its scrim and the inert page behind it would stay;
+  // that does not go through closeMnav, as the sidebar's item is shown and keeps its focus. Narrowed, all of the sidebar is hidden, and the
+  // key of the item that had focus may match a control of the page (a link to Projects), which render() would give the focus to: the page
+  // takes it, at its top. Widened from the drawer's close button, which has no copy, the focus is lost: the page takes it too.
+  matchMedia('(max-width: 900px)').addEventListener('change', e => {
+    const inSide = !!$('.side')?.contains(document.activeElement);
+    if (!e.matches) S.ui.mnav = false;
+    render();
+    const a = document.activeElement;
+    if (inSide && (e.matches || !a || a === document.body)) $('#main-content')?.focus({ preventScroll: true });
+  });
+} catch {
+  /* not supported here; safe to skip */
+}
 try {
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (S.prefs.theme === 'system') render();

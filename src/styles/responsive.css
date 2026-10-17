@@ -14,8 +14,7 @@
   }
 }
 @media (max-width: 900px) {
-  .shell,
-  .shell.collapsed {
+  .shell {
     grid-template-columns: minmax(0, 1fr);
   }
   .side {
@@ -40,10 +39,6 @@
     transition:
       transform 0.22s var(--ease),
       visibility 0s;
-  }
-  .shell.collapsed .side .sitem {
-    justify-content: flex-start;
-    padding: 0 8px;
   }
   .side-scrim {
     display: block;
