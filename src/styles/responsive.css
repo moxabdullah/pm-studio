@@ -26,11 +26,20 @@
     width: 280px;
     z-index: 70;
     transform: translateX(-100%);
-    transition: transform 0.22s var(--ease);
+    /* Off the screen is also out of the Tab order and the reading order: hidden, but only once the slide-out is over (the delay). */
+    visibility: hidden;
+    transition:
+      transform 0.22s var(--ease),
+      visibility 0s linear 0.22s;
     box-shadow: var(--shadow-pop);
   }
+  /* Open, it is visible at once (no delay), so it is there for the slide-in. */
   .shell.mnav .side {
     transform: none;
+    visibility: visible;
+    transition:
+      transform 0.22s var(--ease),
+      visibility 0s;
   }
   .shell.collapsed .side .sitem {
     justify-content: flex-start;

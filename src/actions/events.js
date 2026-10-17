@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $$ } from '../core/utils.js';
 import { S } from '../core/store.js';
-import { render } from '../shell/render.js';
+import { render, sideIsDrawer } from '../shell/render.js';
 import { A, BLUR, DBL, IN } from './actions.js';
 
 document.addEventListener(
@@ -83,7 +83,11 @@ document.addEventListener('mouseover', e => {
   el.classList.add('hl');
 });
 addEventListener('resize', () => {
-  if (S.ui.pop) {
+  // Wider than the phone's, the sidebar is a column of the page again: the open drawer is shut, or its scrim and the inert page behind it
+  // would stay. Focus stays where it is (the sidebar's item is shown), so this does not go through closeMnav.
+  const widened = S.ui.mnav && !sideIsDrawer();
+  if (widened) S.ui.mnav = false;
+  if (S.ui.pop || widened) {
     S.ui.pop = null;
     render();
   }

@@ -28,10 +28,13 @@ import { pageArchive } from '../features/archive.js';
 
 export function renderShell() {
   const u = S.ui;
-  return `<button class="skip" data-a="skipToContent">Skip to content</button><div class="shell ${u.collapsed ? 'collapsed' : ''} ${u.mnav ? 'mnav' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}">
+  // While the sidebar is open as the phone's drawer, all that is outside it and its scrim (the skip link, the page, the bottom nav) is inert:
+  // it takes no Tab stop and no tap, and the page behind the scrim is not read out
+  const inert = u.mnav ? ' inert' : '';
+  return `<button class="skip" data-a="skipToContent"${inert}>Skip to content</button><div class="shell ${u.collapsed ? 'collapsed' : ''} ${u.mnav ? 'mnav' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}">
     ${safely(renderSidebar)}
     ${u.mnav ? '<div class="side-scrim" data-a="closeMnav"></div>' : ''}
-    <main class="main" id="main">
+    <main class="main" id="main"${inert}>
       ${safely(renderTopbar)}
       ${u.offline ? `<div class="offline-bar" role="alert">${ic('wifi-off', 15)}<span><b>You're offline.</b> Changes won't be saved until your connection is back.</span><span class="sp"></span><button class="btn btn-sm btn-secondary" data-a="retryOnline">Try again</button></div>` : ''}
       <div class="content ${u.fx.route ? 'fx-route' : ''}" id="main-content" tabindex="-1" data-keep="c:${esc(u.route)}:${esc(u.params.id || '')}:${esc(u.params.tab || '')}:${esc(u.params.sec || '')}">${u.loading ? skeleton() : renderPage()}</div>
@@ -206,8 +209,8 @@ export function renderBottomNav() {
   const unread = D().notifs.some(n => !n.read && n.type !== 'update');
   const b = (route, label, icon, extra = '') =>
     `<button class="${r === route ? 'on' : ''}" data-a="go" data-r="${route}">${ic(icon, 19)}<span>${label}</span>${extra}</button>`;
-  return `<nav class="bottomnav" aria-label="Primary">
+  return `<nav class="bottomnav" aria-label="Primary"${S.ui.mnav ? ' inert' : ''}>
     ${b('home', 'Home', 'house')}${b('mytasks', 'My Tasks', 'circle-check')}${b('projects', 'Projects', 'folder-kanban')}${b('inbox', 'Inbox', 'inbox', unread ? '<span class="bdot"></span>' : '')}
-    <button data-a="openMnav">${ic('ellipsis', 19)}<span>More</span></button>
+    <button id="mnav-more" data-a="openMnav">${ic('ellipsis', 19)}<span>More</span></button>
   </nav>`;
 }

@@ -58,12 +58,15 @@ export const ROUTE_ICONS = {
   archive: 'archive',
 };
 
+/* At this width and below the sidebar is a drawer from the screen's edge, shut or open (responsive.css), not a column of the page. */
+export const sideIsDrawer = () => matchMedia('(max-width: 900px)').matches;
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
   if (!opt.back) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
   const same = S.ui.route === route && JSON.stringify(S.ui.params) === JSON.stringify(params);
   S.ui.route = route;
   S.ui.params = params;
+  const drawer = S.ui.mnav && sideIsDrawer();
   S.ui.mnav = false;
   S.ui.sel.clear();
   S.ui.pop = null;
@@ -75,6 +78,10 @@ export function go(route, params = {}, opt = {}) {
   S.ui.loading = false;
   if (!same) fxSet(opt.tab ? { tab: true, tabs: true } : { route: true, tabs: true });
   render();
+  // The drawer that was open is shut: a link of it that held focus is hidden now (or still sliding out, where Tab would start in its
+  // list), so focus goes to the page. Not asked of a sidebar that is a column: there the link keeps focus, as it should.
+  const a = document.activeElement;
+  if (drawer && (!a || a === document.body || $('.side')?.contains(a))) $('#main-content')?.focus({ preventScroll: true });
   const c = $('.content');
   if (c && !same) c.scrollTop = 0;
 }

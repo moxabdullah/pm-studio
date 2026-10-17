@@ -49,7 +49,7 @@ import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessa
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
-import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
+import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render, tryFocus } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { dropWsFilters, hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { closeModal, fieldErrHtml, openModal } from '../overlays/modals.js';
@@ -260,13 +260,19 @@ A.toggleSide = () => {
   save();
   render();
 };
-A.openMnav = () => {
+A.openMnav = el => {
+  S.ui.mnavOpener = focusKey(el); // the button itself, not what has focus: a tap does not focus a button in every browser
   S.ui.mnav = true;
   render();
+  // render() has put focus back on the button that opened it, which is inert behind the open sidebar now; the sidebar's first control takes it
+  $('.side')?.querySelector('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')?.focus({ preventScroll: true });
 };
 A.closeMnav = () => {
   S.ui.mnav = false;
   render();
+  // Esc leaves focus on an item of the sidebar that is hidden now, a tap on the scrim leaves it on the page: back to what opened the sidebar
+  const a = document.activeElement;
+  if (!a || a === document.body || $('.side')?.contains(a)) tryFocus(S.ui.mnavOpener) || tryFocus('#mnav-btn');
 };
 A.toggleExpand = el => {
   S.ui.expanded[el.dataset.id] = !S.ui.expanded[el.dataset.id];
@@ -2340,7 +2346,8 @@ A.openPalette = () => {
   render();
 };
 A.openSearch = () => {
-  S.ui.palOpener = focusKey(document.activeElement);
+  // an open sidebar is shut by this, so what held focus in it is hidden when the palette closes: back to what opened the sidebar
+  S.ui.palOpener = S.ui.mnav ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement);
   S.ui.palette = { q: '', mode: 'search', scope: 'all', hl: 0 };
   S.ui.pop = null;
   S.ui.mnav = false;
