@@ -71,7 +71,7 @@
   min-height: 60px;
   flex: 1;
 }
-.bcol.over {
+.bcol.drop-over {
   background: color-mix(in srgb, var(--accent) 6%, var(--sunken));
   border-color: var(--accent-line);
 }
