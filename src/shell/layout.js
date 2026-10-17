@@ -128,7 +128,7 @@ export function renderSidebar() {
             const on = inProj === p.id;
             return `<div class="sproj" data-proj-drop="${esc(p.id)}">
             <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${railTip(p.name)}>
-              <span class="pico" style="--c:${pColor(p)}" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Toggle sub-pages">${ic(p.icon, 12)}</span>
+              <span class="pico" style="--c:${pColor(p)}" ${col ? '' : `data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Toggle sub-pages"`}>${ic(p.icon, 12)}</span>
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
