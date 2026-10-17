@@ -23,9 +23,15 @@ document.addEventListener('keydown', e => {
     A.toggleDark();
     return;
   }
-  // Keep Tab inside whichever surface is modal right now.
+  // Keep Tab inside whichever surface is modal right now. The palette has its own Tab below, and a dialog is above the phone's sidebar. The
+  // sidebar is the modal surface otherwise, over a task panel (inert behind it, even a full one) and over the toasts, which are outside the
+  // inert page (#toasts has to stay readable, so it is not inert itself). A popover is above it: its own controls take the Tab.
   if (e.key === 'Tab') {
-    const box = pl ? $('.palette') : S.ui.modals.length ? $$('.modal').pop() : S.ui.drawer && S.ui.drawerFull ? $('.drawer') : null;
+    let box = null;
+    if (pl) box = $('.palette');
+    else if (S.ui.modals.length) box = $$('.modal').pop();
+    else if (S.ui.mnav) box = S.ui.pop ? null : $('.side');
+    else if (S.ui.drawer && S.ui.drawerFull) box = $('.drawer');
     if (box && !pl) {
       const f = [
         ...box.querySelectorAll(
