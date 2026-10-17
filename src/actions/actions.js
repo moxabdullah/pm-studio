@@ -49,7 +49,7 @@ import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessa
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
-import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render, tryFocus } from '../shell/render.js';
+import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render, sideIsDrawer, tryFocus } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { dropWsFilters, hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { closeModal, fieldErrHtml, openModal } from '../overlays/modals.js';
@@ -256,6 +256,8 @@ A.set = el => {
   render();
 };
 A.toggleSide = () => {
+  // The drawer is never the collapsed rail, so here the change would show nothing, and it is saved: it would arrive on the user's other devices.
+  if (sideIsDrawer()) return;
   S.ui.collapsed = !S.ui.collapsed;
   save();
   render();
