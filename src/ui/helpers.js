@@ -45,7 +45,7 @@ export function av(id, cls = '', tip = true, hidden = !tip) {
 // `hidden` (true) inside a control whose label names the people already: the avatars are not read one by one as well.
 export function avStack(ids, max = 4, cls = 'sm', hidden = false) {
   const v = ids.slice(0, max);
-  return `<span class="avs">${v.map(i => av(i, cls, true, hidden)).join('')}${ids.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)"${hidden ? ' aria-hidden="true"' : ''}>+${ids.length - max}</span>` : ''}</span>`;
+  return `<span class="avs">${v.map(i => av(i, cls, true, hidden)).join('')}${ids.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)"${hidden ? ' aria-hidden="true"' : ` role="img" aria-label="${ids.length - max} more member${ids.length - max === 1 ? '' : 's'}"`}>+${ids.length - max}</span>` : ''}</span>`;
 }
 export function stIcon(st, s = 14) {
   if (!(typeof st === 'string' && st in ST)) st = 'backlog'; // an unknown status is stored data; draw the neutral one

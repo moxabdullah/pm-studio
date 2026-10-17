@@ -46,7 +46,8 @@ document.addEventListener(
     // An action that draws nothing (a click on a dialog's blank area) leaves the popover that was dropped above on screen, with the Tab trap
     // and the popover's keys off: it is drawn away, the focus going back to what opened it.
     if (dropped && render._ov?.pop && !S.ui.pop) {
-      S.ui.popOpener = opener;
+      // A control that takes focus (Copy) keeps it; a click on no such control (a dialog's blank area) goes back to the popover's opener.
+      S.ui.popOpener = (el.matches('button, a[href], input, select, textarea') && focusKey(el)) || opener;
       render();
       S.ui.popOpener = null;
     }

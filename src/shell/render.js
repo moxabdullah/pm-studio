@@ -250,6 +250,8 @@ export function render() {
   // A surface closed and its opener took no focus (a list row): the task panel below takes it, or the page, never <body>.
   const closed = prevOv.modals > ov.modals || (prevOv.pop && !ov.pop) || (prevOv.drawer && !ov.drawer) || (prevOv.pal && !ov.pal);
   if (closed && !ov.modals && lost()) ((ov.drawer && $('.drawer')) || $('#main-content'))?.focus({ preventScroll: true });
+  // The phone drawer is open and the control that had focus went (the offline bar's Try again, back online): the drawer keeps the focus.
+  if (S.ui.mnav && a && a !== document.body && !ov.modals && !ov.pal && lost()) $('.side-close')?.focus({ preventScroll: true });
   render._ov = ov;
   const played = S.ui.fx;
   S.ui.fx = {};
