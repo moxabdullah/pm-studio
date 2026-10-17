@@ -105,6 +105,13 @@ document.addEventListener('keydown', e => {
       closePop();
       return;
     }
+    // The phone's sidebar is over the task panel and the page, which are inert while it is open: a mention list, a cell being edited or a
+    // composer left open there is under it, so the sidebar is what Esc closes next. A popover, the palette and a dialog are above it; a
+    // dialog (and whatever is open in it) goes first, and the sidebar is closed by the Esc after.
+    if (S.ui.mnav && !S.ui.modals.length) {
+      A.closeMnav();
+      return;
+    }
     if (S.ui.mention) {
       S.ui.mention = null;
       render();
@@ -121,12 +128,6 @@ document.addEventListener('keydown', e => {
     }
     if (S.ui.modals.length) {
       closeModal();
-      return;
-    }
-    // The phone's sidebar is over the task panel (and the page), which are inert while it is open, so it is what Esc closes next. A popover,
-    // the palette and a dialog opened from it are above it and went first.
-    if (S.ui.mnav) {
-      A.closeMnav();
       return;
     }
     if (S.ui.subOpen) {
