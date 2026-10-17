@@ -67,6 +67,7 @@ export function go(route, params = {}, opt = {}) {
   S.ui.route = route;
   S.ui.params = params;
   const drawer = S.ui.mnav && sideIsDrawer();
+  const inSide = drawer && !!$('.side')?.contains(document.activeElement);
   S.ui.mnav = false;
   S.ui.sel.clear();
   S.ui.pop = null;
@@ -79,9 +80,11 @@ export function go(route, params = {}, opt = {}) {
   if (!same) fxSet(opt.tab ? { tab: true, tabs: true } : { route: true, tabs: true });
   render();
   // The drawer that was open is shut: a link of it that held focus is hidden now (or still sliding out, where Tab would start in its
-  // list), so focus goes to the page. Not asked of a sidebar that is a column: there the link keeps focus, as it should.
+  // list), so focus goes to the page. That the link had it is read before the render: its key can match a visible control of the page (the
+  // bottom nav's Projects), which render() gives the focus to instead. Not asked of a sidebar that is a column: there the link keeps
+  // focus, as it should.
   const a = document.activeElement;
-  if (drawer && (!a || a === document.body || $('.side')?.contains(a))) $('#main-content')?.focus({ preventScroll: true });
+  if (drawer && (inSide || !a || a === document.body)) $('#main-content')?.focus({ preventScroll: true });
   const c = $('.content');
   if (c && !same) c.scrollTop = 0;
 }
@@ -103,15 +106,18 @@ export function focusKey(el) {
 }
 export function tryFocus(key) {
   if (!key) return false;
-  let el;
+  let els;
   try {
-    el = document.querySelector(key);
+    els = document.querySelectorAll(key);
   } catch {
     return false;
   }
-  if (el && el.offsetParent !== null) {
+  // A key is not unique: the sidebar comes first in the page and shares many controls with it, and on a phone its closed copy is
+  // visibility:hidden, which offsetParent does not tell. So the first match that takes the focus is the one, not the first match.
+  for (const el of els) {
+    if (el.offsetParent === null) continue;
     el.focus({ preventScroll: true });
-    return document.activeElement === el;
+    if (document.activeElement === el) return true;
   }
   return false;
 }

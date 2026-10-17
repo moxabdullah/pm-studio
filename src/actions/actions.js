@@ -268,11 +268,14 @@ A.openMnav = el => {
   $('.side')?.querySelector('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')?.focus({ preventScroll: true });
 };
 A.closeMnav = () => {
+  const inSide = !!$('.side')?.contains(document.activeElement);
   S.ui.mnav = false;
   render();
-  // Esc leaves focus on an item of the sidebar that is hidden now, a tap on the scrim leaves it on the page: back to what opened the sidebar
+  // Esc leaves focus on an item of the sidebar that is hidden now, a tap on the scrim leaves it on the page: back to what opened the sidebar.
+  // That the item had focus is read before the render: its key can match a visible control of the page (the bottom nav's Home), which
+  // render() gives the focus to instead.
   const a = document.activeElement;
-  if (!a || a === document.body || $('.side')?.contains(a)) tryFocus(S.ui.mnavOpener) || tryFocus('#mnav-btn');
+  if (inSide || !a || a === document.body) tryFocus(S.ui.mnavOpener) || tryFocus('#mnav-btn');
 };
 A.toggleExpand = el => {
   S.ui.expanded[el.dataset.id] = !S.ui.expanded[el.dataset.id];
