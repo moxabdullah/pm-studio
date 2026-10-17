@@ -7,7 +7,7 @@
    Every record is { id, ...columns, doc }. The columns are what PocketBase needs for filtering and access rules (relations, status,
    flags). `doc` is the rest of the app object as-is. Fields of the app object that are not columns therefore need no mapping.
 
-   COLLECTIONS   ordered list of { key, coll, updateOnly?, optional? } for the array-backed collections: `key` is the property on S.data, `coll`
+   COLLECTIONS   ordered list of { key, coll, updateOnly? } for the array-backed collections: `key` is the property on S.data, `coll`
                  the PocketBase collection. Parents come first, so creating in this order and deleting in reverse satisfies every relation.
                    members->users (first; the app only ever UPDATES users: admins create accounts in PocketBase),
                    workspaces, teams, projects, tasks, comments, activity, notifs, files, events, savedViews->saved_views, templates, stageSets->stage_sets, workspaceLists->workspace_lists
@@ -161,10 +161,6 @@ const SPECS = {
   templates: {
     key: 'templates',
     coll: 'templates',
-    // Read as none when the server has no such collection (it answers the list with 404): the app is served before the restart that
-    // applies 1791849606, and one failed read would stop the whole load. The next reload after the restart brings the templates in.
-    // Can go once every server has 1791849606.
-    optional: true,
     cols: [
       ['workspace', 'workspace', ONE('')],
       ['name', 'name', TEXT],
@@ -173,8 +169,6 @@ const SPECS = {
   stageSets: {
     key: 'stageSets',
     coll: 'stage_sets',
-    // Read as none when the server has no such collection, like templates above (1791849607). Can go once every server has it.
-    optional: true,
     cols: [
       ['workspace', 'workspace', ONE('')],
       ['name', 'name', TEXT],
@@ -187,8 +181,6 @@ const SPECS = {
   workspaceLists: {
     key: 'workspaceLists',
     coll: 'workspace_lists',
-    // Read as none when the server has no such collection, like templates above (1791849608). Can go once every server has it.
-    optional: true,
     cols: [['workspace', 'workspace', ONE('')]],
     // `created` picks the record when two are loaded for one workspace (store.js listsOf): it is read back, kept out of the doc and never sent.
     readOnly: [['created', 'created']],
@@ -292,7 +284,7 @@ const ORDER = [
 export const COLLECTIONS = Object.freeze(
   ORDER.map(k => {
     const s = SPECS[k];
-    return Object.freeze({ key: s.key, coll: s.coll, ...(s.updateOnly ? { updateOnly: true } : {}), ...(s.optional ? { optional: true } : {}) });
+    return Object.freeze({ key: s.key, coll: s.coll, ...(s.updateOnly ? { updateOnly: true } : {}) });
   }),
 );
 export const USER_PREFS = 'user_prefs';
