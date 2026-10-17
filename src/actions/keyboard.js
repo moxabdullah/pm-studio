@@ -186,9 +186,17 @@ document.addEventListener('keydown', e => {
   }
   if (typing || mod || e.altKey) return;
   if (S.ui.auth) return;
-  // A project row of the sidebar opens with → and closes with ← (its icon does it for the mouse). The rail has no sub-pages to show. Focus stays on
-  // the row: render() puts it back by its key.
-  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !e.shiftKey && t.matches?.('nav.side .sproj > .sitem') && !sideCollapsed()) {
+  // A project row of the sidebar opens with → and closes with ← (its icon does it for the mouse). The rail has no sub-pages to show, and nothing
+  // is toggled under a menu, dialog or the palette that is open over the page. Focus stays on the row: render() puts it back by its key.
+  if (
+    (e.key === 'ArrowRight' || e.key === 'ArrowLeft') &&
+    !e.shiftKey &&
+    t.matches?.('nav.side .sproj > .sitem') &&
+    !sideCollapsed() &&
+    !S.ui.pop &&
+    !S.ui.modals.length &&
+    !pl
+  ) {
     const open = !!S.ui.expanded[t.dataset.id];
     if (e.key === 'ArrowRight' ? !open : open) {
       e.preventDefault();

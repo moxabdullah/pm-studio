@@ -82,6 +82,13 @@ export function sItem(route, label, icon, opt = {}) {
   const on = S.ui.route === route && (!opt.id || S.ui.params.id === opt.id);
   return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${esc(opt.id)}"` : ''} ${railTip(label)} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
 }
+// The pages a project lists under its row in the sidebar
+const SUBTABS = [
+  ['board', 'Board', 'square-kanban'],
+  ['list', 'List', 'list'],
+  ['timeline', 'Timeline', 'chart-gantt'],
+  ['files', 'Files', 'paperclip'],
+];
 export function renderSidebar() {
   const u = S.ui,
     d = D();
@@ -126,27 +133,22 @@ export function renderSidebar() {
           .map(p => {
             const open = !!u.expanded[p.id];
             const on = inProj === p.id;
+            // With the sub-list shown, the current page is its item and the row only holds it
+            const cur = open && !col && SUBTABS.some(([tab]) => tab === u.params.tab) ? 'true' : 'page';
             return `<div class="sproj" data-proj-drop="${esc(p.id)}">
-            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${col ? '' : `aria-expanded="${open}"`} ${on ? 'aria-current="page"' : ''} ${railTip(p.name)}>
+            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${col ? '' : `aria-expanded="${open}"`} ${on ? `aria-current="${cur}"` : ''} ${railTip(p.name)}>
               <span class="pico" style="--c:${pColor(p)}" ${col ? '' : `data-a="toggleExpand" data-id="${esc(p.id)}"`}>${ic(p.icon, 12)}</span>
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
               <span class="sdot" style="background:${pDot(p)}" title="${esc(stageOf(p).name)}${p.health && p.health !== 'ok' ? ' · ' + HEALTH[p.health].name : ''}"></span>
-              <span class="hov"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Project options">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Expand">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
+              <span class="hov" aria-hidden="true"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Project options">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Expand">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
             </div>
             <div class="sub ${open && !col ? 'open' : ''}">
-              ${[
-                ['board', 'Board', 'square-kanban'],
-                ['list', 'List', 'list'],
-                ['timeline', 'Timeline', 'chart-gantt'],
-                ['files', 'Files', 'paperclip'],
-              ]
-                .map(
-                  ([tab, n, i]) =>
-                    `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="${esc(tab)}" ${on && u.params.tab === tab ? 'aria-current="page"' : ''}>${ic(i, 14)}<span>${n}</span></button>`,
-                )
-                .join('')}
+              ${SUBTABS.map(
+                ([tab, n, i]) =>
+                  `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="${esc(tab)}" ${on && u.params.tab === tab ? 'aria-current="page"' : ''}>${ic(i, 14)}<span>${n}</span></button>`,
+              ).join('')}
             </div>
           </div>`;
           })
@@ -203,9 +205,9 @@ export function renderTopbar() {
     <nav class="crumbs trunc" aria-label="Breadcrumb">${crumbs()}</nav>
     <span class="sp"></span>
     <button class="topsearch" data-a="openPalette" aria-label="Search and commands">${ic('search', 14)}<span class="lbltxt">Search or jump to…</span><span class="kbd">${MOD}K</span></button>
-    <button class="ibtn" data-a="go" data-r="notifications" data-tip="Notifications" aria-label="Notifications">${ic('bell', 16)}${D().notifs.some(n => !n.read) ? '<span style="position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)"></span>' : ''}</button>
+    <button class="ibtn" id="top-notifs" data-a="go" data-r="notifications" data-tip="Notifications" aria-label="Notifications">${ic('bell', 16)}${D().notifs.some(n => !n.read) ? '<span style="position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)"></span>' : ''}</button>
     <button class="btn btn-secondary btn-sm" data-a="pop" data-pop="create" aria-haspopup="menu" aria-label="Create new">${ic('plus', 14)}<span class="hide-m">New</span>${ic('chevron-down', 12, 'hide-m')}</button>
-    <button class="ibtn hide-m" data-a="pop" data-pop="user" aria-haspopup="menu" aria-label="Account" style="width:auto;padding:0 2px">${av(D().me, 'md', false)}</button>
+    <button class="ibtn hide-m" id="top-account" data-a="pop" data-pop="user" aria-haspopup="menu" aria-label="Account" style="width:auto;padding:0 2px">${av(D().me, 'md', false)}</button>
   </header>`;
 }
 export function renderBottomNav() {

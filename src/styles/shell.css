@@ -211,10 +211,12 @@
   margin-left: auto;
   display: none;
 }
-.sitem:hover .hov {
+.sitem:hover .hov,
+.sitem:focus-visible .hov {
   display: flex;
 }
-.sitem:hover .sdot {
+.sitem:hover .sdot,
+.sitem:focus-visible .sdot {
   display: none;
 }
 .sitem.drop-before::before {

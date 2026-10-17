@@ -6,11 +6,17 @@ import { focusKey } from '../shell/render.js';
    asked at every update and not remembered: the class flips at 900 px without a render. */
 const SEL = '.collapsed > nav.side [data-tip-pos="right"]';
 let tip = null;
-/* The anchors, { el, key }: the item under the pointer, and the item the keyboard is on. The pointer's wins. The key is kept because a render
-   replaces the element and the new one is found by it. */
+/* The anchors, { el, key }: the item under the pointer, and the item the keyboard is on. Whichever was moved last wins (last). The key is kept
+   because a render replaces the element and the new one is found by it. */
 let hover = null;
 let focus = null;
-let quiet = null; // key of the item a press or Esc dismissed: no tip for it until the anchor is another one
+let last = 'hover';
+/* The pointer's last position, { x, y }. A render under a still pointer makes the browser send pointerover events again, at this same position,
+   and these are told from a real move by the coordinates. Always replaced, never changed: quiet.at holds one. */
+let pt = null;
+/* What a press or Esc dismissed, { key, at }: no tip for that item while it stays the anchor, nor, once the pointer is somewhere else than at,
+   after both anchors have left it. A focus on another item ends it at once. */
+let quiet = null;
 let shown = null; // key of the item the tip is drawn for
 
 const anchor = (cur, el) => (el ? (cur && cur.el === el ? cur : { el, key: focusKey(el) || '' }) : null);
@@ -33,18 +39,20 @@ function hide() {
   if (!tip.hidden) tip.hidden = true;
   shown = null;
 }
+const moved = (a, b) => !a || !b || a.x !== b.x || a.y !== b.y;
+/* The anchors, the one moved last first. */
+const wanted = () => (last === 'hover' ? [hover, focus] : [focus, hover]).filter(Boolean);
 /* Draws the tip for the anchor, or hides it. Called on every event that can change either, and after each render (afterRender). */
 export function syncRailTip() {
   if (!tip) return;
   hover = current(hover);
   focus = current(focus, true);
-  const a = hover || focus;
-  if (!a) {
-    quiet = null;
-    return hide();
-  }
-  if (quiet !== null && a.key !== quiet) quiet = null;
-  if (a.key === quiet) return hide();
+  // The dismissal ends when the pointer has gone elsewhere. Not when the anchor is just null for a moment at the same position: a render
+  // makes the browser see the bare page under the pointer before the new item.
+  if (quiet && moved(quiet.at, pt) && hover?.key !== quiet.key && focus?.key !== quiet.key) quiet = null;
+  // An anchor that is dismissed does not keep the other one from showing.
+  const a = wanted().find(x => x.key !== quiet?.key);
+  if (!a) return hide();
   const r = a.el.getBoundingClientRect();
   const mid = r.top + r.height / 2;
   // Scrolled out of the list: the item is clipped there, and its tip would hang in the air.
@@ -64,10 +72,11 @@ export function syncRailTip() {
   shown = a.key;
 }
 /* A click goes to a page and draws it again; Esc is the way to dismiss a tip. Either way it does not return while the pointer or the keyboard
-   stays on the item. */
-function dismiss() {
-  const a = hover || focus;
-  if (a) quiet = a.key;
+   stays on the item (and the draw may be followed by pointer events at the same position, which are not a move). A press dismisses the item
+   it is on, and nothing when it is on no item (the keyboard's tip goes with the focus, if the press takes it); Esc, the one the tip is drawn for. */
+function dismiss(press) {
+  const a = press ? hover : wanted().find(x => x.key === shown);
+  if (a) quiet = { key: a.key, at: pt };
   syncRailTip();
 }
 
@@ -81,16 +90,27 @@ export function initRailTip() {
   document.body.appendChild(tip);
   document.addEventListener('pointerover', e => {
     if (e.pointerType === 'touch') return;
+    // After a render the browser sends pointerover for the pointer where it was: that is not a move, and the keyboard keeps the tip.
+    const real = moved(pt, { x: e.clientX, y: e.clientY });
+    pt = { x: e.clientX, y: e.clientY };
     hover = anchor(hover, e.target.closest?.(SEL));
+    if (hover && real) last = 'hover';
     syncRailTip();
   });
+  document.addEventListener(
+    'pointermove',
+    e => {
+      if (e.pointerType !== 'touch') pt = { x: e.clientX, y: e.clientY };
+    },
+    { passive: true },
+  );
   document.addEventListener('pointerout', e => {
     if (e.relatedTarget != null) return;
     hover = null; // the pointer left the window
     syncRailTip();
   });
   addEventListener('blur', () => {
-    hover = null;
+    hover = focus = null;
     syncRailTip();
   });
   document.addEventListener('focusin', e => {
@@ -101,6 +121,10 @@ export function initRailTip() {
       /* not supported here; no tip for focus */
     }
     focus = visible ? anchor(focus, e.target.matches(SEL) ? e.target : null) : null;
+    if (focus) {
+      last = 'focus';
+      if (quiet && focus.key !== quiet.key) quiet = null;
+    }
     syncRailTip();
   });
   document.addEventListener('focusout', () => {
@@ -109,7 +133,10 @@ export function initRailTip() {
     // ends, and the tip must not be hidden and shown again, nor the dismissal forgotten, in between.
     queueMicrotask(syncRailTip);
   });
-  document.addEventListener('pointerdown', dismiss);
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') pt = { x: e.clientX, y: e.clientY };
+    dismiss(true);
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') dismiss();
   });
