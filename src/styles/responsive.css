@@ -302,6 +302,13 @@
     min-width: 40px;
     min-height: 40px;
   }
+  /* The drawer's Close is as easy to hit as the button that opens it. It is the last in the top row, so the margin sets it apart from the
+     workspace button (the row's own 2 px gap is inline), and the workspace button, which grows, gives up the room. */
+  .side .side-close {
+    width: 40px;
+    height: 40px;
+    margin-inline-start: 6px;
+  }
   .palette {
     top: 8px;
   }
