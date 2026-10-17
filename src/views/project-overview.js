@@ -38,8 +38,8 @@ export function projOverview(p) {
       </div>
       <div class="stack">
         <section class="panel"><div class="panel-h"><h2>Details</h2></div><div class="panel-b"><dl class="kv">
-          <dt>${ic('circle-dot', 14)}Stage</dt><dd><button class="pillbtn" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}">${pStage(p, ic('chevron-down', 12))}</button></dd>
-          <dt>${ic('activity', 14)}Health</dt><dd><button class="pillbtn" data-a="pop" data-pop="phealth" data-id="${esc(p.id)}">${pHealth(p, ic('chevron-down', 12)) || `<span class="faint">On track</span>${ic('chevron-down', 12)}`}</button></dd>
+          <dt>${ic('circle-dot', 14)}Stage</dt><dd><button class="pillbtn" id="ov-pstage" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}">${pStage(p, ic('chevron-down', 12))}</button></dd>
+          <dt>${ic('activity', 14)}Health</dt><dd><button class="pillbtn" id="ov-phealth" data-a="pop" data-pop="phealth" data-id="${esc(p.id)}">${pHealth(p, ic('chevron-down', 12)) || `<span class="faint">On track</span>${ic('chevron-down', 12)}`}</button></dd>
           <dt>${ic('user', 14)}Lead</dt><dd><span class="pillbtn">${av(p.lead, 'sm', false)}${esc(mem(p.lead)?.name)}</span></dd>
           <dt>${ic('users', 14)}Team</dt><dd><button class="pillbtn" data-a="go" data-r="team" data-id="${esc(p.team)}">${ic(TM[p.team].icon, 13)}${esc(TM[p.team].name)}</button></dd>
           <dt>${ic('calendar', 14)}Start</dt><dd><span class="pillbtn num">${fmtDate(p.start, true)}</span></dd>
