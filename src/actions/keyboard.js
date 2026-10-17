@@ -2,7 +2,7 @@
 import { $, $$ } from '../core/utils.js';
 import { STATUSES } from '../core/constants.js';
 import { S } from '../core/store.js';
-import { go, render } from '../shell/render.js';
+import { go, render, sideCollapsed } from '../shell/render.js';
 import { closeModal } from '../overlays/modals.js';
 import { closePop } from '../overlays/popovers.js';
 import { A, KEY } from './actions.js';
@@ -186,6 +186,16 @@ document.addEventListener('keydown', e => {
   }
   if (typing || mod || e.altKey) return;
   if (S.ui.auth) return;
+  // A project row of the sidebar opens with → and closes with ← (its icon does it for the mouse). The rail has no sub-pages to show. Focus stays on
+  // the row: render() puts it back by its key.
+  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !e.shiftKey && t.matches?.('nav.side .sproj > .sitem') && !sideCollapsed()) {
+    const open = !!S.ui.expanded[t.dataset.id];
+    if (e.key === 'ArrowRight' ? !open : open) {
+      e.preventDefault();
+      A.toggleExpand(t);
+      return;
+    }
+  }
   // number keys inside status popover
   if (S.ui.pop?.type === 'status' && /^[1-5]$/.test(e.key)) {
     A.popPick({ dataset: { v: STATUSES[+e.key - 1].id } });

@@ -396,6 +396,7 @@ export const SHORTCUTS = [
       ['Search', ['/']],
       ['Keyboard shortcuts', ['?']],
       ['Toggle sidebar', ['[']],
+      ['Open or close a project in the sidebar', ['→', '←']],
       ['Toggle dark mode', [MOD, 'Shift', 'L']],
       ['Close panel or dialog', ['Esc']],
     ],

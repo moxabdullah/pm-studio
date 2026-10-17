@@ -13,6 +13,7 @@ import { projTableAfter } from '../pages/projects.js';
 import { renderLayer } from '../overlays/drawer.js';
 import { placePop } from '../overlays/popovers.js';
 import { renderAuth } from '../pages/auth.js';
+import { syncRailTip } from '../ui/tooltip.js';
 
 /* The URL hash picks a route, so "#constructor" must not count as one: only the table's own keys resolve. */
 export const ROUTE_NAMES = lookup({
@@ -133,10 +134,11 @@ export function pageTitle() {
   if (u.route === 'team' && team(u.params.id)) t = team(u.params.id).name;
   return `${t} · ${D().ws.name}`;
 }
-/* Anything clickable is keyboard-reachable: non-native [data-a] controls get a role and a tab stop. */
+/* Anything clickable is keyboard-reachable: non-native [data-a] controls get a role and a tab stop. The sidebar's project icon is not one: the row
+   around it is the control, and the icon is its mouse-only shortcut (the arrow keys do it on the row). */
 export function makeFocusable() {
   for (const el of document.querySelectorAll('[data-a]:not(button):not(a):not(input):not(label):not(select):not(textarea):not([tabindex])')) {
-    if (el.matches('.scrim,.modal-wrap,.drawer-scrim,.side-scrim')) continue;
+    if (el.matches('.scrim,.modal-wrap,.drawer-scrim,.side-scrim,.pico')) continue;
     el.tabIndex = 0;
     if (!el.hasAttribute('role')) el.setAttribute('role', el.dataset.a === 'go' ? 'link' : 'button');
   }
@@ -225,6 +227,7 @@ export function afterRender() {
   if (pal && document.activeElement !== pal && !S.ui.pop) pal.focus();
   if ((S.ui.route === 'project' && S.ui.params.tab === 'timeline') || S.ui.route === 'timeline') tlAfter();
   projTableAfter();
+  syncRailTip();
 }
 /* Headline numbers count up once when a dashboard is entered. */
 export function countUp() {

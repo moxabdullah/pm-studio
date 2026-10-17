@@ -110,8 +110,8 @@ export function renderSidebar() {
       ${sItem('mytasks', 'My Tasks', 'circle-check', { ct: myOpen || '' })}
       ${sItem('favorites', 'Favorites', 'star')}
       ${sItem('notifications', 'Notifications', 'bell', { ct: unreadAll || '' })}
-      <div class="sgroup">
-        <div class="sgroup-h">Workspace</div>
+      <div class="sgroup" role="group" aria-labelledby="sg-workspace">
+        <div class="sgroup-h" id="sg-workspace">Workspace</div>
         ${sItem('overview', 'Overview', 'layout-dashboard')}
         ${sItem('projects', 'Projects', 'folder-kanban')}
         ${sItem('tasks', 'Tasks', 'list-checks')}
@@ -120,15 +120,15 @@ export function renderSidebar() {
         ${sItem('members', 'Members', 'users')}
         ${sItem('activity', 'Activity', 'activity')}
       </div>
-      <div class="sgroup" id="side-projects">
-        <div class="sgroup-h"><span>Projects</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newProject" data-tip="New project  P" aria-label="New project">${ic('plus', 14)}</button></div>
+      <div class="sgroup" id="side-projects" role="group" aria-labelledby="sg-projects">
+        <div class="sgroup-h"><span id="sg-projects">Projects</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newProject" data-tip="New project  P" aria-label="New project">${ic('plus', 14)}</button></div>
         ${projs
           .map(p => {
             const open = !!u.expanded[p.id];
             const on = inProj === p.id;
             return `<div class="sproj" data-proj-drop="${esc(p.id)}">
-            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${railTip(p.name)}>
-              <span class="pico" style="--c:${pColor(p)}" ${col ? '' : `data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Toggle sub-pages"`}>${ic(p.icon, 12)}</span>
+            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${col ? '' : `aria-expanded="${open}"`} ${on ? 'aria-current="page"' : ''} ${railTip(p.name)}>
+              <span class="pico" style="--c:${pColor(p)}" ${col ? '' : `data-a="toggleExpand" data-id="${esc(p.id)}"`}>${ic(p.icon, 12)}</span>
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
@@ -144,7 +144,7 @@ export function renderSidebar() {
               ]
                 .map(
                   ([tab, n, i]) =>
-                    `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="${esc(tab)}">${ic(i, 14)}<span>${n}</span></button>`,
+                    `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="${esc(tab)}" ${on && u.params.tab === tab ? 'aria-current="page"' : ''}>${ic(i, 14)}<span>${n}</span></button>`,
                 )
                 .join('')}
             </div>
@@ -153,17 +153,17 @@ export function renderSidebar() {
           .join('')}
         ${sItem('archive', 'Archive', 'archive', { ct: wsArchivedTasks().length + D().projects.filter(p => p.archived && inWs(p)).length || '' })}
       </div>
-      <div class="sgroup">
-        <div class="sgroup-h"><span>Teams</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTeam" data-tip="New team" aria-label="New team">${ic('plus', 14)}</button></div>
+      <div class="sgroup" role="group" aria-labelledby="sg-teams">
+        <div class="sgroup-h"><span id="sg-teams">Teams</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTeam" data-tip="New team" aria-label="New team">${ic('plus', 14)}</button></div>
         ${teamsList()
           .map(t => sItem('team', t.name, t.icon, { id: t.id }))
           .join('')}
       </div>
     </div>
     <div class="side-bot">
-      <button class="sitem" data-a="pop" data-pop="help" ${railTip('Help')}>${ic('circle-help', 16)}<span>Help & resources</span></button>
+      <button class="sitem" data-a="pop" data-pop="help" aria-haspopup="menu" ${railTip('Help')}>${ic('circle-help', 16)}<span>Help & resources</span></button>
       ${sItem('settings', 'Settings', 'settings')}
-      <button class="sitem" data-a="pop" data-pop="user" style="height:36px" ${railTip('Profile')}>${av(d.me, 'presence', false)}<span class="trunc" style="color:var(--text);font-weight:500">${esc(me().name)}</span><span class="ct">${ic('chevrons-up-down', 13)}</span></button>
+      <button class="sitem" data-a="pop" data-pop="user" aria-haspopup="menu" style="height:36px" ${railTip('Account')}>${av(d.me, 'presence', false, true)}<span class="trunc" style="color:var(--text);font-weight:500">${esc(me().name)}</span><span class="ct">${ic('chevrons-up-down', 13)}</span></button>
     </div>
   </nav>`;
 }
@@ -205,7 +205,7 @@ export function renderTopbar() {
     <button class="topsearch" data-a="openPalette" aria-label="Search and commands">${ic('search', 14)}<span class="lbltxt">Search or jump to…</span><span class="kbd">${MOD}K</span></button>
     <button class="ibtn" data-a="go" data-r="notifications" data-tip="Notifications" aria-label="Notifications">${ic('bell', 16)}${D().notifs.some(n => !n.read) ? '<span style="position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)"></span>' : ''}</button>
     <button class="btn btn-secondary btn-sm" data-a="pop" data-pop="create" aria-haspopup="menu" aria-label="Create new">${ic('plus', 14)}<span class="hide-m">New</span>${ic('chevron-down', 12, 'hide-m')}</button>
-    <button class="ibtn hide-m" data-a="pop" data-pop="user" aria-label="Account menu" style="width:auto;padding:0 2px">${av(D().me, 'md', false)}</button>
+    <button class="ibtn hide-m" data-a="pop" data-pop="user" aria-haspopup="menu" aria-label="Account" style="width:auto;padding:0 2px">${av(D().me, 'md', false)}</button>
   </header>`;
 }
 export function renderBottomNav() {

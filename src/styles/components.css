@@ -162,8 +162,10 @@
 [data-tip] {
   position: relative;
 }
-[data-tip]:hover::after,
-[data-tip]:focus-visible::after {
+/* The collapsed rail's items are left out: its sidebar clips a pseudo-element, so their tip is .tip-float below. :where() adds no
+   specificity, so the -pos='top' variant and the timeline's .ms-w still override this rule as they did. */
+[data-tip]:where(:not([data-tip-pos='right'])):hover::after,
+[data-tip]:where(:not([data-tip-pos='right'])):focus-visible::after {
   content: attr(data-tip);
   position: absolute;
   left: 50%;
@@ -181,12 +183,6 @@
   pointer-events: none;
   animation: tipIn 0.12s 0.35s both;
 }
-[data-tip-pos='right']:hover::after,
-[data-tip-pos='right']:focus-visible::after {
-  left: calc(100% + 8px);
-  top: 50%;
-  transform: translateY(-50%);
-}
 [data-tip-pos='top']:hover::after {
   top: auto;
   bottom: calc(100% + 6px);
@@ -198,6 +194,25 @@
   to {
     opacity: 1;
   }
+}
+/* The tooltip of the collapsed rail: one element in the body, outside the sidebar that clips, placed by ui/tooltip.js */
+.tip-float {
+  position: fixed;
+  transform: translateY(-50%);
+  background: var(--text);
+  color: var(--text-inv);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 5px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  z-index: 200;
+  pointer-events: none;
+  animation: tipIn 0.12s 0.35s both;
+}
+.tip-float[hidden] {
+  display: none;
 }
 
 /* ============================================================
