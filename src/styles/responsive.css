@@ -40,6 +40,10 @@
     display: inline-flex;
     order: 1;
   }
+  /* The drawer is never the collapsed rail (sideCollapsed), so its button would only change the desktop's setting, with nothing to show for it. */
+  .side [data-a='toggleSide'] {
+    display: none;
+  }
   .side-scrim {
     display: block;
     position: fixed;
