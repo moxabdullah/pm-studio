@@ -2342,15 +2342,18 @@ A.openNotif = el => {
 };
 
 /* search & palette */
+/* The palette shuts an open sidebar (the phone's drawer), so what held focus in it, or the popover item that opened the palette from it, is
+   hidden or gone when the palette closes: focus goes back to what opened the sidebar. */
+const palOpenerKey = () => (S.ui.mnav ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement));
 A.openPalette = () => {
-  S.ui.palOpener = focusKey(document.activeElement);
+  S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'cmd', scope: 'all', hl: 0 };
   S.ui.pop = null;
+  S.ui.mnav = false;
   render();
 };
 A.openSearch = () => {
-  // an open sidebar is shut by this, so what held focus in it is hidden when the palette closes: back to what opened the sidebar
-  S.ui.palOpener = S.ui.mnav ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement);
+  S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'search', scope: 'all', hl: 0 };
   S.ui.pop = null;
   S.ui.mnav = false;
