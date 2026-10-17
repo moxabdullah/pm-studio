@@ -92,6 +92,7 @@ export function renderSidebar() {
   return `<nav class="side" aria-label="Main">
     <div class="side-top">
       <div class="row" style="gap:2px">
+        <button class="ibtn side-close" data-a="closeMnav" aria-label="Close navigation">${ic('x', 17)}</button>
         <button class="ws grow" data-a="pop" data-pop="ws" aria-haspopup="menu" aria-label="Switch workspace">
           ${wsLogo(d.ws, 22)}
           <span class="ws-name trunc">${esc(d.ws.name)}</span>

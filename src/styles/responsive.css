@@ -40,6 +40,11 @@
       transform 0.22s var(--ease),
       visibility 0s;
   }
+  /* First in the sidebar for the focus order, shown at its end for the eye (the workspace menu takes the room). */
+  .side .side-close {
+    display: inline-flex;
+    order: 1;
+  }
   .side-scrim {
     display: block;
     position: fixed;
