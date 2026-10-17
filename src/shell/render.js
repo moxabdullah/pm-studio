@@ -162,6 +162,8 @@ export function render() {
   let s0 = null,
     s1 = null;
   const fkey = focusKey(a);
+  // If the render drops that control (the rail's project icon), the control around it takes the focus.
+  const fup = a && a.parentElement ? focusKey(a.parentElement.closest('[data-a]')) : null;
   try {
     s0 = a.selectionStart;
     s1 = a.selectionEnd;
@@ -201,6 +203,7 @@ export function render() {
   if (prevOv.pal && !ov.pal && lost()) tryFocus(S.ui.palOpener);
   if (prevOv.sub && !ov.sub && lost()) tryFocus('.drawer .subt [data-sid="' + (S.ui.lastSub || '') + '"]');
   if (lost() && fkey) tryFocus(fkey);
+  if (lost() && fup) tryFocus(fup);
   render._ov = ov;
   const played = S.ui.fx;
   S.ui.fx = {};

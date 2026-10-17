@@ -76,9 +76,11 @@ export function renderPage() {
   }
 }
 
+// The rail's tooltip, and the item's name while its label is hidden (the label names it in the full sidebar, with its count)
+const railTip = label => (sideCollapsed() ? `data-tip="${esc(label)}" data-tip-pos="right" aria-label="${esc(label)}"` : '');
 export function sItem(route, label, icon, opt = {}) {
   const on = S.ui.route === route && (!opt.id || S.ui.params.id === opt.id);
-  return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${esc(opt.id)}"` : ''} ${sideCollapsed() ? `data-tip="${esc(label)}" data-tip-pos="right"` : ''} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
+  return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${esc(opt.id)}"` : ''} ${railTip(label)} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
 }
 export function renderSidebar() {
   const u = S.ui,
@@ -102,7 +104,7 @@ export function renderSidebar() {
       </div>
     </div>
     <div class="side-scroll" data-keep="side">
-      ${col ? `<button class="sitem" data-a="toggleSide" data-tip="Expand sidebar" data-tip-pos="right" aria-label="Expand sidebar">${ic('panel-left', 16)}</button>` : ''}
+      ${col ? `<button class="sitem" data-a="toggleSide" ${railTip('Expand sidebar')}>${ic('panel-left', 16)}</button>` : ''}
       ${sItem('home', 'Home', 'house')}
       ${sItem('inbox', 'Inbox', 'inbox', { ct: unreadInbox || '', dot: true })}
       ${sItem('mytasks', 'My Tasks', 'circle-check', { ct: myOpen || '' })}
@@ -125,8 +127,8 @@ export function renderSidebar() {
             const open = !!u.expanded[p.id];
             const on = inProj === p.id;
             return `<div class="sproj" data-proj-drop="${esc(p.id)}">
-            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${col ? `data-tip="${esc(p.name)}" data-tip-pos="right"` : ''}>
-              <span class="pico" style="--c:${pColor(p)}" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Toggle sub-pages">${ic(p.icon, 12)}</span>
+            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${railTip(p.name)}>
+              <span class="pico" style="--c:${pColor(p)}" ${col ? '' : `data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Toggle sub-pages"`}>${ic(p.icon, 12)}</span>
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
@@ -159,9 +161,9 @@ export function renderSidebar() {
       </div>
     </div>
     <div class="side-bot">
-      <button class="sitem" data-a="pop" data-pop="help" ${col ? 'data-tip="Help" data-tip-pos="right"' : ''}>${ic('circle-help', 16)}<span>Help & resources</span></button>
+      <button class="sitem" data-a="pop" data-pop="help" ${railTip('Help')}>${ic('circle-help', 16)}<span>Help & resources</span></button>
       ${sItem('settings', 'Settings', 'settings')}
-      <button class="sitem" data-a="pop" data-pop="user" style="height:36px" ${col ? 'data-tip="Profile" data-tip-pos="right"' : ''}>${av(d.me, 'presence', false)}<span class="trunc" style="color:var(--text);font-weight:500">${esc(me().name)}</span><span class="ct">${ic('chevrons-up-down', 13)}</span></button>
+      <button class="sitem" data-a="pop" data-pop="user" style="height:36px" ${railTip('Profile')}>${av(d.me, 'presence', false)}<span class="trunc" style="color:var(--text);font-weight:500">${esc(me().name)}</span><span class="ct">${ic('chevrons-up-down', 13)}</span></button>
     </div>
   </nav>`;
 }
