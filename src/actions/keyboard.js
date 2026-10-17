@@ -123,6 +123,12 @@ document.addEventListener('keydown', e => {
       closeModal();
       return;
     }
+    // The phone's sidebar is over the task panel (and the page), which are inert while it is open, so it is what Esc closes next. A popover,
+    // the palette and a dialog opened from it are above it and went first.
+    if (S.ui.mnav) {
+      A.closeMnav();
+      return;
+    }
     if (S.ui.subOpen) {
       if (typing) t.blur();
       S.ui.lastSub = S.ui.subOpen.sid;
@@ -132,10 +138,6 @@ document.addEventListener('keydown', e => {
     if (S.ui.drawer) {
       if (typing) t.blur();
       A.closeDrawer();
-      return;
-    }
-    if (S.ui.mnav) {
-      A.closeMnav();
       return;
     }
     if (S.ui.sel.size) {
