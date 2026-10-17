@@ -681,8 +681,8 @@ function sortLists(data) {
 let answered = 0;
 const SETTLE_MS = 3000;
 /* Every collection the user may read, in parallel, as { appKey: [records], user_prefs: [record] }. The activity feed and the
-   notification list load only their newest entries, and an optional collection the server does not have (it answers 404) reads as
-   empty. When one read fails, the others are given up to SETTLE_MS to land (and be counted) before the failure is thrown. */
+   notification list load only their newest entries. When one read fails, the others are given up to SETTLE_MS to land (and be
+   counted) before the failure is thrown. */
 async function loadAll() {
   const full = coll => pb.collection(coll).getFullList({ batch: 500, sort: 'created,id' });
   const newest = (coll, n) =>
@@ -690,10 +690,7 @@ async function loadAll() {
       .collection(coll)
       .getList(1, n, { sort: '-created,id', skipTotal: true })
       .then(r => r.items);
-  const jobs = COLLECTIONS.map(({ key, coll, optional }) => [
-    key,
-    CAPS[key] ? newest(coll, CAPS[key]) : optional ? full(coll).catch(err => (err?.status === 404 ? [] : Promise.reject(err))) : full(coll),
-  ]);
+  const jobs = COLLECTIONS.map(({ key, coll }) => [key, CAPS[key] ? newest(coll, CAPS[key]) : full(coll)]);
   jobs.push([USER_PREFS, full(USER_PREFS)]);
   let open = true; // a read that lands after the failure was thrown counts for nobody: the next try would take it as its own
   const reads = jobs.map(j =>
