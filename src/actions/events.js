@@ -4,6 +4,7 @@
 import { $, $$ } from '../core/utils.js';
 import { S } from '../core/store.js';
 import { render } from '../shell/render.js';
+import { remoteRender } from '../shell/remote-render.js';
 import { A, BLUR, DBL, IN } from './actions.js';
 
 document.addEventListener(
@@ -89,17 +90,27 @@ addEventListener('resize', () => {
   }
 });
 try {
-  // Across 900 px the sidebar turns from a column of the page into a drawer or back, and is drawn differently (the collapsed rail is the
-  // column's only), so the shell is drawn again. Widened with the drawer open, it is shut, or its scrim and the inert page behind it would stay;
-  // that does not go through closeMnav, as the sidebar's item is shown and keeps its focus. Narrowed, all of the sidebar is hidden, and the
-  // key of the item that had focus may match a control of the page (a link to Projects), which render() would give the focus to: the page
-  // takes it, at its top. Widened from the drawer's close button, which has no copy, the focus is lost: the page takes it too.
+  // Across 900 px the sidebar turns from a column of the page into a drawer or back. Only two things in the markup follow it, the collapsed
+  // rail (a column's only, sideCollapsed()) and the open drawer (its scrim and the inert page); the rest is CSS, which has switched already
+  // when this fires. So the page is drawn again only for those, and not with render(): a window drag, a rotation or a zoom near 900 px
+  // crosses it again and again, and render() would empty a field the user is typing in and let its blur save what is half typed. remoteRender()
+  // keeps both, at the price of drawing a moment later.
+  // Focus is moved here, at once, before that. Widened with the drawer open, it is shut (not through closeMnav, as the sidebar's own item is
+  // shown and keeps its focus); the close button has no copy on the desktop, and the page is inert until it is drawn again, so that is lifted
+  // for the focus. Narrowed, all of the sidebar is hidden, and the key of the item that had focus may match a control of the page (a link to
+  // Projects) that a later render() would give the focus to. Focus on <body> (a popover's opener in the sidebar, closed by the resize that
+  // came first) goes to the page too, at its top.
   matchMedia('(max-width: 900px)').addEventListener('change', e => {
-    const inSide = !!$('.side')?.contains(document.activeElement);
-    if (!e.matches) S.ui.mnav = false;
-    render();
     const a = document.activeElement;
-    if (inSide && (e.matches || !a || a === document.body)) $('#main-content')?.focus({ preventScroll: true });
+    const lost = !a || a === document.body;
+    const inSide = !!$('.side')?.contains(a);
+    const shut = !e.matches && S.ui.mnav;
+    if (shut) {
+      S.ui.mnav = false;
+      $$('[inert]').forEach(x => x.removeAttribute('inert'));
+    }
+    if (lost || (inSide && (e.matches || a.offsetParent === null))) $('#main-content')?.focus({ preventScroll: true });
+    if (S.ui.collapsed || shut) remoteRender();
   });
 } catch {
   /* not supported here; safe to skip */
