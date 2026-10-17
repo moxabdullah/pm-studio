@@ -4,11 +4,12 @@ import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { D, S, allTasks, pColor, proj, save, stageOf, task } from '../core/store.js';
 import { FT, av, hl, stIcon } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
-import { go, render } from '../shell/render.js';
+import { go, render, sideIsDrawer } from '../shell/render.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { searchAll } from '../pages/search.js';
 import { A } from '../actions/actions.js';
 
+/* "Toggle sidebar" is left out where the sidebar is a drawer: the collapsed rail is the desktop's, and A.toggleSide does nothing there. */
 export function commands() {
   return [
     { id: 'c-task', name: 'Create task', icon: 'plus', kbd: 'N', run: () => A.newTask(document.body) },
@@ -51,7 +52,7 @@ export function commands() {
     { id: 'c-side', name: 'Toggle sidebar', icon: 'panel-left', kbd: '[', run: () => A.toggleSide() },
     { id: 'c-keys', name: 'Keyboard shortcuts', icon: 'keyboard', kbd: '?', run: () => A.shortcuts() },
     { id: 'c-out', name: 'Sign out', icon: 'log-out', run: () => A.signOut() },
-  ];
+  ].filter(c => c.id !== 'c-side' || !sideIsDrawer());
 }
 export function paletteItems() {
   const pl = S.ui.palette;
