@@ -58,23 +58,36 @@ export const ROUTE_ICONS = {
   archive: 'archive',
 };
 
+/* At this width and below the sidebar is a drawer from the screen's edge, shut or open (responsive.css), not a column of the page. */
+export const sideIsDrawer = () => matchMedia('(max-width: 900px)').matches;
+/* The collapsed sidebar (S.ui.collapsed, a setting that is kept) is the narrow icon-only rail of the desktop. The drawer is never that rail: it has
+   no room to save and its items would have no names. So the setting is drawn only where the sidebar is a column. */
+export const sideCollapsed = () => S.ui.collapsed && !sideIsDrawer();
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
   if (!opt.back) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
   const same = S.ui.route === route && JSON.stringify(S.ui.params) === JSON.stringify(params);
   S.ui.route = route;
   S.ui.params = params;
+  const drawer = S.ui.mnav && sideIsDrawer();
+  const inSide = drawer && !!$('.side')?.contains(document.activeElement);
   S.ui.mnav = false;
   S.ui.sel.clear();
   S.ui.pop = null;
   S.ui.composer = null;
   S.ui.editCell = null;
-  if (!opt.keepDrawer && S.ui.drawer && innerWidth < 900) S.ui.drawer = null;
+  if (!opt.keepDrawer && S.ui.drawer && sideIsDrawer()) S.ui.drawer = null;
   // Pages render instantly; motion (not a fake wait) carries the transition.
   clearTimeout(go._t);
   S.ui.loading = false;
   if (!same) fxSet(opt.tab ? { tab: true, tabs: true } : { route: true, tabs: true });
   render();
+  // The drawer that was open is shut: a link of it that held focus is hidden now, which cannot hold focus, so it is lost, and the next Tab
+  // would start where the link was, in the sidebar's list. Focus goes to the page. That the link had it is read before the render: its key
+  // can match a visible control of the page (the bottom nav's Projects), which render() gives the focus to instead. Not asked of a sidebar
+  // that is a column: there the link keeps focus, as it should.
+  const a = document.activeElement;
+  if (drawer && (inSide || !a || a === document.body)) $('#main-content')?.focus({ preventScroll: true });
   const c = $('.content');
   if (c && !same) c.scrollTop = 0;
 }
@@ -96,15 +109,18 @@ export function focusKey(el) {
 }
 export function tryFocus(key) {
   if (!key) return false;
-  let el;
+  let els;
   try {
-    el = document.querySelector(key);
+    els = document.querySelectorAll(key);
   } catch {
     return false;
   }
-  if (el && el.offsetParent !== null) {
+  // A key is not unique: the sidebar comes first in the page and shares many controls with it, and on a phone its closed copy is
+  // visibility:hidden, which offsetParent does not tell. So the first match that takes the focus is the one, not the first match.
+  for (const el of els) {
+    if (el.offsetParent === null) continue;
     el.focus({ preventScroll: true });
-    return document.activeElement === el;
+    if (document.activeElement === el) return true;
   }
   return false;
 }

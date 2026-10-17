@@ -44,7 +44,7 @@
 .cday.out .dn {
   color: var(--text-3);
 }
-.cday.over {
+.cday.drop-over {
   background: var(--accent-soft);
 }
 .cday .dn {
@@ -156,7 +156,7 @@
   flex: 1;
   overflow-y: auto;
 }
-.wcol-b.over {
+.wcol-b.drop-over {
   background: var(--accent-soft);
 }
 .wcard {

@@ -5,7 +5,7 @@ import { HEALTH } from '../core/constants.js';
 import { lookup } from '../core/safe.js';
 import { D, S, allTasks, inWs, isFinished, me, mem, pColor, proj, stageOf, team, teamsList, visibleProjects, wsArchivedTasks } from '../core/store.js';
 import { av, pDot, safely } from '../ui/helpers.js';
-import { ROUTE_NAMES } from './render.js';
+import { ROUTE_NAMES, sideCollapsed } from './render.js';
 import { skeleton } from './skeletons.js';
 import { pageHome } from '../pages/home.js';
 import { pageOverview } from '../pages/overview.js';
@@ -28,10 +28,13 @@ import { pageArchive } from '../features/archive.js';
 
 export function renderShell() {
   const u = S.ui;
-  return `<button class="skip" data-a="skipToContent">Skip to content</button><div class="shell ${u.collapsed ? 'collapsed' : ''} ${u.mnav ? 'mnav' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}">
+  // While the sidebar is open as the phone's drawer, all that is outside it and its scrim (the skip link, the page, the bottom nav) is inert:
+  // it takes no Tab stop and no tap, and the page behind the scrim is not read out
+  const inert = u.mnav ? ' inert' : '';
+  return `<button class="skip" data-a="skipToContent"${inert}>Skip to content</button><div class="shell ${sideCollapsed() ? 'collapsed' : ''} ${u.mnav ? 'mnav' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}">
     ${safely(renderSidebar)}
     ${u.mnav ? '<div class="side-scrim" data-a="closeMnav"></div>' : ''}
-    <main class="main" id="main">
+    <main class="main" id="main"${inert}>
       ${safely(renderTopbar)}
       ${u.offline ? `<div class="offline-bar" role="alert">${ic('wifi-off', 15)}<span><b>You're offline.</b> Changes won't be saved until your connection is back.</span><span class="sp"></span><button class="btn btn-sm btn-secondary" data-a="retryOnline">Try again</button></div>` : ''}
       <div class="content ${u.fx.route ? 'fx-route' : ''}" id="main-content" tabindex="-1" data-keep="c:${esc(u.route)}:${esc(u.params.id || '')}:${esc(u.params.tab || '')}:${esc(u.params.sec || '')}">${u.loading ? skeleton() : renderPage()}</div>
@@ -75,11 +78,12 @@ export function renderPage() {
 
 export function sItem(route, label, icon, opt = {}) {
   const on = S.ui.route === route && (!opt.id || S.ui.params.id === opt.id);
-  return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${esc(opt.id)}"` : ''} ${S.ui.collapsed ? `data-tip="${esc(label)}" data-tip-pos="right"` : ''} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
+  return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${esc(opt.id)}"` : ''} ${sideCollapsed() ? `data-tip="${esc(label)}" data-tip-pos="right"` : ''} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
 }
 export function renderSidebar() {
   const u = S.ui,
     d = D();
+  const col = sideCollapsed();
   const unreadInbox = d.notifs.filter(n => !n.read && n.type !== 'update').length;
   const unreadAll = d.notifs.filter(n => !n.read).length;
   const myOpen = allTasks().filter(t => t.assignee === d.me && t.status !== 'done' && t.due && diffD(parse(t.due), TODAY) <= 0).length;
@@ -88,16 +92,17 @@ export function renderSidebar() {
   return `<nav class="side" aria-label="Main">
     <div class="side-top">
       <div class="row" style="gap:2px">
+        <button class="ibtn side-close" data-a="closeMnav" aria-label="Close navigation">${ic('x', 17)}</button>
         <button class="ws grow" data-a="pop" data-pop="ws" aria-haspopup="menu" aria-label="Switch workspace">
           ${wsLogo(d.ws, 22)}
           <span class="ws-name trunc">${esc(d.ws.name)}</span>
           <span class="chev-d faint">${ic('chevrons-up-down', 13)}</span>
         </button>
-        ${u.collapsed ? '' : `<button class="ibtn ibtn-sm hide-m" data-a="toggleSide" data-tip="Collapse sidebar  [" aria-label="Collapse sidebar">${ic('panel-left', 15)}</button>`}
+        ${col ? '' : `<button class="ibtn ibtn-sm hide-m" data-a="toggleSide" data-tip="Collapse sidebar  [" aria-label="Collapse sidebar">${ic('panel-left', 15)}</button>`}
       </div>
     </div>
     <div class="side-scroll" data-keep="side">
-      ${u.collapsed ? `<button class="sitem" data-a="toggleSide" data-tip="Expand sidebar" data-tip-pos="right" aria-label="Expand sidebar">${ic('panel-left', 16)}</button>` : ''}
+      ${col ? `<button class="sitem" data-a="toggleSide" data-tip="Expand sidebar" data-tip-pos="right" aria-label="Expand sidebar">${ic('panel-left', 16)}</button>` : ''}
       ${sItem('home', 'Home', 'house')}
       ${sItem('inbox', 'Inbox', 'inbox', { ct: unreadInbox || '', dot: true })}
       ${sItem('mytasks', 'My Tasks', 'circle-check', { ct: myOpen || '' })}
@@ -120,7 +125,7 @@ export function renderSidebar() {
             const open = !!u.expanded[p.id];
             const on = inProj === p.id;
             return `<div class="sproj" data-proj-drop="${esc(p.id)}">
-            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${u.collapsed ? `data-tip="${esc(p.name)}" data-tip-pos="right"` : ''}>
+            <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${col ? `data-tip="${esc(p.name)}" data-tip-pos="right"` : ''}>
               <span class="pico" style="--c:${pColor(p)}" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Toggle sub-pages">${ic(p.icon, 12)}</span>
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
@@ -128,7 +133,7 @@ export function renderSidebar() {
               <span class="sdot" style="background:${pDot(p)}" title="${esc(stageOf(p).name)}${p.health && p.health !== 'ok' ? ' · ' + HEALTH[p.health].name : ''}"></span>
               <span class="hov"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Project options">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Expand">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
             </div>
-            <div class="sub ${open && !u.collapsed ? 'open' : ''}">
+            <div class="sub ${open && !col ? 'open' : ''}">
               ${[
                 ['board', 'Board', 'square-kanban'],
                 ['list', 'List', 'list'],
@@ -154,9 +159,9 @@ export function renderSidebar() {
       </div>
     </div>
     <div class="side-bot">
-      <button class="sitem" data-a="pop" data-pop="help" ${u.collapsed ? 'data-tip="Help" data-tip-pos="right"' : ''}>${ic('circle-help', 16)}<span>Help & resources</span></button>
+      <button class="sitem" data-a="pop" data-pop="help" ${col ? 'data-tip="Help" data-tip-pos="right"' : ''}>${ic('circle-help', 16)}<span>Help & resources</span></button>
       ${sItem('settings', 'Settings', 'settings')}
-      <button class="sitem" data-a="pop" data-pop="user" style="height:36px" ${u.collapsed ? 'data-tip="Profile" data-tip-pos="right"' : ''}>${av(d.me, 'presence', false)}<span class="trunc" style="color:var(--text);font-weight:500">${esc(me().name)}</span><span class="ct">${ic('chevrons-up-down', 13)}</span></button>
+      <button class="sitem" data-a="pop" data-pop="user" style="height:36px" ${col ? 'data-tip="Profile" data-tip-pos="right"' : ''}>${av(d.me, 'presence', false)}<span class="trunc" style="color:var(--text);font-weight:500">${esc(me().name)}</span><span class="ct">${ic('chevrons-up-down', 13)}</span></button>
     </div>
   </nav>`;
 }
@@ -206,8 +211,8 @@ export function renderBottomNav() {
   const unread = D().notifs.some(n => !n.read && n.type !== 'update');
   const b = (route, label, icon, extra = '') =>
     `<button class="${r === route ? 'on' : ''}" data-a="go" data-r="${route}">${ic(icon, 19)}<span>${label}</span>${extra}</button>`;
-  return `<nav class="bottomnav" aria-label="Primary">
+  return `<nav class="bottomnav" aria-label="Primary"${S.ui.mnav ? ' inert' : ''}>
     ${b('home', 'Home', 'house')}${b('mytasks', 'My Tasks', 'circle-check')}${b('projects', 'Projects', 'folder-kanban')}${b('inbox', 'Inbox', 'inbox', unread ? '<span class="bdot"></span>' : '')}
-    <button data-a="openMnav">${ic('ellipsis', 19)}<span>More</span></button>
+    <button id="mnav-more" data-a="openMnav">${ic('ellipsis', 19)}<span>More</span></button>
   </nav>`;
 }

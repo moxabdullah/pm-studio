@@ -27,6 +27,11 @@
 .side-top {
   padding: 8px 8px 4px;
 }
+/* The phone's drawer has a close button (responsive.css); the column of the desktop has none. It is first in the sidebar, so it is what
+   an opening drawer focuses. */
+.side .side-close {
+  display: none;
+}
 .ws {
   display: flex;
   align-items: center;

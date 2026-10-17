@@ -14,11 +14,15 @@ export let DRAG = null;
 let pickerClosed = false; // dragstart closed a picker without drawing: dragend draws
 export function clearDropMarks() {
   $$('.drop-line').forEach(x => x.remove());
-  $$('.over').forEach(x => x.classList.remove('over'));
+  $$('.drop-over').forEach(x => x.classList.remove('drop-over'));
   $$('.drop-before,.drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
   $$('.dragging').forEach(x => x.classList.remove('dragging'));
 }
 document.addEventListener('dragstart', e => {
+  // A drop whose render detaches the dragged element sends its dragend to the detached node, never to the document, so the flag can still be
+  // set from the drag before. Every drag starts clear of it, the ones that are not the app's own (text, a link) included: they return below
+  // and their dragend would draw once more for nothing.
+  pickerClosed = false;
   const card = e.target.closest?.('[data-drag-card]'),
     row = e.target.closest?.('[data-drag-row]'),
     cal = e.target.closest?.('[data-drag-cal]'),
@@ -79,12 +83,12 @@ document.addEventListener('dragover', e => {
     const dz = e.target.closest?.(DROP_TARGETS);
     if (dz) {
       e.preventDefault();
-      $$('.dropzone.over').forEach(x => x !== dz && x.classList.remove('over'));
-      dz.classList?.add('over');
+      $$('.dropzone.drop-over').forEach(x => x !== dz && x.classList.remove('drop-over'));
+      dz.classList?.add('drop-over');
     } else {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'none';
-      $$('.dropzone.over').forEach(x => x.classList.remove('over'));
+      $$('.dropzone.drop-over').forEach(x => x.classList.remove('drop-over'));
     }
     return;
   }
@@ -93,8 +97,8 @@ document.addEventListener('dragover', e => {
     const col = e.target.closest('[data-drop-col]');
     if (!col) return;
     e.preventDefault();
-    $$('.bcol.over').forEach(x => x !== col && x.classList.remove('over'));
-    col.classList.add('over');
+    $$('.bcol.drop-over').forEach(x => x !== col && x.classList.remove('drop-over'));
+    col.classList.add('drop-over');
     const body = col.querySelector('[data-col-body]');
     if (!body) return;
     const cards = [...body.querySelectorAll('.kcard:not(.dragging)')];
@@ -127,8 +131,8 @@ document.addEventListener('dragover', e => {
     const day = e.target.closest('[data-drop-day]');
     if (!day) return;
     e.preventDefault();
-    $$('.over').forEach(x => x !== day && x.classList.remove('over'));
-    day.classList.add('over');
+    $$('.drop-over').forEach(x => x !== day && x.classList.remove('drop-over'));
+    day.classList.add('drop-over');
     DRAG.day = day.dataset.dropDay;
   } else if (DRAG.type === 'proj') {
     const it = e.target.closest('[data-proj-drop]');
@@ -155,15 +159,15 @@ document.addEventListener('dragover', e => {
     }
     // a column of the projects Board (the "Unknown stage" one has no data-drop-stage: no drop there)
     const col = e.target.closest('[data-drop-stage]');
-    $$('.bcol.over').forEach(x => x !== col && x.classList.remove('over'));
+    $$('.bcol.drop-over').forEach(x => x !== col && x.classList.remove('drop-over'));
     if (!col) return;
     e.preventDefault();
-    col.classList.add('over');
+    col.classList.add('drop-over');
   }
 });
 document.addEventListener('dragleave', e => {
   const dz = e.target.closest?.('.dropzone');
-  if (dz && !dz.contains(e.relatedTarget)) dz.classList.remove('over');
+  if (dz && !dz.contains(e.relatedTarget)) dz.classList.remove('drop-over');
 });
 document.addEventListener('drop', e => {
   const files = e.dataTransfer?.files;

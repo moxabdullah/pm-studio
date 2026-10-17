@@ -560,7 +560,7 @@
   cursor: pointer;
 }
 .dropzone:hover,
-.dropzone.over {
+.dropzone.drop-over {
   background: var(--accent-soft);
   border-color: var(--accent-line);
   color: var(--text);

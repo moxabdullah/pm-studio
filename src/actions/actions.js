@@ -49,7 +49,7 @@ import { MAX_FILE_BYTES, downloadFile, fileOf, isRaster, uploadFile, uploadMessa
 import { FORMER, fileType, fsize } from '../ui/helpers.js';
 import { applyPrefs, effectiveDark } from '../core/theme.js';
 import { clearStickyToasts, latest, latestFields, mutate, toast } from '../ui/toast.js';
-import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render } from '../shell/render.js';
+import { ROUTE_NAMES, autosize, focusKey, fxSet, go, render, sideIsDrawer, tryFocus } from '../shell/render.js';
 import { remoteRender } from '../shell/remote-render.js';
 import { dropWsFilters, hideProjCol, peekView, viewOf } from '../shell/view-engine.js';
 import { closeModal, fieldErrHtml, openModal } from '../overlays/modals.js';
@@ -256,17 +256,28 @@ A.set = el => {
   render();
 };
 A.toggleSide = () => {
+  // The drawer is never the collapsed rail, so here the change would show nothing, and it is saved: it would arrive on the user's other devices.
+  if (sideIsDrawer()) return;
   S.ui.collapsed = !S.ui.collapsed;
   save();
   render();
 };
-A.openMnav = () => {
+A.openMnav = el => {
+  S.ui.mnavOpener = focusKey(el); // the button itself, not what has focus: a tap does not focus a button in every browser
   S.ui.mnav = true;
   render();
+  // render() has put focus back on the button that opened it, which is inert behind the open sidebar now; the sidebar's first control takes it
+  $('.side')?.querySelector('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')?.focus({ preventScroll: true });
 };
 A.closeMnav = () => {
+  const inSide = !!$('.side')?.contains(document.activeElement);
   S.ui.mnav = false;
   render();
+  // Esc leaves focus on an item of the sidebar that is hidden now, a tap on the scrim leaves it on the page: back to what opened the sidebar.
+  // That the item had focus is read before the render: its key can match a visible control of the page (the bottom nav's Home), which
+  // render() gives the focus to instead.
+  const a = document.activeElement;
+  if (inSide || !a || a === document.body) tryFocus(S.ui.mnavOpener) || tryFocus('#mnav-btn');
 };
 A.toggleExpand = el => {
   S.ui.expanded[el.dataset.id] = !S.ui.expanded[el.dataset.id];
@@ -2333,17 +2344,23 @@ A.openNotif = el => {
 };
 
 /* search & palette */
+/* The palette shuts an open sidebar (the phone's drawer), so what held focus in it, or the popover item that opened the palette from it, is
+   hidden or gone when the palette closes: focus goes back to what opened the sidebar. Not when a dialog is open over the sidebar (one of its
+   "+" buttons opens it): the palette is over the dialog, the sidebar under it stays, and Esc returns to the control of the dialog that had focus. */
+const drawerOnTop = () => S.ui.mnav && !S.ui.modals.length;
+const palOpenerKey = () => (drawerOnTop() ? S.ui.mnavOpener || '#mnav-btn' : focusKey(document.activeElement));
 A.openPalette = () => {
-  S.ui.palOpener = focusKey(document.activeElement);
+  S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'cmd', scope: 'all', hl: 0 };
   S.ui.pop = null;
+  if (drawerOnTop()) S.ui.mnav = false;
   render();
 };
 A.openSearch = () => {
-  S.ui.palOpener = focusKey(document.activeElement);
+  S.ui.palOpener = palOpenerKey();
   S.ui.palette = { q: '', mode: 'search', scope: 'all', hl: 0 };
   S.ui.pop = null;
-  S.ui.mnav = false;
+  if (drawerOnTop()) S.ui.mnav = false;
   render();
 };
 A.closePalette = () => {

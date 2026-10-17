@@ -16,15 +16,18 @@ import { subtaskHtml } from '../features/subtasks.js';
 export function renderLayer() {
   const u = S.ui;
   let h = '';
+  // The task panel (z-index 50) stays open under the phone's sidebar (70) when that opens over it, and is out of reach like the rest of the page.
+  const inert = u.mnav ? ' inert' : '';
   if (u.drawer && task(u.drawer))
     h += safely(
-      () => (u.drawerFull ? `<div class="drawer-scrim full${u.fx.drawer ? ' enter' : ''}" data-a="closeDrawer"></div>` : '') + drawerHtml(task(u.drawer)),
+      () =>
+        (u.drawerFull ? `<div class="drawer-scrim full${u.fx.drawer ? ' enter' : ''}" data-a="closeDrawer"${inert}></div>` : '') + drawerHtml(task(u.drawer)),
     );
   u.modals.forEach((m, i) => {
     const en = u.fx.modal === i + 1;
     h += safely(
       () =>
-        `<div class="scrim${en ? ' enter' : ''}" data-a="closeModal" style="z-index:${60 + i * 2}"></div><div class="modal-wrap" data-a="closeModalBg" style="z-index:${61 + i * 2}">${en ? modalHtml(m).replace('class="modal ', 'class="modal enter ') : modalHtml(m)}</div>`,
+        `<div class="scrim${en ? ' enter' : ''}" data-a="closeModal" style="z-index:${71 + i * 2}"></div><div class="modal-wrap" data-a="closeModalBg" style="z-index:${72 + i * 2}">${en ? modalHtml(m).replace('class="modal ', 'class="modal enter ') : modalHtml(m)}</div>`,
     );
   });
   if (u.palette) h += safely(() => `<div class="scrim" data-a="closePalette" style="z-index:89"></div>${paletteHtml()}`);
@@ -52,7 +55,7 @@ export function drawerHtml(t) {
           .slice(0, 5)
       : [];
   const sub = u.subOpen && u.subOpen.tid === t.id ? t.subtasks.find(s => s.id === u.subOpen.sid) : null;
-  return `<aside class="drawer ${u.drawerFull ? 'full' : ''} ${u.fx.drawer ? 'enter' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}" role="dialog" aria-modal="${u.drawerFull}" aria-labelledby="d-h" tabindex="-1">
+  return `<aside class="drawer ${u.drawerFull ? 'full' : ''} ${u.fx.drawer ? 'enter' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}" role="dialog" aria-modal="${u.drawerFull}" aria-labelledby="d-h" tabindex="-1"${u.mnav ? ' inert' : ''}>
     <h2 class="sr" id="d-h">${sub ? 'Subtask: ' + esc(sub.title) : 'Task: ' + esc(t.title)}</h2>
     <div class="drawer-h">
       <button class="pillbtn" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="board" style="font-size:12.5px"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(p.name)}</button><span class="faint">/</span><span class="mono faint" style="font-size:11.5px;padding:0 6px">${esc(t.key)}</span>

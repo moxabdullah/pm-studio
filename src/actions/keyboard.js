@@ -23,9 +23,15 @@ document.addEventListener('keydown', e => {
     A.toggleDark();
     return;
   }
-  // Keep Tab inside whichever surface is modal right now.
+  // Keep Tab inside whichever surface is modal right now. The palette has its own Tab below, and a dialog is above the phone's sidebar. The
+  // sidebar is the modal surface otherwise, over a task panel (inert behind it, even a full one) and over the toasts, which are outside the
+  // inert page (#toasts has to stay readable, so it is not inert itself). A popover is above it: its own controls take the Tab.
   if (e.key === 'Tab') {
-    const box = pl ? $('.palette') : S.ui.modals.length ? $$('.modal').pop() : S.ui.drawer && S.ui.drawerFull ? $('.drawer') : null;
+    let box = null;
+    if (pl) box = $('.palette');
+    else if (S.ui.modals.length) box = $$('.modal').pop();
+    else if (S.ui.mnav) box = S.ui.pop ? null : $('.side');
+    else if (S.ui.drawer && S.ui.drawerFull) box = $('.drawer');
     if (box && !pl) {
       const f = [
         ...box.querySelectorAll(
@@ -105,17 +111,26 @@ document.addEventListener('keydown', e => {
       closePop();
       return;
     }
-    if (S.ui.mention) {
+    // The phone's sidebar is over the task panel and the page, which are inert while it is open: a mention list, a cell being edited or a
+    // composer left open there is under it, so the sidebar is what Esc closes next. A popover, the palette and a dialog are above it; a
+    // dialog (and whatever is open in it) goes first, and the sidebar is closed by the Esc after. The mention list (the task panel's or the
+    // inbox's comment box), a cell being edited (table, list) and a composer (board, list) belong to the page and are never inside a dialog,
+    // so with one open, a dialog is what Esc closes: they wait for it as much as for the sidebar.
+    if (S.ui.mnav && !S.ui.modals.length) {
+      A.closeMnav();
+      return;
+    }
+    if (S.ui.mention && !S.ui.modals.length) {
       S.ui.mention = null;
       render();
       return;
     }
-    if (S.ui.editCell) {
+    if (S.ui.editCell && !S.ui.modals.length) {
       S.ui.editCell = null;
       render();
       return;
     }
-    if (S.ui.composer) {
+    if (S.ui.composer && !S.ui.modals.length) {
       A.cancelComposer();
       return;
     }
@@ -132,10 +147,6 @@ document.addEventListener('keydown', e => {
     if (S.ui.drawer) {
       if (typing) t.blur();
       A.closeDrawer();
-      return;
-    }
-    if (S.ui.mnav) {
-      A.closeMnav();
       return;
     }
     if (S.ui.sel.size) {

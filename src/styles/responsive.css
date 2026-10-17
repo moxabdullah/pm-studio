@@ -14,6 +14,7 @@
   }
 }
 @media (max-width: 900px) {
+  /* The drawer is not a column, collapsed or not: a stale "collapsed" (the page is drawn again a moment after a crossing) must not keep its grid. */
   .shell,
   .shell.collapsed {
     grid-template-columns: minmax(0, 1fr);
@@ -26,15 +27,24 @@
     width: 280px;
     z-index: 70;
     transform: translateX(-100%);
+    /* Off the screen is also out of the Tab order and the reading order. Every change of mnav draws the whole shell again (render() replaces
+       #app), so the sidebar is drawn open or shut at once, where it is: it does not slide, and nothing is left to wait for with a delayed hide. */
+    visibility: hidden;
     transition: transform 0.22s var(--ease);
     box-shadow: var(--shadow-pop);
   }
   .shell.mnav .side {
     transform: none;
+    visibility: visible;
   }
-  .shell.collapsed .side .sitem {
-    justify-content: flex-start;
-    padding: 0 8px;
+  /* First in the sidebar for the focus order, shown at its end for the eye (the workspace menu takes the room). */
+  .side .side-close {
+    display: inline-flex;
+    order: 1;
+  }
+  /* The drawer is never the collapsed rail (sideCollapsed), so its button would only change the desktop's setting, with nothing to show for it. */
+  .side [data-a='toggleSide'] {
+    display: none;
   }
   .side-scrim {
     display: block;
@@ -293,6 +303,13 @@
   .topsearch {
     min-width: 40px;
     min-height: 40px;
+  }
+  /* The drawer's Close is as easy to hit as the button that opens it. It is the last in the top row, so the margin sets it apart from the
+     workspace button (the row's own 2 px gap is inline), and the workspace button, which grows, gives up the room. */
+  .side .side-close {
+    width: 40px;
+    height: 40px;
+    margin-inline-start: 6px;
   }
   .palette {
     top: 8px;
