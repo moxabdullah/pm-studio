@@ -107,22 +107,24 @@ document.addEventListener('keydown', e => {
     }
     // The phone's sidebar is over the task panel and the page, which are inert while it is open: a mention list, a cell being edited or a
     // composer left open there is under it, so the sidebar is what Esc closes next. A popover, the palette and a dialog are above it; a
-    // dialog (and whatever is open in it) goes first, and the sidebar is closed by the Esc after.
+    // dialog (and whatever is open in it) goes first, and the sidebar is closed by the Esc after. The mention list (the task panel's or the
+    // inbox's comment box), a cell being edited (table, list) and a composer (board, list) belong to the page and are never inside a dialog,
+    // so with one open, a dialog is what Esc closes: they wait for it as much as for the sidebar.
     if (S.ui.mnav && !S.ui.modals.length) {
       A.closeMnav();
       return;
     }
-    if (S.ui.mention) {
+    if (S.ui.mention && !S.ui.modals.length) {
       S.ui.mention = null;
       render();
       return;
     }
-    if (S.ui.editCell) {
+    if (S.ui.editCell && !S.ui.modals.length) {
       S.ui.editCell = null;
       render();
       return;
     }
-    if (S.ui.composer) {
+    if (S.ui.composer && !S.ui.modals.length) {
       A.cancelComposer();
       return;
     }
