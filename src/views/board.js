@@ -2,7 +2,7 @@
 import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PR, STATUSES } from '../core/constants.js';
-import { S, commentsOf, pColor, proj, shownLabels } from '../core/store.js';
+import { S, commentsOf, mem, pColor, proj, shownLabels } from '../core/store.js';
 import { av, dueHtml, lblPills, prIcon, progBar, stIcon } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
@@ -24,7 +24,7 @@ export function kcard(t, opt = {}) {
       ${t.recur ? `<span class="m" data-tip="Repeats ${esc(String(t.recur).toLowerCase())}">${ic('repeat', 12)}</span>` : ''}
       ${cc ? `<span class="m" aria-label="${cc} comments">${ic('message-square', 12)}${cc}</span>` : ''}
       ${ac ? `<span class="m" aria-label="${ac} attachments">${ic('paperclip', 12)}${ac}</span>` : ''}
-      <button class="m" data-a="pop" data-pop="assignee" data-id="${esc(t.id)}" style="margin-left:auto" aria-label="Assignee">${av(t.assignee, 'sm')}</button>
+      <button class="m" data-a="pop" data-pop="assignee" data-id="${esc(t.id)}" style="margin-left:auto" aria-label="Assignee: ${esc(mem(t.assignee)?.name || 'Unassigned')}">${av(t.assignee, 'sm')}</button>
     </div>
     <div class="hacts"><button class="ibtn ibtn-xs" data-a="toggleDone" data-id="${esc(t.id)}" data-tip="${t.status === 'done' ? 'Reopen' : 'Mark complete'}" aria-label="${t.status === 'done' ? 'Reopen' : 'Mark complete'}">${ic(t.status === 'done' ? 'rotate-ccw' : 'check', 13)}</button><button class="ibtn ibtn-xs" data-a="editTask" data-id="${esc(t.id)}" data-tip="Quick edit" aria-label="Quick edit">${ic('pencil', 12)}</button><button class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="task" data-id="${esc(t.id)}" aria-label="More">${ic('ellipsis', 13)}</button></div>
   </div>`;

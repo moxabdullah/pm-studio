@@ -37,6 +37,10 @@
     transform: none;
     visibility: visible;
   }
+  /* The offline bar's "Try again" is at the right end of the bar, which a drawer of 280px covers on a phone as narrow as 320px: it leaves the room. */
+  .shell.mnav.offline .side {
+    max-width: calc(100vw - 96px);
+  }
   /* First in the sidebar for the focus order, shown at its end for the eye (the workspace menu takes the room). */
   .side .side-close {
     display: inline-flex;
@@ -53,6 +57,12 @@
     background: var(--overlay);
     z-index: 69;
     animation: fade 0.14s both;
+  }
+  /* The offline bar is not inert while the sidebar is open: it stays reachable. It is over the scrim (the same z-index, and it comes later in the
+     page) and under the sidebar, which covers its left end: the sidebar leaves the room (max-width below) for the bar's button, at the right end. */
+  .shell.mnav .offline-bar {
+    position: relative;
+    z-index: 69;
   }
   :root {
     --gutter: 16px;

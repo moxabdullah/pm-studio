@@ -8,7 +8,7 @@
      - keeps every text field the user has changed but not yet committed (the task title commits on blur, for example), and the focus
        and caret of the field they are typing in, including the rich-text description (character offsets, since its nodes are rebuilt),
      - stops the blur handlers (which commit a field) from firing because the page was rebuilt around the focused field. */
-import { autosize, focusKey, render } from './render.js';
+import { autosize, focusKey, keyEls, render } from './render.js';
 
 const COALESCE_MS = 100;
 const RECHECK_MS = 150;
@@ -94,6 +94,13 @@ document.addEventListener(
 export function remoteRender() {
   if (!timer) timer = setTimeout(run, COALESCE_MS);
 }
+/* Draws in this task, with no wait for more changes, unless something is in progress (then it waits for that, as it always does). A function of
+   its own: remoteRender is the sync engine's render hook, which must take no argument that could make it synchronous. */
+export function remoteRenderNow() {
+  if (busy()) return remoteRender();
+  clearTimeout(timer); // this render does for the one that was waiting
+  run();
+}
 function run() {
   timer = 0;
   if (busy()) {
@@ -115,7 +122,7 @@ const TEXT_TYPES = new Set(['', 'text', 'search', 'email', 'url', 'tel', 'passwo
 const isTextField = el => el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && TEXT_TYPES.has(el.getAttribute('type') || ''));
 const query = key => {
   try {
-    return key ? document.querySelector(key) : null;
+    return key ? keyEls(key)[0] || null : null;
   } catch {
     return null;
   }

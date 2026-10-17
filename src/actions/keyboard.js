@@ -25,19 +25,28 @@ document.addEventListener('keydown', e => {
   }
   // Keep Tab inside whichever surface is modal right now. The palette has its own Tab below, and a dialog is above the phone's sidebar. The
   // sidebar is the modal surface otherwise, over a task panel (inert behind it, even a full one) and over the toasts, which are outside the
-  // inert page (#toasts has to stay readable, so it is not inert itself). A popover is above it: its own controls take the Tab.
+  // inert page (#toasts has to stay readable, so it is not inert itself). The offline bar is outside it too (it has to stay reachable), so it is
+  // a part of the sidebar's cycle. A popover is above all of them: over the sidebar, a dialog or a full task panel its own controls take the Tab.
   if (e.key === 'Tab') {
-    let box = null;
-    if (pl) box = $('.palette');
-    else if (S.ui.modals.length) box = $$('.modal').pop();
-    else if (S.ui.mnav) box = S.ui.pop ? null : $('.side');
-    else if (S.ui.drawer && S.ui.drawerFull) box = $('.drawer');
-    if (box && !pl) {
-      const f = [
-        ...box.querySelectorAll(
-          'a[href],button:not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"]),[contenteditable="true"]',
-        ),
-      ].filter(x => x.offsetParent !== null);
+    const pop = S.ui.pop && !pl ? $('.pop.floating') : null;
+    let boxes = [];
+    if (pl) boxes = [$('.palette')];
+    else if (pop && (S.ui.mnav || S.ui.modals.length || (S.ui.drawer && S.ui.drawerFull))) boxes = [pop];
+    else if (S.ui.modals.length) boxes = [$$('.modal').pop()];
+    else if (S.ui.mnav) boxes = [$('.side'), $('.offline-bar')];
+    else if (S.ui.drawer && S.ui.drawerFull) boxes = [$('.drawer')];
+    if (boxes.length && !pl) {
+      const f = boxes
+        .flatMap(box =>
+          box
+            ? [
+                ...box.querySelectorAll(
+                  'a[href],button:not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"]),[contenteditable="true"]',
+                ),
+              ]
+            : [],
+        )
+        .filter(x => x.offsetParent !== null);
       if (f.length) {
         const i = f.indexOf(document.activeElement);
         if (e.shiftKey && i <= 0) {
@@ -50,6 +59,15 @@ document.addEventListener('keydown', e => {
           f[0].focus();
           return;
         }
+      } else if (pop) {
+        // Nothing in the popover takes a Tab (a note, say): the focus stays on it, not on the page behind.
+        e.preventDefault();
+        if (!pop.contains(document.activeElement)) {
+          const to = [...pop.querySelectorAll('[data-pop-first],[tabindex="-1"]')].find(x => !x.disabled && x.offsetParent !== null);
+          to?.focus({ preventScroll: true });
+          if (!pop.contains(document.activeElement)) pop.focus({ preventScroll: true });
+        }
+        return;
       }
     }
   }

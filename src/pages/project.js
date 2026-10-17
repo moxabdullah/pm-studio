@@ -5,7 +5,7 @@ import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, canSee, proj, stageOf, tasksOf } from '../core/store.js';
 import { HEALTH } from '../core/constants.js';
-import { avStack, empty, pHealth, pIcon, pStage } from '../ui/helpers.js';
+import { avStack, empty, nameOf, pHealth, pIcon, pStage } from '../ui/helpers.js';
 import { applyView, groupTasks, peekView, viewToolbar } from '../shell/view-engine.js';
 import { listHtml } from '../components/task-list.js';
 import { page404, stateDenied } from './errors.js';
@@ -47,6 +47,8 @@ export function pageProject() {
   else if (tab === 'files') body = filesHtml(p.id);
   else if (tab === 'activity') body = projActivity(p);
   else body = taskViewBody(tab, applyView(ts, peekView(key)), key, p);
+  // The button names all its members, those behind the "+N" chip as well
+  const names = p.members.map(nameOf);
 
   return `<div class="page flush">
     <div class="proj-h">
@@ -57,7 +59,7 @@ export function pageProject() {
         <button class="pillbtn" data-a="pop" data-pop="pstage" data-id="${esc(p.id)}" aria-label="Project stage: ${esc(stageOf(p).name)}" style="height:24px">${pStage(p, ic('chevron-down', 12))}</button>${pHealth(p, ic('chevron-down', 12)) ? `<button class="pillbtn" data-a="pop" data-pop="phealth" data-id="${esc(p.id)}" aria-label="Project health: ${HEALTH[p.health].name}" style="height:24px">${pHealth(p, ic('chevron-down', 12))}</button>` : ''}
         <span class="sp"></span>
         <div class="row" style="gap:4px">
-          <button class="row" data-a="share" data-id="${esc(p.id)}" aria-label="Members" style="gap:0">${avStack(p.members, 5, 'md')}</button>
+          <button class="row" data-a="share" data-id="${esc(p.id)}" aria-label="Members${names.length ? `: ${esc(names.join(', '))}` : ''}" style="gap:0">${avStack(p.members, 5, 'md', true)}</button>
           <button class="ibtn ibtn-sm" data-a="share" data-id="${esc(p.id)}" data-tip="Add member" aria-label="Add member">${ic('user-plus', 15)}</button>
           <button class="btn btn-secondary btn-sm hide-m" data-a="share" data-id="${esc(p.id)}">${ic('share-2', 13)}Share</button>
           <button class="ibtn ibtn-sm" data-a="editProject" data-id="${esc(p.id)}" data-tip="Project settings" aria-label="Project settings">${ic('settings', 15)}</button>

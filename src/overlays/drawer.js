@@ -13,6 +13,7 @@ import { popHtml } from './popovers.js';
 import { paletteHtml } from './palette.js';
 import { subtaskHtml } from '../features/subtasks.js';
 
+const MODAL_LEVELS = 4; // z-index levels of stacked dialogs (overlays.css): the popovers, at 80, stay above them
 export function renderLayer() {
   const u = S.ui;
   let h = '';
@@ -25,9 +26,13 @@ export function renderLayer() {
     );
   u.modals.forEach((m, i) => {
     const en = u.fx.modal === i + 1;
+    // Every dialog from the fourth on shares the top level, the later in the layer above the earlier. There a scrim and its dialog have one
+    // z-index: a lower one would put the scrim under the dialog before it, which would not be dimmed.
+    const z = 72 + Math.min(i, MODAL_LEVELS - 1) * 2;
+    const zs = i < MODAL_LEVELS - 1 ? z - 1 : z;
     h += safely(
       () =>
-        `<div class="scrim${en ? ' enter' : ''}" data-a="closeModal" style="z-index:${71 + i * 2}"></div><div class="modal-wrap" data-a="closeModalBg" style="z-index:${72 + i * 2}">${en ? modalHtml(m).replace('class="modal ', 'class="modal enter ') : modalHtml(m)}</div>`,
+        `<div class="scrim${en ? ' enter' : ''}" data-a="closeModal" style="z-index:${zs}"></div><div class="modal-wrap" data-a="closeModalBg" style="z-index:${z}">${en ? modalHtml(m).replace('class="modal ', 'class="modal enter ') : modalHtml(m)}</div>`,
     );
   });
   if (u.palette) h += safely(() => `<div class="scrim" data-a="closePalette" style="z-index:89"></div>${paletteHtml()}`);

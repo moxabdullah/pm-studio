@@ -19,7 +19,7 @@ import { pageMember, pageMembers, pageTeam, pageTeams } from '../pages/members.j
 import { pageActivity } from '../pages/activity.js';
 import { pageSearch } from '../pages/search.js';
 import { page404, stateFailed } from '../pages/errors.js';
-import { pageProject } from '../pages/project.js';
+import { PTABS, pageProject } from '../pages/project.js';
 import { pageWsCalendar } from '../views/calendar.js';
 import { pageWsTimeline } from '../views/timeline.js';
 import { pageSettings } from '../pages/settings.js';
@@ -29,15 +29,18 @@ import { pageArchive } from '../features/archive.js';
 export function renderShell() {
   const u = S.ui;
   // While the sidebar is open as the phone's drawer, all that is outside it and its scrim (the skip link, the page, the bottom nav) is inert:
-  // it takes no Tab stop and no tap, and the page behind the scrim is not read out
+  // it takes no Tab stop and no tap, and the page behind the scrim is not read out. The offline bar is the exception, and it is in <main>: so
+  // <main> is not inert itself, but the top bar and the page are. The bar is above the scrim (responsive.css), so a tap reaches it where the
+  // sidebar does not cover it (the drawer is narrower than the phone by the room of the bar's button: .offline, responsive.css), and it is a part of the
+  // sidebar's Tab cycle (keyboard.js).
   const inert = u.mnav ? ' inert' : '';
-  return `<button class="skip" data-a="skipToContent"${inert}>Skip to content</button><div class="shell ${sideCollapsed() ? 'collapsed' : ''} ${u.mnav ? 'mnav' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}">
+  return `<button class="skip" data-a="skipToContent"${inert}>Skip to content</button><div class="shell ${sideCollapsed() ? 'collapsed' : ''} ${u.mnav ? 'mnav' : ''} ${u.offline ? 'offline' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}">
     ${safely(renderSidebar)}
     ${u.mnav ? '<div class="side-scrim" data-a="closeMnav"></div>' : ''}
-    <main class="main" id="main"${inert}>
+    <main class="main" id="main">
       ${safely(renderTopbar)}
       ${u.offline ? `<div class="offline-bar" role="alert">${ic('wifi-off', 15)}<span><b>You're offline.</b> Changes won't be saved until your connection is back.</span><span class="sp"></span><button class="btn btn-sm btn-secondary" data-a="retryOnline">Try again</button></div>` : ''}
-      <div class="content ${u.fx.route ? 'fx-route' : ''}" id="main-content" tabindex="-1" data-keep="c:${esc(u.route)}:${esc(u.params.id || '')}:${esc(u.params.tab || '')}:${esc(u.params.sec || '')}">${u.loading ? skeleton() : renderPage()}</div>
+      <div class="content ${u.fx.route ? 'fx-route' : ''}" id="main-content" tabindex="-1"${inert} data-keep="c:${esc(u.route)}:${esc(u.params.id || '')}:${esc(u.params.tab || '')}:${esc(u.params.sec || '')}">${u.loading ? skeleton() : renderPage()}</div>
     </main>
     ${safely(renderBottomNav)}
   </div>`;
@@ -82,23 +85,19 @@ export function sItem(route, label, icon, opt = {}) {
   const on = S.ui.route === route && (!opt.id || S.ui.params.id === opt.id);
   return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${esc(opt.id)}"` : ''} ${railTip(label)} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
 }
-// The pages a project lists under its row in the sidebar
-const SUBTABS = [
-  ['board', 'Board', 'square-kanban'],
-  ['list', 'List', 'list'],
-  ['timeline', 'Timeline', 'chart-gantt'],
-  ['files', 'Files', 'paperclip'],
-];
+// The pages a project lists under its row in the sidebar are some of its tabs (PTABS). Read when drawn: the two modules import each other.
+const SIDE_TABS = new Set(['board', 'list', 'timeline', 'files']);
 export function renderSidebar() {
   const u = S.ui,
     d = D();
+  const subTabs = PTABS.filter(([tab]) => SIDE_TABS.has(tab));
   const col = sideCollapsed();
   const unreadInbox = d.notifs.filter(n => !n.read && n.type !== 'update').length;
   const unreadAll = d.notifs.filter(n => !n.read).length;
   const myOpen = allTasks().filter(t => t.assignee === d.me && t.status !== 'done' && t.due && diffD(parse(t.due), TODAY) <= 0).length;
   const projs = visibleProjects().filter(p => !isFinished(p));
   const inProj = u.route === 'project' ? u.params.id : null;
-  return `<nav class="side" aria-label="Main">
+  return `<nav class="side" id="side-nav" aria-label="Main">
     <div class="side-top">
       <div class="row" style="gap:2px">
         <button class="ibtn side-close" data-a="closeMnav" aria-label="Close navigation">${ic('x', 17)}</button>
@@ -134,7 +133,7 @@ export function renderSidebar() {
             const open = !!u.expanded[p.id];
             const on = inProj === p.id;
             // With the sub-list shown, the current page is its item and the row only holds it
-            const cur = open && !col && SUBTABS.some(([tab]) => tab === u.params.tab) ? 'true' : 'page';
+            const cur = open && !col && subTabs.some(([tab]) => tab === u.params.tab) ? 'true' : 'page';
             return `<div class="sproj" data-proj-drop="${esc(p.id)}">
             <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${esc(p.id)}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-ctx="project" role="link" tabindex="0" ${col ? '' : `aria-expanded="${open}"`} ${on ? `aria-current="${cur}"` : ''} ${railTip(p.name)}>
               <span class="pico" style="--c:${pColor(p)}" ${col ? '' : `data-a="toggleExpand" data-id="${esc(p.id)}"`}>${ic(p.icon, 12)}</span>
@@ -145,10 +144,12 @@ export function renderSidebar() {
               <span class="hov" aria-hidden="true"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${esc(p.id)}" aria-label="Project options">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${esc(p.id)}" aria-label="Expand">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
             </div>
             <div class="sub ${open && !col ? 'open' : ''}">
-              ${SUBTABS.map(
-                ([tab, n, i]) =>
-                  `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="${esc(tab)}" ${on && u.params.tab === tab ? 'aria-current="page"' : ''}>${ic(i, 14)}<span>${n}</span></button>`,
-              ).join('')}
+              ${subTabs
+                .map(
+                  ([tab, n, i]) =>
+                    `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${esc(p.id)}" data-tab="${esc(tab)}" ${on && u.params.tab === tab ? 'aria-current="page"' : ''}>${ic(i, 14)}<span>${n}</span></button>`,
+                )
+                .join('')}
             </div>
           </div>`;
           })
@@ -199,8 +200,8 @@ export function crumbs() {
   return out.join('<span class="sep">/</span>');
 }
 export function renderTopbar() {
-  return `<header class="topbar">
-    <button class="ibtn" data-a="openMnav" aria-label="Open navigation" style="display:none" id="mnav-btn">${ic('menu', 17)}</button>
+  return `<header class="topbar"${S.ui.mnav ? ' inert' : ''}>
+    <button class="ibtn" data-a="openMnav" aria-label="Open navigation" aria-expanded="${!!S.ui.mnav}" aria-controls="side-nav" style="display:none" id="mnav-btn">${ic('menu', 17)}</button>
     <style>@media(max-width:900px){#mnav-btn{display:inline-flex!important}}</style>
     <nav class="crumbs trunc" aria-label="Breadcrumb">${crumbs()}</nav>
     <span class="sp"></span>
@@ -217,6 +218,6 @@ export function renderBottomNav() {
     `<button class="${r === route ? 'on' : ''}" data-a="go" data-r="${route}">${ic(icon, 19)}<span>${label}</span>${extra}</button>`;
   return `<nav class="bottomnav" aria-label="Primary"${S.ui.mnav ? ' inert' : ''}>
     ${b('home', 'Home', 'house')}${b('mytasks', 'My Tasks', 'circle-check')}${b('projects', 'Projects', 'folder-kanban')}${b('inbox', 'Inbox', 'inbox', unread ? '<span class="bdot"></span>' : '')}
-    <button id="mnav-more" data-a="openMnav">${ic('ellipsis', 19)}<span>More</span></button>
+    <button id="mnav-more" data-a="openMnav" aria-expanded="${!!S.ui.mnav}" aria-controls="side-nav">${ic('ellipsis', 19)}<span>More</span></button>
   </nav>`;
 }

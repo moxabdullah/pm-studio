@@ -23,7 +23,7 @@ export function cellStatus(t) {
 }
 export function cellAssignee(t) {
   const m = mem(t.assignee);
-  return `<button class="pillbtn ${m ? '' : 'empty'}" data-a="pop" data-pop="assignee" data-id="${esc(t.id)}" aria-label="Assignee">${av(t.assignee, 'sm', false)}<span class="trunc">${m ? esc(m.name) : 'Unassigned'}</span></button>`;
+  return `<button class="pillbtn ${m ? '' : 'empty'}" data-a="pop" data-pop="assignee" data-id="${esc(t.id)}" aria-label="Assignee: ${m ? esc(m.name) : 'Unassigned'}">${av(t.assignee, 'sm', false)}<span class="trunc">${m ? esc(m.name) : 'Unassigned'}</span></button>`;
 }
 export function cellPrio(t) {
   return `<button class="pillbtn ${t.priority === 'none' ? 'empty' : ''}" data-a="pop" data-pop="priority" data-id="${esc(t.id)}" aria-label="Priority">${prPill(t.priority)}</button>`;
@@ -134,7 +134,7 @@ export function actHtml(a, opt = {}) {
     : p
       ? `<span class="obj" data-a="go" data-r="project" data-id="${esc(p.id)}">${esc(p.name)}</span>`
       : '';
-  return `<div class="fitem">${av(a.by, 'sm', FORMER)}<div class="grow"><b>${esc(m?.id === D().me ? 'You' : nameOf(a.by))}</b> <span class="muted">${esc(a.verb)}</span> ${obj} ${a.extra ? `<span class="muted">${esc(a.extra)}</span>` : ''}${opt.proj && p && t ? ` <span class="faint">in ${esc(p.name)}</span>` : ''}</div><time>${ago(a.at)}</time></div>`;
+  return `<div class="fitem">${av(a.by, 'sm', FORMER, true)}<div class="grow"><b>${esc(m?.id === D().me ? 'You' : nameOf(a.by))}</b> <span class="muted">${esc(a.verb)}</span> ${obj} ${a.extra ? `<span class="muted">${esc(a.extra)}</span>` : ''}${opt.proj && p && t ? ` <span class="faint">in ${esc(p.name)}</span>` : ''}</div><time>${ago(a.at)}</time></div>`;
 }
 export function miniRow(t, opt = {}) {
   const p = proj(t.project);

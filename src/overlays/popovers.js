@@ -61,7 +61,9 @@ export function openPop(el, extra = {}) {
       return;
     }
     const first =
-      $('.pop.floating [data-pop-first]') || $('.pop.floating .mi[aria-checked="true"]') || $('.pop.floating .mi, .pop.floating button, .pop.floating input');
+      $('.pop.floating [data-pop-first]:not(:disabled)') ||
+      $('.pop.floating .mi[aria-checked="true"]:not(:disabled)') ||
+      $('.pop.floating .mi:not(:disabled), .pop.floating button:not(:disabled), .pop.floating input:not(:disabled)');
     first?.focus({ preventScroll: true });
   }, 10);
 }
@@ -402,7 +404,7 @@ export function popHtml(p) {
         ts
           .map(
             x =>
-              `<button class="mi" data-a="openTask" data-id="${esc(x.id)}">${stIcon(x.status)}<span class="trunc">${esc(x.title)}</span><span class="r">${av(x.assignee, 'sm', false)}</span></button>`,
+              `<button class="mi" data-a="openTask" data-id="${esc(x.id)}">${stIcon(x.status)}<span class="trunc">${esc(x.title)}</span><span class="r">${av(x.assignee, 'sm', false, false)}</span></button>`,
           )
           .join('');
       style = 'width:280px';
@@ -436,7 +438,7 @@ export function popHtml(p) {
       break;
   }
   if (!inner) return '';
-  return `<div class="pop floating ${cls} ${S.ui.fx.pop ? 'enter' : ''}" role="menu" style="left:${p.x}px;top:${p.y}px;${style}" data-pop-root>${inner}</div>`;
+  return `<div class="pop floating ${cls} ${S.ui.fx.pop ? 'enter' : ''}" role="menu" tabindex="-1" style="left:${p.x}px;top:${p.y}px;${style}" data-pop-root>${inner}</div>`;
 }
 /* The tick list of a filter's values: its options, a ticked "Deleted label" row for each value chosen that the options lack (a label
    removed from the list), so it can be unticked here, and the note when a Labels filter has no options. `st`: more style for a row. */
