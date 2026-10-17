@@ -110,7 +110,7 @@ try {
   await H.waitVal(A, P(5), 'lead', M(2));
   await H.openEdit(A, P(5));
   await patchRec(P(5), { lead: M(3), members: [M(1), M(3)] }); // B's change: the old lead m2 is no longer a member
-  await H.waitVal(A, P(5), 'lead', M(3));
+  if (!(await H.waitVal(A, P(5), 'lead', M(3)))) throw new Error('A never received the lead change from B (the stale-session precondition)');
   await A.fill('#p-name', 'PD Design A');
   const n3 = sent.length;
   await clickSave(A);

@@ -3,10 +3,10 @@
      npm run compare -- <suite>... | all  --a <checkout> --b <checkout>
    Each checkout gets its own PocketBase (its migrations and hooks), seed and vite, on the usual ports, one after the other. Output:
    PM_OUT (default qa/out/compare-<timestamp>) with an a/ and a b/ folder. Prints, for every suite, the counts of both and every
-   check id that passed on one and not on the other (DIFF) or failed on both (BOTH-FAIL).
+   check id that passed on one and not on the other (DIFF) or failed on both (BOTH-FAIL; BOTH-KNOWN for a known bug, which is not a failure).
    Exit code: 0 no difference and no failure, 1 otherwise, 2 usage, 3 ports in use. */
 import path from 'node:path';
-import { QA_DIR, stamp } from '../lib/env.mjs';
+import { assertScratchDir, QA_DIR, stamp } from '../lib/env.mjs';
 import { Qa } from '../lib/stack.mjs';
 import { runSuite } from './runner.mjs';
 import { resolveSuites, SUITES } from './suites.mjs';
@@ -34,7 +34,13 @@ try {
   process.exit(2);
 }
 
-const root = path.resolve(process.env.PM_OUT || path.join(QA_DIR, 'out', `compare-${stamp()}`));
+let root;
+try {
+  root = assertScratchDir(process.env.PM_OUT || path.join(QA_DIR, 'out', `compare-${stamp()}`), a, b);
+} catch (e) {
+  console.error(e.message);
+  process.exit(2);
+}
 const runs = { a: {}, b: {} };
 let failed = false;
 for (const [side, checkout] of [
@@ -86,8 +92,13 @@ for (const name of names) {
       console.log(`  DIFF ${k}  A ${pa === undefined ? 'absent' : pa ? 'pass' : 'FAIL'}  B ${pb === undefined ? 'absent' : pb ? 'pass' : 'FAIL'}`);
       failed = true;
     } else if (pa === false) {
-      console.log(`  BOTH-FAIL ${k}`);
-      failed = true;
+      // a bug on main that known.mjs lists fails on both sides: reported, but it is not a failure of the comparison
+      const known = r => r.tally.known.some(x => x.startsWith(`${k}:`));
+      if (known(ra) && known(rb)) console.log(`  BOTH-KNOWN ${k}`);
+      else {
+        console.log(`  BOTH-FAIL ${k}`);
+        failed = true;
+      }
     }
   }
 }

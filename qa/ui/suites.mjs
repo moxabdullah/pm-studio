@@ -44,10 +44,12 @@ export const SUITES = {
 };
 
 export const resolveSuites = names => {
+  if (names.includes('all') && names.length > 1) throw new Error('"all" cannot be combined with suite names (the others would be ignored)');
   const list = !names.length || names.includes('all') ? Object.keys(SUITES) : names;
   const bad = list.filter(n => {
-    const [base, only] = n.split(':');
-    return !SUITES[base] || (only && !SUITES[base].files.some(f => path.basename(f, '.mjs') === only));
+    const parts = n.split(':');
+    const [base, only] = parts;
+    return parts.length > 2 || !Object.hasOwn(SUITES, base) || (only !== undefined && !SUITES[base].files.some(f => path.basename(f, '.mjs') === only));
   });
   if (bad.length) throw new Error(`unknown suite ${bad.join(', ')}. Suites: ${Object.keys(SUITES).join(' ')} (or "all")`);
   return list;

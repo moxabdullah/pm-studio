@@ -386,14 +386,13 @@ export async function runScenario(cfg) {
     // ---- checks
     const has = v => typeof v === 'string' && (v.includes(MARK) || v.includes(MARK2));
     const agree = s => has(s.screenText) === has(s.store);
-    const c1 =
-      [result.s1, result.s5].every(agree) && !has(result.s1.store) && !has(result.s5.store) && [result.s1, result.s5].every(s => s.screenText === s.store);
+    const c1 = [result.s1, result.s5].every(agree) && !has(result.s1.store) && !has(result.s5.store) && [result.s1, result.s5].every(s => s.screen === s.store);
     const caretOk = s => s.focused && s.active.includes(A ? '#d-desc' : '#s-note') && s.caret && s.caret.start === s.caret.end && s.caret.start <= s.caret.len;
-    const xLanded =
-      (result.afterX_600ms.screenText || '').includes('X') && (result.afterX_600ms.screenText || '').length > (result.s5.screenText || '').length - 1;
+    const countX = s => ((s && s.screenText) || '').split('X').length - 1;
+    const xLanded = countX(result.afterX_600ms) === countX(result.s5) + 1;
     const c2 = caretOk(result.s1) && caretOk(result.s5) && caretOk(result.afterX_600ms) && xLanded;
     const sent = result.requestsAfterX.filter(e => e.k === 'req' && (e.body.includes(MARK) || e.body.includes(MARK2)));
-    const c3 = !has(result.afterX_600ms.store) && !has(result.afterX_3s.store) && sent.length === 0 && !result.server.hasMarker;
+    const c3 = result.server.status === 200 && !has(result.afterX_600ms.store) && !has(result.afterX_3s.store) && sent.length === 0 && !result.server.hasMarker;
     result.checks = {
       C1: c1 ? 'PASS' : 'FAIL',
       C2: c2 ? 'PASS' : 'FAIL',

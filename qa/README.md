@@ -4,6 +4,14 @@ Browser suites and scenarios for PM Space. Each run starts a throwaway PocketBas
 `npm run seed:dev -- --dev-database`, starts vite against it, runs the suite, and stops everything again (also on a failure and on
 Ctrl+C). Nothing here touches the real server on :8090 or its `server/pb_data`.
 
+Limits of that guarantee: a second Ctrl+C while the first is still stopping things does not stop them any faster and can leave
+PocketBase or vite running (check `ss -ltnp` for the ports below and stop what is left). A run only stops processes it started
+itself; a stranger on one of its ports makes the run refuse to start (or fail), it is never killed. `PM_OUT` must not be the
+checkout's `server/` folder (the run refuses it), and a `pb_data` that already exists in the output folder is never reused or
+deleted: remove it by hand or pick another folder. For a short time while seeding, the throwaway database has the dev seed's superuser with its published
+password (on 127.0.0.1 only); the run deletes it and creates a random-password one right after the seed. The qa package needs Node 20 or later (`engines` in `qa/package.json`),
+because the pinned Playwright does; the app itself still builds on Node 18.
+
 A run executes the checkout's own seed script, vite config and pb_hooks with your environment, and Chromium runs without its
 sandbox. Only point `PM_SRC` or `compare --a/--b` at code you trust, not at an unreviewed branch from someone else.
 

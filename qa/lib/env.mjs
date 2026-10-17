@@ -8,6 +8,7 @@
    PM_OUT        output folder (default: qa/out/<suite>-<timestamp>; for "all" it is the parent of one folder per suite)
 
    Never point any of these at the real server on :8090 or at its pb_data. */
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +38,35 @@ export function config() {
     // vite may listen on ::1 only, so the browser goes through "localhost"
     baseUrl: `http://localhost:${vitePort}`,
   };
+}
+
+// the real path of something that may not exist yet: the nearest existing parent is resolved, so a link into server/ is seen too
+function realPath(p) {
+  let head = path.resolve(p);
+  const rest = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(head), ...rest.reverse());
+    } catch {
+      const up = path.dirname(head);
+      if (up === head) return path.resolve(p);
+      rest.push(path.basename(head));
+      head = up;
+    }
+  }
+}
+
+/* An output folder gets a throwaway pb_data, logs and screenshots. Refuses server/ of this repo or of any given checkout (and
+   anything under it): that is where a normal server keeps its pb_data. Returns the resolved folder. */
+export function assertScratchDir(dir, ...checkouts) {
+  const d = realPath(dir);
+  for (const root of new Set([REPO_DIR, ...checkouts.filter(Boolean).map(c => path.resolve(c))])) {
+    const server = realPath(path.join(root, 'server'));
+    const rel = path.relative(server, d);
+    if (rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)))
+      throw new Error(`output folder ${dir} is the server folder ${server} or inside it: refusing to use it`);
+  }
+  return path.resolve(dir);
 }
 
 export const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');

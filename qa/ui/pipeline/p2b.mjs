@@ -106,7 +106,10 @@ await L.check('b4', 'pick a finished stage (Closed) by keyboard under the Active
   const d = await desc();
   await L.shot(page, 'b4-focus-on-body-card-left-board');
   const gone = (await page.locator('.pbcard', { hasText: 'Marketing Campaign' }).count()) === 0;
-  return { pass: gone && d !== 'BODY', ev: `picked "${cur}"; toast=${JSON.stringify(toast.slice(-1))}; card left board=${gone}; focus after: ${d}` };
+  return {
+    pass: gone && /^button:Expand Closed/.test(d),
+    ev: `picked "${cur}"; toast=${JSON.stringify(toast.slice(-1))}; card left board=${gone}; focus after: ${d}`,
+  };
 });
 
 // restore Marketing Campaign to tender via API
@@ -163,7 +166,7 @@ await L.check('b6', 'collapse an expanded column back with Enter on its header b
   await L.sleep(500);
   const strip = await page.locator('button.bcol.collapsed[aria-label^="Expand Closed"]').count();
   const d = await desc();
-  return { pass: strip === 1 && d !== 'BODY', ev: `collapsed again=${strip}; focus after: ${d}` };
+  return { pass: strip === 1 && /^button:Expand Closed/.test(d), ev: `collapsed again=${strip}; focus after: ${d}` };
 });
 console.log('console errors:', JSON.stringify(page.errs));
 await b.close();

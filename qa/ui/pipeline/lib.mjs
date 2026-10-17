@@ -32,8 +32,15 @@ export async function api(method, apiPath, body) {
   return j;
 }
 export const pbGet = (coll, id) => api('GET', `/collections/${coll}/records/${id}`);
-export const pbList = async (coll, filter = '') =>
-  (await api('GET', `/collections/${coll}/records?perPage=200${filter ? '&filter=' + encodeURIComponent(filter) : ''}`)).items;
+export const pbList = async (coll, filter = '') => {
+  const out = [];
+  for (let page = 1; ; page++) {
+    const q = `?page=${page}&perPage=200${filter ? '&filter=' + encodeURIComponent(filter) : ''}`;
+    const r = await api('GET', `/collections/${coll}/records${q}`);
+    out.push(...r.items);
+    if (page >= r.totalPages) return out;
+  }
+};
 
 export const cards = page => page.evaluate(() => [...document.querySelectorAll('.pcard')].map(c => c.querySelector('b')?.textContent.trim()));
 export const rows = page =>

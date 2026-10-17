@@ -213,7 +213,7 @@ try {
     return dd.innerText.trim();
   });
   await check('O4b', 'sighted view: the dd shows only a dash (the hidden text takes no space)', E, async () => ({
-    pass: (await E.locator('dl.kv dd.kv-f').first().boundingBox()).height < 40,
+    pass: vis.endsWith('—') && (await E.locator('dl.kv dd.kv-f').first().boundingBox()).height < 40, // innerText also holds the hidden "No value"
     ev: vis,
   }));
 
@@ -330,8 +330,8 @@ try {
     const i = document.getElementById('p-f_kick01');
     let e = i.parentElement;
     while (e && e.scrollHeight <= e.clientHeight + 1) e = e.parentElement;
-    const er = document.getElementById('p-f_kick01-err').getBoundingClientRect();
-    return { err: [er.top, er.bottom], bodyBottom: e.getBoundingClientRect().bottom, scrollTop: e.scrollTop };
+    const er = document.getElementById('p-f_kick01-err')?.getBoundingClientRect();
+    return { err: er ? [er.top, er.bottom] : null, bodyBottom: e.getBoundingClientRect().bottom, scrollTop: e.scrollTop };
   });
   await check(
     'F3',
@@ -341,6 +341,7 @@ try {
       pass:
         edge.inputBottom <= edge.bodyBottom &&
         edge.inputBottom >= edge.bodyBottom - 6 &&
+        !!edgeAfter.err &&
         edgeAfter.err[1] <= edgeAfter.bodyBottom + 0.5 &&
         edgeAfter.scrollTop > edge.scrollTop,
       ev: { edge, edgeAfter },
@@ -438,7 +439,7 @@ try {
   await H.cancelTop(V);
 
   await check('Z1', 'zero console errors in every session; nothing pending', V, async () => ({
-    pass: allErrs().length === 0 && (await L.settle(V)).length === 0 && (await L.settle(T)).length === 0,
+    pass: allErrs().length === 0 && (await Promise.all(pages.map(p => L.settle(p)))).every(p => p.length === 0),
     ev: allErrs().slice(0, 5),
   }));
 } catch (e) {

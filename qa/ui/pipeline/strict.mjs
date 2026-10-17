@@ -176,7 +176,7 @@ await L.check(
       };
     });
     // nearest: a button that was to the right of the view ends flush with the board's right edge (within the board's 4px padding + rounding)
-    const flush = Math.min(r.left, r.right) <= 12;
+    const flush = r.right <= 12;
     await restore();
     return {
       pass: r.sl > 900 && r.sl <= r.max && r.fullX && r.inViewY && r.hit && flush && /^Move /.test(r.lbl),

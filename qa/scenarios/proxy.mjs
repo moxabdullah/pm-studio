@@ -99,13 +99,20 @@ const server = http.createServer((req, res) => {
         if (!sse.delete(entry)) return;
         log({ event: 'sse-close', path, how: entry.why || how });
       };
-      res.on('close', () => closed('client closed'));
+      res.on('close', () => {
+        closed('client closed');
+        up.destroy(); // the page is gone: do not leave its stream open on PocketBase
+      });
       upRes.on('end', () => closed('upstream ended'));
       upRes.on('error', () => closed('upstream error'));
       upRes.pipe(res);
     } else {
       upRes.pipe(res);
       upRes.on('end', () => log({ method: req.method, path, status: upRes.statusCode, mode }));
+      upRes.on('error', err => {
+        log({ method: req.method, path, status: 0, mode, note: `upstream error: ${err.code || err.message}` });
+        res.destroy(); // a body cut short must not leave the client waiting
+      });
     }
   });
   up.on('error', err => {

@@ -4,15 +4,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { QA_DIR, REPO_DIR } from './env.mjs';
+import { assertScratchDir, QA_DIR, REPO_DIR } from './env.mjs';
 
 export { chromium };
 export const BASE = process.env.PM_BASE || 'http://localhost:5180';
 export const PBU = process.env.PM_PB || 'http://127.0.0.1:8095';
-// suites call the API as superuser (PATCH, DELETE): never against the real server, even when run by hand
-if (new URL(PBU).port === '8090') throw new Error('PM_PB is the real server on :8090: refusing to run');
+// suites call the API as superuser (PATCH, DELETE) and sign in to the app: neither may be the real server, even when run by hand
+for (const [name, url] of [
+  ['PM_BASE', BASE],
+  ['PM_PB', PBU],
+])
+  if (new URL(url).port === '8090') throw new Error(`${name} is the real server on :8090: refusing to run`);
 export const SRC = process.env.PM_SRC || REPO_DIR;
-export const OUT = path.resolve(process.env.PM_OUT || path.join(QA_DIR, 'out', 'adhoc'));
+export const OUT = assertScratchDir(process.env.PM_OUT || path.join(QA_DIR, 'out', 'adhoc'), SRC);
 fs.mkdirSync(OUT, { recursive: true });
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
 export const launch = () => chromium.launch({ headless: true, args: ['--no-sandbox'] });

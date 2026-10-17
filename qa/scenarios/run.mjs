@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { QA_DIR, stamp } from '../lib/env.mjs';
+import { assertScratchDir, QA_DIR, stamp } from '../lib/env.mjs';
 import { Qa } from '../lib/stack.mjs';
 import { waitHttp } from '../lib/procs.mjs';
 
@@ -46,7 +46,7 @@ const qa = new Qa({ proxy: true });
 let code = 0;
 try {
   qa.init();
-  const outDir = path.resolve(process.env.PM_OUT || path.join(QA_DIR, 'out', `scenario-${name}-${stamp()}`));
+  const outDir = assertScratchDir(process.env.PM_OUT || path.join(QA_DIR, 'out', `scenario-${name}-${stamp()}`), qa.cfg.src);
   fs.mkdirSync(outDir, { recursive: true });
   const { proxyPort, pbPort, proxyUrl, pbUrl, baseUrl } = qa.cfg;
 
@@ -69,6 +69,7 @@ try {
     },
   );
   await waitHttp(`${proxyUrl}/__fault`, 'fault proxy', 15000, proxy);
+  qa.stack.verifyOwn(proxyPort, 'fault proxy');
   await qa.startVite(outDir, proxyUrl);
   await qa.warmUp();
 
@@ -86,8 +87,10 @@ try {
     if (failed.length || !steps.length) code = 1;
   }
   // a scenario that throws partway still writes the steps it got to, all of which may have passed
-  if (result && result.error) {
-    console.log(`${name}: the scenario crashed before its last step: ${String(result.error).split('\n')[0]}`);
+  // (fix2 keeps the error of a crashed check under that check's name in result.json)
+  const crashed = result && (result.error || Object.values(result).find(v => v && typeof v === 'object' && v.error)?.error);
+  if (crashed) {
+    console.log(`${name}: the scenario crashed before its last step: ${String(crashed).split('\n')[0]}`);
     code = 1;
   }
 } catch (e) {

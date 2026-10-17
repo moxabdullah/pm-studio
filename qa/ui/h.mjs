@@ -93,8 +93,10 @@ export const noHScroll = page =>
   page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, bsw: document.body.scrollWidth }));
 export async function setProjectValues(pid, vals) {
   const r = await projRec(pid);
-  await L.api('PATCH', '/collections/projects/records/' + pid, { doc: { ...r.doc, ...vals } });
+  const res = await L.api('PATCH', '/collections/projects/records/' + pid, { doc: { ...r.doc, ...vals } });
+  if (res.status < 200 || res.status >= 300) throw new Error(`PATCH of project ${pid} failed with ${res.status}: the suite would run against the wrong data`);
 }
+// true when the page's store holds the value within 10 s
 export const waitVal = (page, pid, k, v) =>
   page
     .waitForFunction(([i, key, val]) => window.__pmspace.D().projects.find(x => x.id === i)?.[key] === val, [pid, k, v], { timeout: 10000 })

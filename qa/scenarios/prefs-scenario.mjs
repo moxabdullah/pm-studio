@@ -1,5 +1,6 @@
 /* P1: is a user_prefs update pending from page load, and does a PATCH 200 clear it?
-   SCENARIO=prefs-scenario.mjs node run.mjs <checkout> <out>. Samples sync.pendingDetails() and records every user_prefs request. */
+   Run it with `npm run scenario -- prefs` from qa/ (PM_SRC and PM_OUT are optional). Samples sync.pendingDetails() and records every
+   user_prefs request of both pages, answered or not. */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,35 +17,55 @@ export async function runScenario(cfg) {
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
-    page.on('console', m => {
-      const t = m.text();
-      if (/status of 5\d\d/.test(t)) return;
-      if (m.type() === 'error' || m.type() === 'warning' || /sync/.test(t))
-        out.console.push({ s: (Date.now() - t0) / 1000, type: m.type(), text: t.slice(0, 400) });
-    });
-    page.on('pageerror', e => out.console.push({ s: (Date.now() - t0) / 1000, type: 'pageerror', text: String(e).slice(0, 300) }));
-    page.on('response', async res => {
-      const req = res.request();
-      if (!/user_prefs/.test(req.url())) return;
-      let body = '';
-      try {
-        body = (await res.text()).slice(0, 1500);
-      } catch {
-        // no readable body
-      }
-      out.requests.push({
-        s: (Date.now() - t0) / 1000,
-        method: req.method(),
-        url: req
+    // every user_prefs request of a page, and its console output; the second page of the end gets the same
+    const watch = (pg, tag) => {
+      pg.on('console', m => {
+        const t = m.text();
+        if (/status of 5\d\d/.test(t)) return;
+        if (m.type() === 'error' || m.type() === 'warning' || /sync/.test(t))
+          out.console.push({ page: tag, s: (Date.now() - t0) / 1000, type: m.type(), text: t.slice(0, 400) });
+      });
+      pg.on('pageerror', e => out.console.push({ page: tag, s: (Date.now() - t0) / 1000, type: 'pageerror', text: String(e).slice(0, 300) }));
+      const shown = req =>
+        req
           .url()
           .replace(/^https?:\/\/[^/]+/, '')
-          .slice(0, 160),
-        sent: (req.postData() || '').slice(0, 1500),
-        status: res.status(),
-        patchHdr: res.headers()['x-doc-patch'] || null,
-        body,
+          .slice(0, 160);
+      pg.on('response', async res => {
+        const req = res.request();
+        if (!/user_prefs/.test(req.url())) return;
+        let body = '';
+        try {
+          body = (await res.text()).slice(0, 1500);
+        } catch {
+          // no readable body
+        }
+        out.requests.push({
+          page: tag,
+          s: (Date.now() - t0) / 1000,
+          method: req.method(),
+          url: shown(req),
+          sent: (req.postData() || '').slice(0, 1500),
+          status: res.status(),
+          patchHdr: res.headers()['x-doc-patch'] || null,
+          body,
+        });
       });
-    });
+      // a request that got no answer at all (cut off by a reload, refused by the network)
+      pg.on('requestfailed', req => {
+        if (/user_prefs/.test(req.url()))
+          out.requests.push({
+            page: tag,
+            s: (Date.now() - t0) / 1000,
+            method: req.method(),
+            url: shown(req),
+            sent: (req.postData() || '').slice(0, 1500),
+            status: 0,
+            failure: req.failure()?.errorText || null,
+          });
+      });
+    };
+    watch(page, 'first');
     await page.goto(baseUrl, { waitUntil: 'load' });
     await page.waitForSelector('#l-email', { timeout: 60000 });
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -96,6 +117,7 @@ export async function runScenario(cfg) {
     // a second, fresh page (new context, new login): what does a load see now that the server has whatever was written?
     const c2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const p2 = await c2.newPage();
+    watch(p2, 'second');
     await p2.goto(baseUrl, { waitUntil: 'load' });
     await p2.waitForSelector('#l-email', { timeout: 60000 });
     await p2.fill('#l-email', email);

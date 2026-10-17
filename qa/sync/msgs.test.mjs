@@ -1758,4 +1758,6 @@ console.log('\n== L5: the same while the delete is still in flight');
   await stopSync();
 }
 server.patches = false;
+await sleep(50);
+ok(unhandled.length === 0, `no unhandled rejection in the whole run (${unhandled.length})`);
 finish();

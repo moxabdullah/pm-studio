@@ -14,10 +14,19 @@ const repo = resolve(here, '../..');
 const args = process.argv.slice(2);
 const verbose = args.includes('-v');
 const only = args.find(a => a.startsWith('--only='));
+const unknownFlags = args.filter(a => a.startsWith('-') && a !== '-v' && !a.startsWith('--only='));
+const ALL_GROUPS = ['views', 'msgs', 'prefs'];
+const wanted = only ? only.slice(7).split(',') : ALL_GROUPS;
+if (unknownFlags.length || wanted.some(g => !ALL_GROUPS.includes(g))) {
+  console.error(
+    `sync: unknown option or group (${[...unknownFlags, ...wanted.filter(g => !ALL_GROUPS.includes(g))].join(' ')}). Groups: ${ALL_GROUPS.join(' ')}`,
+  );
+  process.exit(2);
+}
 const checkout = resolve(args.find(a => !a.startsWith('-')) || repo);
 const src = join(checkout, 'src');
 const out = join(repo, 'qa/out/sync');
-const GROUPS = ['views', 'msgs', 'prefs'].filter(g => !only || only.slice(7).split(',').includes(g));
+const GROUPS = ALL_GROUPS.filter(g => wanted.includes(g));
 
 if (!existsSync(join(src, 'core/sync.js'))) {
   console.error(`sync: ${src}/core/sync.js not found (usage: node qa/sync/run.mjs [checkout])`);
@@ -73,6 +82,7 @@ await loadEsbuild().build({
 
 const t0 = Date.now();
 const total = { ok: 0, FAIL: 0, KNOWN: 0 };
+const GROUP_LIMIT_MS = Number(process.env.QA_SYNC_TIMEOUT_S || 300) * 1000; // a group that hangs is killed and counts as a FAIL
 const runGroup = g =>
   new Promise(done => {
     const n = { ok: 0, FAIL: 0, KNOWN: 0 };
@@ -93,11 +103,19 @@ const runGroup = g =>
     const child = spawn(process.execPath, [join(out, `${g}.mjs`)], { stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.setEncoding('utf8').on('data', take);
     child.stderr.setEncoding('utf8').on('data', c => (err += c));
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, GROUP_LIMIT_MS);
     child.on('close', (code, signal) => {
+      clearTimeout(timer);
       take('\n');
       // A group that ends other than by finishing (a throw, a hang cut short) counts as one FAIL, so it can't pass by printing less.
       if (code !== (n.FAIL ? 1 : 0) || n.ok + n.KNOWN === 0) {
-        lines.push(`    FAIL ${g}: the run ended abnormally (exit ${code ?? signal}, ${n.ok + n.FAIL + n.KNOWN} checks)`);
+        lines.push(
+          `    FAIL ${g}: ${timedOut ? `no end after ${GROUP_LIMIT_MS / 1000} s, killed` : 'the run ended abnormally'} (exit ${code ?? signal}, ${n.ok + n.FAIL + n.KNOWN} checks)`,
+        );
         n.FAIL++;
         lines.push(...err.split('\n').slice(-30));
       } else if (verbose) lines.push(...err.split('\n'));

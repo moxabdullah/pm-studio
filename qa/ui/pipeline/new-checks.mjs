@@ -46,7 +46,8 @@ const mkTwoSets = async () => {
   return { main, second };
 };
 const rmSets = async (...sets) => {
-  for (const s of sets) await L.api('DELETE', '/collections/stage_sets/records/' + s.id).catch(() => {});
+  for (const s of sets)
+    await L.api('DELETE', '/collections/stage_sets/records/' + s.id).catch(e => console.log(`WARNING: stage set ${s.id} not deleted: ${e.message}`));
   await L.sleep(600);
 };
 // what has focus, and is it really visible (not clipped by the board, a column, or the viewport)?
@@ -439,6 +440,7 @@ if (only.includes('d')) {
     'task board: drag a task card todo -> progress still moves it; no stray popover, no .dragging/.drop-line left, no console error',
     page,
     async () => {
+      const errs0 = page.errs.length;
       const id = await page.evaluate(() => document.querySelector('[data-drop-col="todo"] .kcard')?.dataset.dragCard);
       const before = await colOf(id);
       await dragTo(id, 'progress');
@@ -451,8 +453,16 @@ if (only.includes('d')) {
         over: document.querySelectorAll('.bcol.drop-over').length,
       }));
       return {
-        pass: before === 'todo' && after === 'progress' && srv === 'progress' && !leftovers.pop && !leftovers.dragging && !leftovers.line && !leftovers.over,
-        ev: `${id}: ${before} -> ${after}; server status=${srv}; leftovers=${JSON.stringify(leftovers)}; toast=${JSON.stringify(await L.toastsTxt(page))}`,
+        pass:
+          before === 'todo' &&
+          after === 'progress' &&
+          srv === 'progress' &&
+          !leftovers.pop &&
+          !leftovers.dragging &&
+          !leftovers.line &&
+          !leftovers.over &&
+          page.errs.length === errs0,
+        ev: `${id}: ${before} -> ${after}; server status=${srv}; leftovers=${JSON.stringify(leftovers)}; new console errors=${JSON.stringify(page.errs.slice(errs0))}; toast=${JSON.stringify(await L.toastsTxt(page))}`,
       };
     },
   );
@@ -461,6 +471,7 @@ if (only.includes('d')) {
     'task board: a popover open when a task drag starts and ends in no column (cancelled drop) is not left stranded; no error',
     page,
     async () => {
+      const errs0 = page.errs.length;
       const id = await page.evaluate(() => document.querySelector('[data-drop-col="review"] .kcard')?.dataset.dragCard);
       // open any floating popover on the page (the board's sort/filter or a card menu), then start the drag
       const trig = page.locator('[data-a="pop"]:visible, [data-pop]:visible').first();
@@ -485,8 +496,8 @@ if (only.includes('d')) {
       }));
       await L.shot(page, 'N-d2-after-cancelled-task-drag');
       return {
-        pass: popBefore === 1 && popAfter === 0 && col === 'review' && !leftovers.dragging && !leftovers.line,
-        ev: `trigger "${trigDesc}": popovers before drag=${popBefore}, mid-drag=${popMid}, after drop-nowhere=${popAfter}; card still in ${col}; leftovers=${JSON.stringify(leftovers)}`,
+        pass: popBefore === 1 && popAfter === 0 && col === 'review' && !leftovers.dragging && !leftovers.line && page.errs.length === errs0,
+        ev: `trigger "${trigDesc}": popovers before drag=${popBefore}, mid-drag=${popMid}, after drop-nowhere=${popAfter}; card still in ${col}; leftovers=${JSON.stringify(leftovers)}; new console errors=${JSON.stringify(page.errs.slice(errs0))}`,
       };
     },
   );

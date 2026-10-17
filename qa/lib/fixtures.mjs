@@ -32,5 +32,6 @@ export const projRec = async pid => (await L.api('GET', '/collections/projects/r
 export const fvals = async pid => Object.fromEntries(Object.entries((await projRec(pid)).doc).filter(([k]) => k.startsWith('f_')));
 export async function patchProject(pid, extra) {
   const r = await projRec(pid);
-  await L.api('PATCH', '/collections/projects/records/' + pid, { doc: { ...r.doc, ...extra } });
+  const res = await L.api('PATCH', '/collections/projects/records/' + pid, { doc: { ...r.doc, ...extra } });
+  if (res.status < 200 || res.status >= 300) throw new Error(`PATCH of project ${pid} failed with ${res.status}: the suite would run against the wrong data`);
 }

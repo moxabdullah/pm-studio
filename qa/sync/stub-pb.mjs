@@ -1,4 +1,6 @@
 // In-memory stand-in for src/core/pb.js: a fake server whose requests can be made to fail with a 5xx.
+// Not modelled: the live stream's connection state. pb.realtime.isConnected is always true, onDisconnect is never called and PB_CONNECT never
+// fires, so the safety net's stream-replacement and reconnect branches are not covered here (the browser scenarios in qa/scenarios are).
 export const server = {
   down: 0,
   db: {},
@@ -64,6 +66,12 @@ const coll = name => {
     },
     async create(p) {
       fail('create', name, p.id);
+      // like the server: an id that exists is a 400 with data.id (sync.js reads it as "an earlier attempt got through after all")
+      if (t().has(p.id))
+        throw Object.assign(new Error('exists'), {
+          status: 400,
+          response: { message: 'Failed to create record.', data: { id: { code: 'validation_not_unique' } } },
+        });
       const r = { ...p, updated: String(++ts) };
       t().set(p.id, r);
       return r;
@@ -71,6 +79,7 @@ const coll = name => {
     async update(id, f, options) {
       fail('update', name, id);
       server.sent.push({ c: name, id, f });
+      if (!t().has(id)) throw nf();
       const r = { ...t().get(id), ...f, updated: String(++ts) };
       delete r.docPatch;
       delete r.docUnset;

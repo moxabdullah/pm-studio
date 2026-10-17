@@ -426,7 +426,7 @@ export async function runScenario(cfg) {
         7,
         'reconnect toast',
         !!rc && rc.text === 'Reconnected. All changes are synced.',
-        '"Reconnected. All changes are synced." (or "Reconnected." when the always-pending prefs op interferes)',
+        '"Reconnected. All changes are synced."',
         rc ? `"${rc.text}" at ok+${((rc.ms - tOk) / 1000).toFixed(1)}s` : 'not seen',
       );
       return finish();
@@ -994,7 +994,7 @@ function analyse(tl, marks, readProxyLog) {
 function render(r) {
   const L = [];
   L.push(`checkout ${r.checkout} @ ${r.sha}   user ${r.email}`);
-  if (r.task) L.push(`task ${r.task.id}: "${r.task.title}" -> ${r.titles.saved} -> ${r.titles.lost}`);
+  if (r.task && r.titles) L.push(`task ${r.task.id}: "${r.task.title}" -> ${r.titles.saved} -> ${r.titles.lost}`);
   L.push('', 'STEPS');
   for (const s of r.steps) L.push(`  ${s.pass ? 'PASS' : 'FAIL'}  ${s.n}. ${s.name}\n        expected: ${s.expected}\n        observed: ${s.observed}`);
   if (r.error) L.push('', 'SCENARIO ERROR', r.error);
@@ -1032,7 +1032,11 @@ function render(r) {
 // standalone use
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const e = process.env;
-  runScenario({ baseUrl: e.BASE_URL, proxyUrl: e.PROXY_URL, proxyLog: e.PROXY_LOG, outDir: e.OUT_DIR, email: e.EMAIL, password: e.PASSWORD }).then(() =>
-    process.exit(0),
+  runScenario({ baseUrl: e.BASE_URL, proxyUrl: e.PROXY_URL, proxyLog: e.PROXY_LOG, outDir: e.OUT_DIR, email: e.EMAIL, password: e.PASSWORD }).then(
+    r => process.exit(r.error || (r.steps && (!r.steps.length || r.steps.some(s => !s.pass))) ? 1 : 0),
+    err => {
+      console.error(err);
+      process.exit(1);
+    },
   );
 }

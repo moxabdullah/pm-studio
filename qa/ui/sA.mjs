@@ -464,7 +464,10 @@ try {
     return { pass: !head.includes('Client') && head.includes('End user') && head.includes('Location'), ev: head.join('|') };
   });
   await H.goProject(page, P1);
-  await check('H7', 'overview of p1 no longer shows Client', page, async () => ({ pass: !(await H.detailRows(page)).some(r => /Client/.test(r[0])), ev: '' }));
+  await check('H7', 'overview of p1 no longer shows Client', page, async () => {
+    const rows = await H.detailRows(page);
+    return { pass: rows.length > 0 && !rows.some(r => /Client/.test(r[0])), ev: `${rows.length} rows` };
+  });
 
   // ---------- I: values through the New project form; clear through Edit
   await page.evaluate(() => window.__pmspace.go('projects'));

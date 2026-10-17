@@ -33,16 +33,25 @@ try {
   await qa.warmUp();
   const done = [];
   for (const name of names) {
-    const r = await runSuite(qa, name, suiteOut(root, name, names.length));
-    console.log(r.line);
-    console.log(`    output ${r.outDir}`);
-    done.push(r);
-    if (!ok(r)) failed = true;
+    // a suite that crashes (a failed seed, say) is a FAIL of that suite; the others still run and the Summary is still printed
+    try {
+      const r = await runSuite(qa, name, suiteOut(root, name, names.length));
+      console.log(r.line);
+      console.log(`    output ${r.outDir}`);
+      done.push(r);
+      if (!ok(r)) failed = true;
+    } catch (e) {
+      console.error(`SUITE ${name} CRASHED:`, e && e.stack ? e.stack : e);
+      done.push({ name, crashed: true });
+      failed = true;
+    }
   }
   console.log('\nSummary');
   for (const r of done)
     console.log(
-      `  ${ok(r) ? 'ok  ' : 'FAIL'} ${r.name.padEnd(9)} ${r.tally.pass} pass ${r.tally.fail.length} fail ${r.tally.known.length} known of ${r.tally.total} checks, ${r.secs}s`,
+      r.crashed
+        ? `  FAIL ${r.name.padEnd(9)} crashed before it finished`
+        : `  ${ok(r) ? 'ok  ' : 'FAIL'} ${r.name.padEnd(9)} ${r.tally.pass} pass ${r.tally.fail.length} fail ${r.tally.known.length} known of ${r.tally.total} checks, ${r.secs}s`,
     );
 } catch (e) {
   console.error('RUN FAILED:', e && e.stack ? e.stack : e);

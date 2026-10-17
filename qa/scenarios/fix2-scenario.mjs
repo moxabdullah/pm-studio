@@ -1,5 +1,5 @@
 /* C4 (online typing in the subtask note while remote changes to the same task arrive) and C5 (offline toast wording).
-   Same orchestrator as focus-scenario.mjs (SCENARIO=fix2-scenario.mjs node run.mjs <checkout> <out>). */
+   Run it with `npm run scenario -- fix2` from qa/ (same orchestrator as focus-scenario.mjs). */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -194,7 +194,7 @@ export async function runScenario(cfg) {
     };
     res.verdict =
       Object.entries(res.checks)
-        .filter(([k]) => !['pageRebuiltDuringTyping', 'titleChangeArrived', 'remoteStatuses'].includes(k))
+        .filter(([k]) => !['pageRebuiltDuringTyping', 'remoteStatuses'].includes(k))
         .every(([, v]) => v) && res.remote.every(r => r.status === 200)
         ? 'PASS'
         : 'FAIL';

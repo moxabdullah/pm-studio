@@ -246,35 +246,40 @@ await L.check('c1', 'board keeps scrollLeft after a drag-drop move (drop at scro
 });
 
 await restore();
-await L.check('c2', 'board keeps scrollLeft after a move through the stage picker (button) at scrollLeft 900', page, async () => {
-  await setSL(900);
-  await L.sleep(300);
-  const vn = await page.evaluate(() => {
-    const bd = document.querySelector('.pboard').getBoundingClientRect();
-    const c = [...document.querySelectorAll('.pbcard')].find(c => {
-      const r = c.getBoundingClientRect();
-      return r.left >= bd.left && r.right <= bd.right;
+await L.check(
+  'c2',
+  "after a move through the stage picker (button) at scrollLeft 900 the board stays scrolled (not reset to 0) and the moved card's button is in view",
+  page,
+  async () => {
+    await setSL(900);
+    await L.sleep(300);
+    const vn = await page.evaluate(() => {
+      const bd = document.querySelector('.pboard').getBoundingClientRect();
+      const c = [...document.querySelectorAll('.pbcard')].find(c => {
+        const r = c.getBoundingClientRect();
+        return r.left >= bd.left && r.right <= bd.right;
+      });
+      return c?.getAttribute('aria-label');
     });
-    return c?.getAttribute('aria-label');
-  });
-  if (!vn) return { pass: false, ev: 'no visible card at 900' };
-  await page.locator('.pbcard', { hasText: vn }).locator('[data-pop="pstage"]').click();
-  await L.sleep(300);
-  const items = await L.popItems(page);
-  await L.popPick(page, 'Warranty');
-  await L.sleep(600);
-  const s = await st();
-  const vis = await page.evaluate(() => {
-    const bd = document.querySelector('.pboard').getBoundingClientRect();
-    const a = document.activeElement;
-    const r = a.getBoundingClientRect();
-    return { inBoard: !!a.closest('.pboard'), visible: r.left >= bd.left - 1 && r.right <= bd.right + 1, lbl: a.getAttribute('aria-label') };
-  });
-  return {
-    pass: s.sl > 0 && vis.inBoard && vis.visible && /^Move /.test(vis.lbl),
-    ev: `[ADAPTED: focus now scrolls the moved card's button into view] picker for "${vn}" items=${items.length}; picked Warranty; scrollLeft after=${s.sl} (was 900); focus=${JSON.stringify(vis)}; toast=${JSON.stringify(await L.toastsTxt(page))}`,
-  };
-});
+    if (!vn) return { pass: false, ev: 'no visible card at 900' };
+    await page.locator('.pbcard', { hasText: vn }).locator('[data-pop="pstage"]').click();
+    await L.sleep(300);
+    const items = await L.popItems(page);
+    await L.popPick(page, 'Warranty');
+    await L.sleep(600);
+    const s = await st();
+    const vis = await page.evaluate(() => {
+      const bd = document.querySelector('.pboard').getBoundingClientRect();
+      const a = document.activeElement;
+      const r = a.getBoundingClientRect();
+      return { inBoard: !!a.closest('.pboard'), visible: r.left >= bd.left - 1 && r.right <= bd.right + 1, lbl: a.getAttribute('aria-label') };
+    });
+    return {
+      pass: s.sl > 0 && vis.inBoard && vis.visible && /^Move /.test(vis.lbl),
+      ev: `[ADAPTED: focus now scrolls the moved card's button into view] picker for "${vn}" items=${items.length}; picked Warranty; scrollLeft after=${s.sl} (was 900); focus=${JSON.stringify(vis)}; toast=${JSON.stringify(await L.toastsTxt(page))}`,
+    };
+  },
+);
 
 await restore();
 await L.check('c3', 'board keeps scrollLeft after collapse / expand of a column and after a live change from another client', page, async () => {

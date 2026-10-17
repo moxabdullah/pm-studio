@@ -31,11 +31,13 @@ export function rawRgba(input) {
   const bpp = type === 6 ? 4 : 3;
   const stride = width * bpp;
   const raw = zlib.inflateSync(Buffer.concat(idat));
+  if (raw.length < height * (stride + 1)) throw new Error('truncated PNG image data');
   const cur = Buffer.alloc(stride);
   let prev = Buffer.alloc(stride);
   const out = Buffer.alloc(width * height * 4, 255);
   for (let y = 0; y < height; y++) {
     const filter = raw[y * (stride + 1)];
+    if (filter > 4) throw new Error(`unsupported PNG filter type ${filter}`);
     const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
     for (let i = 0; i < stride; i++) {
       const a = i >= bpp ? cur[i - bpp] : 0;

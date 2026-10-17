@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config, REPO_DIR } from './env.mjs';
+import { assertScratchDir, config, REPO_DIR } from './env.mjs';
 import { Stack, killTree, listeners, sleep, waitHttp } from './procs.mjs';
 
 const MARK = '.qa-scratch';
@@ -21,6 +21,8 @@ export class Qa {
       ports: [this.cfg.pbPort, this.cfg.vitePort, ...(proxy ? [this.cfg.proxyPort] : [])],
       log: quiet ? () => {} : (...a) => console.log('[qa]', ...a),
     });
+    // proves a pb_data folder is one this run made: written into its marker file, kept here, never anywhere a stranger could read it first
+    this.token = crypto.randomBytes(16).toString('hex');
     this.pb = null;
     this.vite = null;
     this.viteLog = null;
@@ -41,6 +43,9 @@ export class Qa {
     if (!fs.existsSync(inSrc)) {
       fs.symlinkSync(bin, inSrc);
       this.log(`linked ${inSrc} -> ${bin}`);
+    } else if (process.env.PM_PB_BIN && fs.realpathSync(inSrc) !== fs.realpathSync(bin)) {
+      // seed-dev.js always runs <checkout>/server/pocketbase: a different PM_PB_BIN would serve with one binary and seed with another
+      throw new Error(`PM_PB_BIN (${bin}) is not the checkout's own binary ${inSrc}, which seed:dev uses: unset PM_PB_BIN or point it at that file`);
     }
     const nm = path.join(src, 'node_modules');
     if (!fs.existsSync(nm)) {
@@ -51,7 +56,7 @@ export class Qa {
       for (const e of fs.readdirSync(from)) if (!['.vite', '.vite-temp', '.cache'].includes(e)) fs.symlinkSync(path.join(from, e), path.join(nm, e));
       this.log(`created ${nm} with per-package links into ${from}`);
     }
-    this.sha = spawnSync('git', ['-C', src, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim() || 'no-git';
+    this.sha = (spawnSync('git', ['-C', src, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout || '').trim() || 'no-git';
     this.stack.claimPorts();
     this.log(`checkout ${src} @ ${this.sha}`);
   }
@@ -59,6 +64,7 @@ export class Qa {
   /* vite for the checkout, its /api proxy pointed at `target` (PocketBase, or the fault proxy). */
   async startVite(outDir, target = this.cfg.pbUrl) {
     const { src, vitePort, baseUrl } = this.cfg;
+    assertScratchDir(outDir, src);
     this.viteLog = path.join(outDir, 'vite.log');
     this.vite = this.stack.start('vite', 'npx', ['vite', '--port', String(vitePort), '--strictPort'], {
       cwd: src,
@@ -66,20 +72,29 @@ export class Qa {
       logFile: this.viteLog,
     });
     await waitHttp(`${baseUrl}/`, 'vite', 90000, this.vite);
+    this.stack.verifyOwn(vitePort, 'vite');
   }
 
   /* A new empty PocketBase, the dev seed, a random-password superuser. Returns what a suite needs in its environment. */
   async freshDb(outDir) {
     const { src, pbBin, pbPort, pbUrl } = this.cfg;
+    assertScratchDir(outDir, src);
     await this.stopPb();
     const dataDir = path.join(outDir, 'pb_data');
-    // Only a folder this runner made (it holds the marker) is ever deleted, so a PM_OUT pointing at server/ can't wipe a real pb_data.
+    // Only a pb_data this run made is ever deleted (its marker holds this run's random token), so a folder that was already there,
+    // a real pb_data included, is refused, whatever it contains. A rerun into the same PM_OUT needs the old pb_data removed by hand.
     if (fs.existsSync(dataDir)) {
-      if (!fs.existsSync(path.join(dataDir, MARK))) throw new Error(`${dataDir} was not made by qa/: refusing to delete it`);
+      let mine = false;
+      try {
+        mine = fs.readFileSync(path.join(dataDir, MARK), 'utf8') === this.token;
+      } catch {
+        // no marker
+      }
+      if (!mine) throw new Error(`${dataDir} already exists and was not made by this run: refusing to delete it (remove it yourself or choose another PM_OUT)`);
       fs.rmSync(dataDir, { recursive: true, force: true });
     }
     fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(path.join(dataDir, MARK), '');
+    fs.writeFileSync(path.join(dataDir, MARK), this.token);
     const logFile = path.join(outDir, 'pocketbase.log');
     this.pb = this.stack.start(
       'pocketbase',
@@ -94,6 +109,7 @@ export class Qa {
       { cwd: src, logFile },
     );
     await waitHttp(`${pbUrl}/api/health`, 'PocketBase', 60000, this.pb);
+    this.stack.verifyOwn(pbPort, 'PocketBase');
     const seed = spawnSync('npm', ['run', 'seed:dev', '--', '--dev-database'], {
       cwd: src,
       env: { ...process.env, PB_DIR: dataDir, PB_URL: pbUrl },
@@ -160,8 +176,8 @@ export class Qa {
       killTree(child.pid, 'SIGKILL');
     }, timeoutS * 1000);
     const code = await new Promise(resolve => {
-      if (child.exitCode !== null) resolve(child.exitCode);
-      child.once('exit', (c, sig) => resolve(c ?? (sig ? 128 : 1)));
+      if (child.exitCode !== null || child.signalCode !== null) resolve(child.exitCode ?? 128);
+      else child.once('exit', (c, sig) => resolve(c ?? (sig ? 128 : 1)));
     });
     clearTimeout(timer);
     killTree(child.pid, 'SIGKILL'); // anything the script left behind (browsers)
